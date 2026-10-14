@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 
-const source=readFileSync(new URL('../scripts/sector-manager.mjs',import.meta.url),'utf8');
+const source=readFileSync(new URL('../scripts/sector-manager.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
 function fixture(){
   const notices=[];
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
-  const context=vm.createContext({console,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
+  const context=vm.createContext({console,ZoneRuntime,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -175,4 +176,11 @@ test('all repeatable tabs have accessible entry toggles; Overview remains a form
     assert.match(html,/data-expand-all/);assert.match(html,/data-collapse-all/);
   }
   app.tab='Overview';assert(!app.build().includes('data-entry-toggle'));
+});
+
+
+test('Effects exposes an Actor drop reference without changing older record category or custom data',()=>{
+  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='sector';app.draft=entries();app.tab='Effects';
+  app.draft.effects=[{title:'Zone anomaly',category:'Phenomenon',duration:'One day',custom:{preserve:true}}];
+  const before=JSON.stringify(app.draft);const html=app.build();assert.match(html,/data-reference data-type="Actor"/);assert.match(html,/name="effects.0.uuid"/);assert.match(html,/value="Phenomenon" selected/);assert.equal(JSON.stringify(app.draft),before);
 });

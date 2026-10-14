@@ -4,28 +4,40 @@
 const {chromium}=require('playwright');
 const {readFileSync,existsSync}=require('node:fs');
 const assert=require('node:assert/strict');
+const http=require('node:http');
+const path=require('node:path');
 
 (async()=>{
   const executablePath=process.env.MYZ_CHROMIUM_PATH||(existsSync('/usr/bin/chromium')?'/usr/bin/chromium':undefined);
   const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox']});
+  const root=path.resolve(__dirname,'..');
+  const server=http.createServer((request,response)=>{
+    const file=path.resolve(root,'.'+decodeURIComponent(request.url));
+    if(!file.startsWith(root+'/scripts/')){response.writeHead(200,{'Content-Type':'text/html'});response.end('<html></html>');return;}
+    try{response.writeHead(200,{'Content-Type':'text/javascript'});response.end(readFileSync(file));}catch{response.writeHead(404);response.end();}
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const origin='http://127.0.0.1:'+server.address().port;
   try{
     const page=await browser.newPage({viewport:{width:1400,height:900}});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
+    await page.goto(origin);
     await page.setContent(`<style>
       *{box-sizing:border-box}body{margin:0;font:14px Arial}
-      .application{display:flex;flex-direction:column;position:absolute;left:20px;top:20px;width:1100px;height:480px;border:1px solid #888;background:#fff}
+      .application{z-index:10;display:flex;flex-direction:column;position:absolute;left:20px;top:20px;width:1100px;height:480px;border:1px solid #888;background:#fff}
       .window-header{height:32px;flex-shrink:0}.window-content{flex:1;overflow:auto;padding:8px}
       button{cursor:pointer}textarea{font:inherit}input,select{height:28px}input[type=checkbox]{height:16px}
     </style>`);
     await page.addScriptTag({content:`
-      let ready;
+      let ready;const initCallbacks=[];let identity=0;const hookCallbacks=new Map();globalThis.notifyErrors=[];
       globalThis.nativeClicks=[];
       class ApplicationV2 {
         constructor(options={}){this.options=options;this.rendered=false;}
         async _onRender(){}
+        async _onClose(){}
         async render(){
           if(!this.element){
-            this.element=document.createElement('div');this.element.className='application myz-sector-manager';
+            this.element=document.createElement('div');this.element.className='application '+this.constructor.DEFAULT_OPTIONS.classes.join(' ');this.element.id=this.constructor.DEFAULT_OPTIONS.id;this.element.style.width=this.constructor.DEFAULT_OPTIONS.position.width+'px';this.element.style.height=this.constructor.DEFAULT_OPTIONS.position.height+'px';
             this.element.innerHTML='<header class="window-header">Test ApplicationV2 frame</header><section class="window-content"></section>';
             document.body.append(this.element);
           }
@@ -33,7 +45,7 @@ const assert=require('node:assert/strict');
           this.rendered=true;await this._onRender({},{});return this;
         }
         bringToFront(){}
-        async close(){this.element.remove();this.rendered=false;}
+        async close(){await this._onClose({});this.element.remove();this.rendered=false;}
       }
       globalThis.docs=new Map();
       for(const [uuid,name,type] of [['Scene.one','The Zone','Scene'],['Actor.one','Zone Ghoul','Actor'],['Item.one','Artifact','Item'],['Compendium.world.items.Item.one','Compendium Artifact','Item']]){
@@ -47,18 +59,36 @@ const assert=require('node:assert/strict');
           const i=document.createElement('i');i.className='fa-solid fa-file';a.prepend(i);return a.outerHTML;
         }
       };
-      globalThis.foundry={utils:{deepClone:value=>structuredClone(value)},applications:{api:{ApplicationV2,DialogV2:{confirm:async()=>true}},ux:{TextEditor:{implementation:editor}}}};
-      globalThis.Hooks={once:(name,callback)=>ready=callback};
+      globalThis.foundry={utils:{deepClone:value=>structuredClone(value),randomID:()=> 'identity'+(++identity)},applications:{api:{ApplicationV2,DialogV2:{confirm:async()=>true}},ux:{TextEditor:{implementation:editor}}}};
+      globalThis.Hooks={once:(name,callback)=>{if(name==='ready')ready=callback;else initCallbacks.push(callback);},on:(name,callback)=>{if(!hookCallbacks.has(name))hookCallbacks.set(name,new Map());const id=++identity;hookCallbacks.get(name).set(id,callback);return id;},off:(name,id)=>hookCallbacks.get(name)?.delete(id),call:(name,...args)=>{for(const callback of hookCallbacks.get(name)?.values()||[])callback(...args);}};
       globalThis.fromUuid=async uuid=>docs.get(uuid);
-      globalThis.ui={notifications:{info(){},warn(){},error:message=>{throw new Error(message)}}};
+      globalThis.ui={notifications:{info(){},warn(){},error:message=>notifyErrors.push(message)}};
       const data={version:1,code:'A2',status:'Explored',terrain:'Forest',rot:0,description:'Long description',notes:'GM notes',supplies:{cleanGrub:{quantity:2.75,collected:true}}};
       for(const key of ['locations','encounters','loot','effects','secrets','history'])data[key]=Array.from({length:20},(_,i)=>({title:'Entry '+(i+1),details:'Existing notes '+i,uuid:key==='locations'?'Scene.one':key==='encounters'?'Actor.one':key==='loot'?'Item.one':''}));
-      globalThis.records=Array.from({length:70},(_,i)=>({id:'sector'+i,name:i===1?'A very long sector name that must wrap rather than being clipped':'Sector '+i,flags:structuredClone({...data,code:'A'+(i+1)}),getFlag(){return this.flags;},async update(update){this.name=update.name;},async setFlag(mod,key,flags){this.flags=structuredClone(flags);}}));
+      globalThis.records=Array.from({length:70},(_,i)=>({id:'sector'+i,name:i===1?'A very long sector name that must wrap rather than being clipped':'Sector '+i,flags:structuredClone({...data,code:'A'+(i+1)}),getFlag(mod,key){return key==='sector'?this.flags:undefined;},async update(update){this.name=update.name;},async setFlag(mod,key,flags){this.flags=structuredClone(flags);}}));
       records.get=id=>records.find(j=>j.id===id);
-      globalThis.game={journal:records,user:{isGM:true}};
+      const settings=new Map(),settingOptions=new Map();
+      globalThis.game={journal:records,user:{id:'gm',isGM:true},users:{activeGM:{id:'gm'}},scenes:new Map(),settings:{register:(mod,key,options)=>{settingOptions.set(key,options);if(!settings.has(key))settings.set(key,options.default);},get:(mod,key)=>settings.get(key),set:async(mod,key,value)=>{settings.set(key,value);settingOptions.get(key)?.onChange?.(value);}}};
+      globalThis.JournalEntry={create:async data=>{
+        const doc={id:'created'+(++identity),name:data.name,ownership:data.ownership,value:data.flags||{},getFlag(mod,key){return this.value[mod]?.[key];},async setFlag(mod,key,value){this.value[mod]??={};this.value[mod][key]=structuredClone(value);Hooks.call('updateJournalEntry',this);},async update(update){this.name=update.name;}};
+        records.push(doc);Hooks.call('createJournalEntry',doc);return doc;
+      }};
+      class Container{constructor(){this.children=[];}addChild(child){this.children.push(child);child.parent=this;return child;}removeChild(child){this.children=this.children.filter(item=>item!==child);child.parent=null;}destroy(){this.destroyed=true;for(const child of this.children)child.destroy?.();}}
+      class Graphics extends Container{lineStyle(){return this;}moveTo(){return this;}lineTo(){return this;}beginFill(){return this;}drawRect(){return this;}endFill(){return this;}}
+      class Text extends Container{constructor(){super();this.position={set(){}};}}
+      globalThis.PIXI={Container,Graphics,Text,Point:class{constructor(x,y){this.x=x;this.y=y;}}};
+      const board=document.createElement('canvas');board.width=1400;board.height=900;board.style.cssText='position:fixed;left:0;top:0;width:1400px;height:900px';document.body.prepend(board);
+      const stage=new Container();stage.zoom=1;stage.pan={x:0,y:0};stage.toLocal=point=>({x:(point.x-stage.pan.x)/stage.zoom,y:(point.y-stage.pan.y)/stage.zoom});
+      globalThis.canvas={ready:false,scene:null,stage,app:{view:board,screen:{width:1400,height:900}}};
+      for(const id of ['zone','combat']){
+        const scene={id,name:id==='zone'?'Zone Map':'Combat Map',width:6000,height:6000,grid:{size:100},dimensions:{sceneRect:{x:0,y:0,width:6000,height:6000}},tokens:new Map(),async view(){canvas.ready=true;canvas.scene=this;Hooks.call('canvasReady');}};
+        for(const [tokenId,name,x] of [['ark','Ark marker',10],['party','Expedition marker',600]])scene.tokens.set(tokenId,{id:tokenId,name,x,y:10,width:1,height:1,parent:scene});
+        game.scenes.set(id,scene);
+      }
+      globalThis.zoneState=()=>records.get(game.settings.get('myz-sector-manager','zoneConfigurationId'))?.getFlag('myz-sector-manager','zoneConfiguration');
     `});
-    await page.addScriptTag({content:readFileSync(require.resolve('../scripts/sector-manager.mjs'),'utf8')});
-    await page.evaluate(async()=>{ready();globalThis.manager=await game.myzSectorManager.open('sector1');});
+    await page.addScriptTag({type:'module',url:origin+'/scripts/sector-manager.mjs'});
+    await page.evaluate(async()=>{for(const callback of initCallbacks)callback();ready();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
 
     for(const tab of ['Overview','Locations','Encounters','Loot','Effects','Secrets','History']){
       await page.locator(`[data-tab="${tab}"]`).click();
@@ -88,12 +118,12 @@ const assert=require('node:assert/strict');
     const wide=await consumableRatio();assert(wide>.4&&wide<.55);
     assert.equal(await page.locator('[name="supplies.cleanGrub.quantity"]').inputValue(),'2.75');
     assert(await page.locator('[name="supplies.cleanGrub.collected"]').isChecked());
-    assert.equal(await page.locator('[name="supplies.cleanGrub.quantity"]').evaluate(el=>Math.round(el.getBoundingClientRect().width)),65);
+    assert.equal(await page.locator('[name="supplies.cleanGrub.quantity"]').evaluate(el=>Math.round(el.getBoundingClientRect().width)),38);
     await page.evaluate(()=>{manager.element.style.width='600px';manager.element.style.height='360px';});
     await page.waitForFunction(()=>document.querySelector('.sm-consumables').getBoundingClientRect().width>document.querySelector('.sm-content').clientWidth*.85);
     assert(await consumableRatio()>.85);
     assert(await page.locator('.sm-content').evaluate(el=>el.scrollWidth<=el.clientWidth));
-    console.log('Consumables adapt from half to full width with 65px decimal inputs and preserved collected state');
+    console.log('Consumables adapt from half to full width with 38px centered decimal inputs and preserved collected state');
     await page.evaluate(()=>{manager.element.style.width='1100px';manager.element.style.height='480px';});
 
     await page.locator('[data-tab="Locations"]').click();await page.waitForSelector('.sm-entry');
@@ -141,7 +171,78 @@ const assert=require('node:assert/strict');
     assert.equal(await page.locator(`[data-entry="${firstId}"]`).count(),0);
     await page.locator('[data-action="add"]').click();await page.waitForFunction(()=>manager.draft.locations.length===20);
     assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-toggle]').getAttribute('aria-expanded'),'true');
-    assert.deepEqual(errors,[]);
-    console.log('Save/reopen retains data and session UI state; deletion cleans identity; new entries expand; no browser errors');
-  }finally{await browser.close();}
+    console.log('Save/reopen retains data and session UI state; deletion cleans identity; new entries expand');
+
+    // Search must restore all records even after a tab rerender under a filter.
+    assert.equal(await page.locator('.sm-sidebar [data-action="new"]').count(),0);
+    assert.equal(await page.locator('[data-action="delete"]').evaluate(el=>el.nextElementSibling.dataset.action),'new');
+    await page.locator('[data-filter]').fill('SECTOR 10');assert.equal(await page.locator('[data-open]:visible').count(),1);
+    await page.locator('[data-tab="Effects"]').click();await page.waitForFunction(()=>manager.tab==='Effects');
+    await page.locator('[data-filter]').fill('');assert.equal(await page.locator('[data-open]:visible').count(),70);
+    await page.locator('[data-filter]').fill('not a sector');assert(await page.locator('[data-sector-empty]').isVisible());
+    await page.locator('[data-filter]').fill('a2');assert(await page.locator('[data-open="sector1"]').isVisible());
+    await page.locator('[data-filter]').fill('');
+    const effect=page.locator('.sm-entry').first();
+    await effect.locator('[data-reference]').evaluate(el=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({type:'Actor',uuid:'Actor.one'}));el.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));});
+    await effect.locator('a.content-link').waitFor();assert.equal(await effect.locator('input[name$=".uuid"]').inputValue(),'Actor.one');
+    assert.equal(await effect.locator('select[name$=".category"]').inputValue(),'Weather');
+    await effect.locator('[data-entry-toggle]').click();assert(await effect.locator('.sm-entry-body').isHidden());await effect.locator('[data-entry-toggle]').click();
+    console.log('Sidebar search restores after rerenders; New Sector is beside Delete; Effects accepts native Actor references');
+
+    // Configure one Scene with multi-cell sectors and two different tracked tokens.
+    await page.locator('.sm-zone-summary summary').click();
+    await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
+    const dialog=page.locator('.myz-zone-configuration');
+    await dialog.locator('[name="sceneId"]').selectOption('zone');
+    await dialog.locator('[name="unit"]').selectOption('cells');
+    await page.waitForFunction(()=>document.querySelector('.zm-config [name="width"]').value==='10');
+    await dialog.locator('[name="width"]').fill('5');await dialog.locator('[name="height"]').fill('4');
+    await dialog.locator('[name="ark"]').selectOption('ark');
+    await dialog.locator('[data-add-group]').click();await dialog.locator('[data-group]').waitFor();
+    await dialog.locator('[name="group-name"]').fill('Expedition Alpha');await dialog.locator('[name="group-token"]').selectOption('party');
+    await dialog.locator('.zm-actor').evaluate(el=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({type:'Actor',uuid:'Actor.one'}));el.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));});
+    await dialog.locator('.zm-actor a.content-link').waitFor();
+    await dialog.locator('[data-save-zone]').click();await page.waitForFunction(()=>Boolean(zoneState()?.groups?.length));
+    assert.deepEqual(await page.evaluate(()=>[zoneState().grid.width,zoneState().grid.height]),[500,400]);
+    assert.equal(await page.evaluate(()=>zoneState().groups[0].actorUuid),'Actor.one');
+    assert.equal(await page.evaluate(()=>records.get(game.settings.get('myz-sector-manager','zoneConfigurationId')).ownership.default),0);
+    assert.equal(await page.evaluate(()=>game.myzSectorManager.zone.tracking()[1].coordinate),'B1');
+    assert.equal(await page.evaluate(()=>game.myzSectorManager.zone.tracking()[1].live),false);
+    await page.locator('[data-zone-view]').click();await page.waitForFunction(()=>canvas.scene?.id==='zone');
+    await page.waitForFunction(()=>game.myzSectorManager.zone.tracking()[1].live);
+    await page.locator('[data-zone-overlay]').click();await page.waitForFunction(()=>canvas.stage.children.some(child=>child.name==='myz-zone-overlay'));
+    assert(await page.evaluate(()=>canvas.stage.children.every(child=>child.eventMode==='none'&&!child.interactiveChildren)));
+
+    // One-shot point selection uses canvas transforms, leaves normal controls alone,
+    // and creates only the confirmed map cell rather than filling the whole map.
+    await page.evaluate(()=>{canvas.stage.zoom=2;canvas.stage.pan={x:100,y:100};});
+    await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
+    await dialog.locator('[data-pick-origin]').click();
+    await page.mouse.click(1300,850); // outside both windows; local point is (600,375)
+    assert.equal(await dialog.locator('[name="originX"]').inputValue(),'600');assert.equal(await dialog.locator('[name="originY"]').inputValue(),'375');
+    await dialog.locator('[data-cancel-zone]').click(); // discard the origin preview without touching saved config
+    // Pick cleanup was already one-shot; restore the configured origin and scale.
+    await page.evaluate(()=>{canvas.stage.zoom=1;canvas.stage.pan={x:0,y:0};});
+    await page.locator('[data-zone-select]').click();await page.mouse.click(1300,850); // C3: no existing record
+    await page.waitForFunction(()=>manager.draft?.code==='C3');
+    assert.equal(await page.evaluate(()=>records.filter(j=>j.getFlag('myz-sector-manager','sector')?.code==='C3').length),1);
+    assert.equal(await page.evaluate(()=>records.filter(j=>j.getFlag('myz-sector-manager','sector')?.version===1).length),71);
+
+    // Tracking operates without a Sector Manager window and never reads Combat tokens.
+    await page.evaluate(async()=>{await manager.close();const token=game.scenes.get('zone').tokens.get('party');token.x=1200;Hooks.call('updateToken',token,{x:1200});});
+    await page.waitForFunction(()=>zoneState().groups[0].lastKnown==='C1');
+    await page.evaluate(async()=>{await game.scenes.get('combat').view();const token=game.scenes.get('combat').tokens.get('party');token.x=9000;Hooks.call('updateToken',token,{x:9000});});
+    assert.equal(await page.evaluate(()=>zoneState().groups[0].lastKnown),'C1');assert.equal(await page.evaluate(()=>canvas.stage.children.length),0);
+    await page.evaluate(async()=>{globalThis.manager=await game.myzSectorManager.open('sector1');});
+    await page.waitForFunction(()=>document.querySelector('.zm-positions').textContent.includes('last known'));
+    assert.match(await page.locator('.zm-positions').innerText(),/Expedition Alpha: C1/);
+    await page.evaluate(async()=>{await game.scenes.get('zone').view();});await page.waitForFunction(()=>canvas.stage.children.length===1);
+    await page.evaluate(()=>{const scene=game.scenes.get('zone'),token=scene.tokens.get('party');scene.tokens.delete('party');Hooks.call('deleteToken',token);});
+    await page.waitForFunction(()=>zoneState().groups[0].location.status==='missing-token');
+    assert.equal(await page.evaluate(()=>zoneState().groups[0].lastKnown),'C1');
+    await page.evaluate(()=>{game.scenes.delete('zone');Hooks.call('deleteScene',{id:'zone'});});
+    await page.waitForFunction(()=>document.querySelector('.sm-zone-summary').textContent.includes('Scene is missing'));
+    assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>notifyErrors),[]);
+    console.log('Zone dialog units/tokens/Actor links persist; origin picking respects zoom; confirmed map creation, overlay isolation, closed-window tracking and missing references pass');
+  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

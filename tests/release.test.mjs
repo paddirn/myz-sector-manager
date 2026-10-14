@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {validateManifest} from '../scripts/prepare-release.mjs';
 
@@ -35,4 +36,16 @@ test('release guard allows only confirmed absence and fails closed on errors or 
   }
   await assertReleaseAbsent({...options,request:async(url)=>{assert(url.endsWith(`/releases/tags/${tag}`));return {status:404,ok:false};}});
   await assert.rejects(assertReleaseAbsent({...options,request:async()=>{throw new Error('Network failed');}}),/Network failed/);
+});
+
+
+test('every relative runtime import is included in the installable package',()=>{
+  const {files}=validateManifest(manifest,tag,root);const packed=new Set(files);
+  for(const file of manifest.esmodules){
+    const code=fs.readFileSync(path.join(root,file),'utf8');
+    for(const match of code.matchAll(/from ['"](\.[^'"]+)['"]/g)){
+      const imported=path.relative(root,path.resolve(root,path.dirname(file),match[1]));
+      assert(packed.has(imported),`${file} imports ${imported} but it is missing from the release package`);
+    }
+  }
 });
