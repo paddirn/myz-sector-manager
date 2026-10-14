@@ -1,0 +1,53 @@
+name: Release Module
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Run tests
+        run: node --test tests/*.test.mjs
+      - name: Validate tagged module and create package
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/prepare-release.mjs "$RELEASE_TAG"
+      - name: Verify ZIP integrity and root manifest
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          unzip -t "dist/myz-sector-manager-${RELEASE_TAG}.zip"
+          unzip -p "dist/myz-sector-manager-${RELEASE_TAG}.zip" module.json | cmp - module.json
+      - name: Refuse to modify an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/check-release.mjs
+      - name: Publish release with both install assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "dist/myz-sector-manager-${RELEASE_TAG}.zip" dist/module.json \
+            --verify-tag --latest --title "MYZ Sector Manager ${RELEASE_TAG}" --generate-notes
