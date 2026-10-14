@@ -10,7 +10,8 @@ function fixture(){
   class ApplicationV2 {async render(){return this;} }
   const context=vm.createContext({console,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;',context);
-  return {context,app:new context.Manager(),notices,documents};
+  const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
+  return {context,app,notices,documents};
 }
 const journal=(id,code,name=id)=>({id,name,getFlag:()=>({version:1,code,status:'Scouted',loot:[{title:'Old artifact',uuid:'Item.old'}]})});
 
@@ -20,7 +21,7 @@ test('coordinates sort naturally with names as fallback and sidebar text is esca
   assert.deepEqual(Array.from(app.journals,x=>x.id),['one','two','ten','none']);
   context.game.journal.get=()=>undefined;
   const html=app.build();
-  assert.match(html,/<strong>A2<\/strong><small>Scouted<\/small><span>&lt;Long sector&gt;<\/span>/);
+  assert.match(html,/<span class="sm-sector-meta"><strong>A2<\/strong><small> · Scouted<\/small><\/span><span>&lt;Long sector&gt;<\/span>/);
   assert.match(html,/height:auto;min-height:0;flex:0 0 auto/);
 });
 
@@ -50,7 +51,7 @@ test('capture keeps fractional supplies and checkbox booleans without touching e
 
 test('document drops resolve UUIDs, reject incorrect types, and preserve unsaved fields',async()=>{
   const {app,documents,notices}=fixture();
-  let captured=0;app.capture=()=>captured++;app.element={querySelector:()=>null};
+  let captured=0;app.capture=()=>captured++;app.element={querySelector:()=>null,contains:()=>true};app.renderReference=async()=>{};
   const input={value:'Item.original'};const zone={dataset:{type:'Item'},querySelector:()=>input};
   const event={payload:{uuid:'Actor.wrong'},preventDefault(){},stopPropagation(){}};
   documents.set('Actor.wrong',{uuid:'Actor.wrong',documentName:'Actor'});
@@ -59,10 +60,10 @@ test('document drops resolve UUIDs, reject incorrect types, and preserve unsaved
   await app.dropReference(event,zone);assert.equal(input.value,'Item.valid');assert.equal(captured,1);assert.equal(app.dirty,true);
 });
 
-test('reference buttons open document sheets and view scenes; missing UUIDs report errors',async()=>{
+test('native reference clicks invoke Foundry document-link hooks; missing UUIDs report errors',async()=>{
   const {app,documents,notices}=fixture();let opened=0,viewed=0;
-  documents.set('Item.one',{documentName:'Item',sheet:{render:async force=>{assert.equal(force,true);opened++;}}});
-  documents.set('Scene.one',{documentName:'Scene',view:async()=>viewed++});
+  documents.set('Item.one',{documentName:'Item',_onClickDocumentLink:async()=>opened++});
+  documents.set('Scene.one',{documentName:'Scene',_onClickDocumentLink:async()=>viewed++});
   const zone=uuid=>({querySelector:()=>({value:uuid})});
   await app.openReference(zone('Item.one'));await app.openReference(zone('Scene.one'));
   assert.equal(opened,1);assert.equal(viewed,1);
@@ -81,4 +82,97 @@ test('saving and reopening preserves fractional supplies, collected state and ex
   assert.equal(reopened.draft.supplies.cleanWater.quantity,3.5);
   assert.equal(reopened.draft.supplies.cleanWater.collected,true);
   assert.equal(reopened.draft.loot[0].uuid,'Item.old');
+});
+
+
+const entries = () => ({version:1,locations:[{title:'Factory',uuid:'Scene.one'},{title:'Vault',uuid:'Scene.two'}],loot:[{title:'Artifact'}],encounters:[],effects:[],secrets:[],history:[]});
+
+test('collapse identities survive editing, reordering and cloned data on reopen without changing flags',()=>{
+  const {context,app}=fixture();app.sectorId='sector';app.draft=entries();
+  const initial=JSON.stringify(app.draft);
+  const id=app.entryState('locations').entries[0].id;
+  app.setCollapsed('locations',id,true);
+  assert.equal(JSON.stringify(app.draft),initial);assert.equal(app.dirty,false);
+  assert.equal(app.entryState('locations').collapsed.size,1);
+  app.draft.locations[0].title='Edited Factory';app.draft.locations.reverse();
+  const state=app.entryState('locations');
+  assert.equal(state.entries[1].id,id);assert(state.collapsed.has(id));
+  const reopened=new context.Manager();reopened.sectorId='sector';reopened.draft=structuredClone(app.draft);
+  assert.equal(reopened.entryState('locations').entries[1].id,id);
+  assert(reopened.entryState('locations').collapsed.has(id));
+});
+
+test('expand and collapse all are scoped to the active tab and sector',()=>{
+  const {app}=fixture();app.sectorId='one';app.draft=entries();app.tab='Locations';
+  app.collapseAll(true);assert.equal(app.entryState('locations').collapsed.size,2);
+  assert.equal(app.entryState('loot').collapsed.size,0);
+  app.tab='Loot';app.collapseAll(true);assert.equal(app.entryState('loot').collapsed.size,1);
+  app.tab='Locations';app.collapseAll(false);assert.equal(app.entryState('locations').collapsed.size,0);
+  assert.equal(app.entryState('loot').collapsed.size,1);
+  app.sectorId='two';app.draft=entries();assert.equal(app.entryState('loot').collapsed.size,0);
+});
+
+test('deleting by stable UI identity forgets its state without shifting remaining identities',async()=>{
+  const {app}=fixture();app.sectorId='sector';app.draft=entries();app.capture=()=>{};
+  const [first,second]=app.entryState('locations').entries;
+  app.setCollapsed('locations',first.id,true);app.setCollapsed('locations',second.id,true);
+  app.draft.locations.reverse();
+  await app.removeEntry('locations',first.id);
+  const state=app.entryState('locations');
+  assert.equal(app.draft.locations.length,1);assert.equal(app.draft.locations[0].title,'Vault');
+  assert.equal(state.entries[0].id,second.id);assert(!state.collapsed.has(first.id));assert(state.collapsed.has(second.id));
+  app.draft.locations.push({title:'New'});
+  const added=app.entryState('locations').entries[1];assert(!state.collapsed.has(added.id));
+});
+
+function referenceZone(uuid){
+  const listeners={};
+  const link={setAttribute(){},addEventListener:(name,fn)=>listeners[name]=fn,click:()=>listeners.click({preventDefault(){},stopPropagation(){}})};
+  const target={classList:{add(){},remove(){}},textContent:'',innerHTML:'',querySelector:()=>link};
+  const input={value:uuid}, clear={disabled:false};
+  const zone={querySelector:selector=>selector==='input'?input:selector==='[data-reference-link]'?target:clear};
+  return {zone,target,input,clear,listeners,link};
+}
+
+test('legacy UUIDs enrich into native links with keyboard support and no separate open button',async()=>{
+  const {app,context,documents}=fixture();const {zone,target,listeners}=referenceZone('Item.one');let opened=0;
+  documents.set('Item.one',{_onClickDocumentLink:async()=>opened++});
+  context.foundry.applications.ux.TextEditor.implementation.enrichHTML=async(text,options)=>{
+    assert.equal(text,'@UUID[Item.one]');assert.equal(options.documents,true);assert.equal(options.rolls,false);
+    return '<a class="content-link">Artifact</a>';
+  };
+  await app.renderReference(zone);assert.match(target.innerHTML,/content-link/);
+  await listeners.keydown({key:'Enter',preventDefault(){},stopPropagation(){}});
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(opened,1);
+  context.game.journal.get=()=>({name:'Sector'});app.draft=entries();app.tab='Locations';
+  assert(!app.build().includes('Open Reference'));assert(!app.build().includes('Reference UUID (optional)'));
+});
+
+test('missing or malformed references retain their UUID and can be cleared safely',async()=>{
+  const {app}=fixture();
+  const missing=referenceZone('Item.missing');await app.renderReference(missing.zone);
+  assert.match(missing.target.textContent,/Missing reference/);assert.equal(missing.input.value,'Item.missing');
+  const malformed=referenceZone('Item.bad]@UUID[Actor.injected');await app.renderReference(malformed.zone);
+  assert.match(malformed.target.textContent,/Reference unavailable/);assert.equal(malformed.target.innerHTML,'');
+  app.capture=()=>{};await app.clearReference(missing.zone);assert.equal(missing.input.value,'');assert(missing.clear.disabled);
+  assert.equal(missing.target.textContent,'Drop a document here');assert(app.dirty);
+});
+
+test('a slow enrichment cannot restore a reference after it was cleared',async()=>{
+  const {app,context}=fixture();const {zone,input,target}=referenceZone('Item.slow');let resolve;
+  context.fromUuid=()=>new Promise(done=>resolve=done);
+  const pending=app.renderReference(zone);
+  input.value='';await app.renderReference(zone);
+  resolve({_onClickDocumentLink(){}});await pending;
+  assert.equal(target.textContent,'Drop a document here');assert.equal(target.innerHTML,'');
+});
+
+test('all repeatable tabs have accessible entry toggles; Overview remains a form',()=>{
+  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='sector';app.draft=entries();
+  for(const [tab,key] of Object.entries({Locations:'locations',Encounters:'encounters',Loot:'loot',Effects:'effects',Secrets:'secrets',History:'history'})){
+    app.tab=tab;app.draft[key]=[{title:'One'},{title:'Two'}];const html=app.build();
+    assert.match(html,/aria-expanded="true" aria-controls="sm-entry-\d+-body"/);
+    assert.match(html,/data-expand-all/);assert.match(html,/data-collapse-all/);
+  }
+  app.tab='Overview';assert(!app.build().includes('data-entry-toggle'));
 });

@@ -1,4 +1,4 @@
-# MYZ Sector Manager v0.1.1
+# MYZ Sector Manager v0.1.2
 
 Foundry VTT v14 GM-only Journal-backed sector editor.
 
@@ -9,7 +9,7 @@ Foundry VTT v14 GM-only Journal-backed sector editor.
 2. Enable the module in a Foundry v14 test world.
 3. Create a Script Macro: `await game.myzSectorManager.open();`
 
-The manifest works after the first automated release completes. For later releases, use Foundry's module Update control; no manual ZIP upload is needed. If an older installation uses a raw GitHub manifest URL, reinstall it using the stable URL above. Back up the world first.
+Version 0.1.1 is already released; version 0.1.2 will become available only after its tag is authorized and the workflow succeeds. For later releases, use Foundry's module Update control; no manual ZIP upload is needed. If an older installation uses a raw GitHub manifest URL, reinstall it using the stable URL above. Back up the world first.
 
 ## Features
 - GM-only Journal Entry sector records, searchable selector, tabbed editor.
@@ -21,12 +21,15 @@ The manifest works after the first automated release completes. For later releas
 Prototype not yet tested in a live Foundry v14 world. Back up your world first.
 Native Journal windows do not automatically use the Sector Sheet. No automatic map pins, import, or player view yet.
 
-## Version 0.1.1
+## Version 0.1.2 (prepared)
 
-- Sidebar entries expand for long names, show bold coordinates first, then exploration status and sector name, and sort naturally by coordinates (A2 before A10). Entries without coordinates follow those with coordinates and sort by name.
-- Drop a Scene into a Locations reference, an Actor into an Encounters reference, or an Item into a Loot reference. World and compendium document UUIDs are resolved through Foundry. Use **Open Reference** to open the document sheet or view the referenced scene without activating it for other players. Manual UUID entry remains available, including in Secrets and History.
-- Loot includes decimal quantities and collected checkboxes for Clean Grub, Rot Grub, Clean Water, Rot Water, Bullets, and Booze. Checkboxes track collection only; they do not reduce quantities or transfer supplies to actors. Save Sector to persist changes.
-- Existing loot entries and other sector fields are retained. Older records receive zeroed supply counters when opened, persisted on the next save.
+- Two-line sidebar entries show bold coordinates and exploration status together, then the wrapping sector name. Natural coordinate sorting (A2 before A10) is unchanged.
+- Tab contents and the sector list scroll independently. Tab navigation and Save remain visible when the window is resized.
+- **Consumables** is a compact panel, half-width when the content area is wide and full-width in narrow windows. Decimal quantities and collected checkboxes still use the original `supplies` fields; no data migration is needed.
+- Drop a Scene into Locations, an Actor into Encounters, or an Item into Loot. Secrets and History accept other document types. References display enriched Foundry links with the resolved document name and native icon; click or press Enter to open them through Foundry's document-link handler. Use the × button to remove a reference or drop another document to replace it. Missing documents are indicated without clearing their saved UUID. Existing UUID references display automatically; there is no separate UUID text field or Open button.
+- Each repeatable entry has a keyboard-accessible chevron/title button. **Expand All** and **Collapse All** affect the current tab only. Delete never toggles the entry. New entries start expanded.
+- Collapse state stays in local memory for this Foundry session, including tab switches and reopening the manager. It is not written into Journal flags and resets on a page reload. Session-generated identities survive current-draft edits, deletions, and reordering; saved records reconnect by their content on reopen. Externally edited or completely identical records may not retain distinct collapse preferences across a reload of their data because legacy records have no persistent entry IDs. No entry IDs are added to saved records for this UI feature.
+- Existing sector records, custom entry fields, old loot, quantities, and collected states are preserved. Click **Save Sector** to persist edits and reference changes. Checkboxes only track collection and do not transfer resources to actors.
 
 ## Development checks
 
@@ -37,7 +40,23 @@ node --check scripts/sector-manager.mjs
 node --test tests/*.test.mjs
 ```
 
-The Node tests use a simulated Foundry API to check sorting, escaping, document references, legacy data, and supply persistence. Live Foundry v14 validation is performed by the user in a backup world. Check long names and A2/A10 ordering, valid and wrong-type drops (including compendium entries), reference buttons, fractional supply quantities, collected checkboxes, and reopening saved sectors. Confirm old loot is intact and player access remains restricted.
+The Node tests simulate Foundry APIs and check sorting, escaping, legacy data, consumable persistence, native-link enrichment/routing, missing/stale references, and independent session-only collapse state.
+
+An optional Chromium layout/interaction test is available with a separately installed Playwright package and Chromium (no application dependency):
+
+```sh
+node tests/interface-browser.cjs
+```
+
+It uses the system `/usr/bin/chromium` when available; otherwise Playwright's installed Chromium, or an executable specified by `MYZ_CHROMIUM_PATH`. It models ApplicationV2's frame and content slot and mocks Foundry's document APIs. It checks mouse-wheel scrolling in all seven tabs, independent sidebar scrolling, resizing, compact Consumables, keyboard interactions, unsaved edits, reference drops, and session reopen. It does not establish live Foundry v14 behavior and is not included in the dependency-free release job.
+
+Live Foundry v14 validation is performed by the user in a backup world. Verify:
+
+1. Resize the manager wide and narrow; use the mouse wheel through every tab and a long sector list. Confirm tabs and Save remain visible and long names wrap.
+2. Check old decimal quantities and collected states in Consumables, change values, save, and reopen.
+3. Drop world and compendium documents into the appropriate reference areas; use mouse and Enter to open native links. Replace/remove references and verify missing documents are indicated without losing their UUIDs.
+4. Edit a card, collapse/reopen it, switch tabs, save, close/reopen the manager, and confirm data is retained. Check independent/bulk collapse and deletion without accidental toggling. New entries must start expanded.
+5. Confirm pre-update sectors, loot, references, and unknown/custom fields remain intact, and player access remains restricted.
 
 ## Publish a release (no manual ZIPs)
 
@@ -47,13 +66,13 @@ The Node tests use a simulated Foundry API to check sorting, escaping, document 
 2. Open **Settings → Actions → General**. Ensure GitHub Actions is enabled and GitHub-authored actions are allowed. This workflow uses `actions/checkout` and `actions/setup-node`.
 3. The release job explicitly requests only `contents: write`. You normally do not need to change the repository-wide default workflow permission from read-only. If an organization policy blocks write permissions, an administrator must permit this workflow to write repository contents. No personal access token or paid service is needed: GitHub supplies the workflow token automatically.
 
-### First release: v0.1.1
+### Publish this update: v0.1.2
 
-1. Make sure the feature changes and this automation pull request are merged into **main**. The current `module.json` already declares `0.1.1`, its stable manifest URL, and the matching ZIP download URL.
+1. Merge the interface-improvements pull request into **main**. The current `module.json` already declares `0.1.2`, its stable manifest URL, and the matching ZIP download URL.
 2. Test in your backup Foundry v14 world before publishing. Local tests cannot verify the live Foundry interface.
-3. Ask Codex: **“Verify main contains the release automation and module version 0.1.1, run the checks, then create and push tag v0.1.1 at that main commit. Do not manually create a release; let GitHub Actions do it.”** This is a separate publishing authorization. Do not draft or publish a release through GitHub's Releases form first.
+3. Ask Codex: **“Verify main contains the release automation and module version 0.1.2, run the checks, then create and push tag v0.1.2 at that main commit. Do not manually create a release; let GitHub Actions do it.”** This is a separate publishing authorization. Do not draft or publish a release through GitHub's Releases form first.
 4. Open the repository's **Actions** tab and select **Release Module**. Wait for a green checkmark.
-5. Open **Releases**. The `v0.1.1` release should contain **module.json** and **myz-sector-manager-v0.1.1.zip**. GitHub's additional source-code archives are not the installable module ZIP.
+5. Open **Releases**. The `v0.1.2` release should contain **module.json** and **myz-sector-manager-v0.1.2.zip**. GitHub's additional source-code archives are not the installable module ZIP.
 6. In The Forge / Foundry Setup, install or update through the stable manifest URL above. Test in your backup world and check that old sectors and loot remain intact.
 
 If you prefer to push the tag yourself from a local clone with the merged main checked out:
@@ -61,14 +80,14 @@ If you prefer to push the tag yourself from a local clone with the merged main c
 ```sh
 git switch main
 git pull --ff-only origin main
-# Verify module.json says 0.1.1 and the automation is present first.
-git tag v0.1.1
-git push origin v0.1.1
+# Verify module.json says 0.1.2 and the automation is present first.
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 ### Every later release
 
-1. Ask Codex to implement the changes on a feature branch, update `module.json` to the next version (for example `0.1.2`), set its `download` URL to `https://github.com/paddirn/myz-sector-manager/releases/download/v0.1.2/myz-sector-manager-v0.1.2.zip`, update version-specific documentation, run checks, and create a pull request. Keep `id` and the stable `manifest` URL unchanged.
+1. Ask Codex to implement the changes on a feature branch, update `module.json` to the next version (for example `0.1.3`), set its `download` URL to `https://github.com/paddirn/myz-sector-manager/releases/download/v0.1.3/myz-sector-manager-v0.1.3.zip`, update version-specific documentation, run checks, and create a pull request. Keep `id` and the stable `manifest` URL unchanged.
 2. Review and merge the pull request. Test the changes in your backup world.
 3. Authorize Codex to push the matching version tag at the tested main commit, as above. Publish versions in increasing order: the workflow marks the new release as latest.
 4. Watch Actions, check both release assets, then use Foundry's Update control.
@@ -80,9 +99,9 @@ Only pushed tags matching `v*.*.*` trigger publication. The validator further re
 For a local package check, run from the repository root (replace the tag with the actual manifest version):
 
 ```sh
-node scripts/prepare-release.mjs v0.1.1
-unzip -t dist/myz-sector-manager-v0.1.1.zip
-unzip -p dist/myz-sector-manager-v0.1.1.zip module.json | cmp - module.json
+node scripts/prepare-release.mjs v0.1.2
+unzip -t dist/myz-sector-manager-v0.1.2.zip
+unzip -p dist/myz-sector-manager-v0.1.2.zip module.json | cmp - module.json
 ```
 
 `dist/` is ignored by Git. Packaging refuses to overwrite an existing ZIP: inspect and remove only the generated output before rebuilding.
