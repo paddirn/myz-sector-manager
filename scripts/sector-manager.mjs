@@ -1,8 +1,9 @@
+import {ZoneRuntime} from './zone/runtime.mjs';
 const MOD = 'myz-sector-manager';
 const KEY = 'sector';
 const TABS = ['Overview', 'Locations', 'Encounters', 'Loot', 'Effects', 'Secrets', 'History'];
 const COLLECTIONS = {Locations:'locations', Encounters:'encounters', Loot:'loot', Effects:'effects', Secrets:'secrets', History:'history'};
-const REFERENCES = {locations:'Scene', encounters:'Actor', loot:'Item'};
+const REFERENCES = {locations:'Scene', encounters:'Actor', loot:'Item', effects:'Actor'};
 // Session-only UI identities: never written to Journal flags.
 const ENTRY_UI = new Map();
 let entrySequence = 0;
@@ -44,9 +45,11 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   }
   build(){
     const j=this.journal, d=this.data;
-    const list=this.journals.filter(x=>`${x.name} ${x.getFlag(MOD,KEY)?.code||''}`.toLowerCase().includes(this.filter.toLowerCase()));
-    const menu=`<aside class="sm-sidebar"><div class="sm-toolbar"><button data-action="new" type="button">+ New Sector</button></div><input data-filter placeholder="Search sectors" value="${attr(this.filter)}"><div class="sm-list">${list.map(x=>`<button type="button" data-open="${attr(x.id)}" class="${x.id===this.sectorId?'selected':''}"><span class="sm-sector-meta"><strong>${escapeHTML(x.getFlag(MOD,KEY)?.code||'No coordinates')}</strong><small> · ${escapeHTML(x.getFlag(MOD,KEY)?.status||'')}</small></span><span>${escapeHTML(x.name)}</span></button>`).join('')||'<p>No sectors yet.</p>'}</div></aside>`;
-    let main='<div class="sm-empty"><h2>Zone Sector Records</h2><p>Create a sector or select one from the list. Each record is a GM-only Journal Entry.</p></div>';
+    const list=this.journals;
+    const matches=x=>`${x.name} ${x.getFlag(MOD,KEY)?.code||''}`.toLowerCase().includes(this.filter.toLowerCase());
+    const menu=`<aside class="sm-sidebar"><input data-filter aria-label="Search sectors by coordinates or name" placeholder="Search sectors" value="${attr(this.filter)}"><div class="sm-list">${list.map(x=>`<button type="button" data-open="${attr(x.id)}" data-search="${attr(`${x.name} ${x.getFlag(MOD,KEY)?.code||''}`.toLowerCase())}" ${matches(x)?'':'hidden'} class="${x.id===this.sectorId?'selected':''}"><span class="sm-sector-meta"><strong>${escapeHTML(x.getFlag(MOD,KEY)?.code||'No coordinates')}</strong><small> · ${escapeHTML(x.getFlag(MOD,KEY)?.status||'')}</small></span><span>${escapeHTML(x.name)}</span></button>`).join('')}<p data-sector-empty ${list.some(matches)?'hidden':''}>${list.length?'No sectors match your search.':'No sectors yet.'}</p></div></aside>`;
+    const zoneSummary=`<div class="sm-zone-summary">${zone.summary()}</div>`;
+    let main=`<section class="sm-main"><header class="sm-header"><h2>Zone Sector Records</h2><div class="sm-header-buttons"><button type="button" disabled>Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<div class="sm-content"><div class="sm-empty"><p>Create a sector or select one from the list. Each record is a GM-only Journal Entry.</p></div></div></section>`;
     if(j){
       let body='';
       if(this.tab==='Overview') body=`<div class="sm-grid">${field('Sector name','journalName',d.journalName??j.name)}${field('Sector ID / Coordinates','code',d.code)}${field('Terrain','terrain',d.terrain)}${field('Rot Level','rot',d.rot,'number')}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost'])}</div>${area('Description','description',d.description)}${area('GM Notes','notes',d.notes)}`;
@@ -54,10 +57,10 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
         const key=COLLECTIONS[this.tab], arr=d[key]||[];
         const state=this.entryState(key);
         body=(this.tab==='Loot'?supplies(d):'')+`<div class="sm-section-header"><p>${this.tab==='Effects'?'Track weather, Zone phenomena, hazards, and special environmental effects.':`Track sector ${this.tab.toLowerCase()} as individual editable records.`}</p><div class="sm-entry-controls">${arr.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}">+ Add Entry</button></div></div>`+
-          arr.map((item,i)=>{const id=state.entries[i].id, collapsed=state.collapsed.has(id);return `<article class="sm-entry ${collapsed?'is-collapsed':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body"><span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span><strong data-entry-title>${escapeHTML(item.title||`Entry ${i+1}`)}</strong></button><button type="button" data-remove="${key}:${id}" title="Remove entry" aria-label="Remove ${attr(item.title||`Entry ${i+1}`)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}><div class="sm-grid">${field('Title',`${key}.${i}.title`,item.title||'')}${select('Status',`${key}.${i}.status`,item.status||'Active',['Active','Hidden','Discovered','Resolved','Collected','Depleted','Inactive'])}${this.tab==='Effects'?select('Category',`${key}.${i}.category`,item.category||'Weather',['Weather','Phenomenon','Special Effect','Hazard']):reference(key,i,item.uuid||'')}</div>${area('Details / Rules / Notes',`${key}.${i}.details`,item.details||'')}${this.tab==='Effects'?field('Duration / Trigger',`${key}.${i}.duration`,item.duration||''):''}</div></article>`;}).join('')+
+          arr.map((item,i)=>{const id=state.entries[i].id, collapsed=state.collapsed.has(id);return `<article class="sm-entry ${collapsed?'is-collapsed':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body"><span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span><strong data-entry-title>${escapeHTML(item.title||`Entry ${i+1}`)}</strong></button><button type="button" data-remove="${key}:${id}" title="Remove entry" aria-label="Remove ${attr(item.title||`Entry ${i+1}`)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}><div class="sm-grid">${field('Title',`${key}.${i}.title`,item.title||'')}${select('Status',`${key}.${i}.status`,item.status||'Active',['Active','Hidden','Discovered','Resolved','Collected','Depleted','Inactive'])}${this.tab==='Effects'?select('Category',`${key}.${i}.category`,item.category||'Weather',['Weather','Phenomenon','Special Effect','Hazard'])+reference(key,i,item.uuid||''):reference(key,i,item.uuid||'')}</div>${area('Details / Rules / Notes',`${key}.${i}.details`,item.details||'')}${this.tab==='Effects'?field('Duration / Trigger',`${key}.${i}.duration`,item.duration||''):''}</div></article>`;}).join('')+
           (!arr.length?`<div class="sm-empty">No ${escapeHTML(this.tab.toLowerCase())} yet. Add an entry to get started.</div>`:'');
       }
-      main=`<section class="sm-main"><header class="sm-header"><div><h2>${escapeHTML(j.name)}</h2><small>GM only · Journal-backed · ${escapeHTML(d.code||'No sector ID')}</small></div><div class="sm-header-buttons"><button type="button" data-action="journal">Open Journal</button><button type="button" data-action="delete">Delete Sector</button></div></header><nav class="sm-tabs">${TABS.map(t=>`<button type="button" data-tab="${t}" class="${t===this.tab?'active':''}">${t}</button>`).join('')}</nav><div class="sm-content">${body}</div><footer class="sm-footer"><span>${this.dirty?'● Unsaved changes':'Changes saved'}</span><button type="button" data-action="save" ${this.busy?'disabled':''}>Save Sector</button></footer></section>`;
+      main=`<section class="sm-main"><header class="sm-header"><div><h2>${escapeHTML(j.name)}</h2><small>GM only · Journal-backed · ${escapeHTML(d.code||'No sector ID')}</small></div><div class="sm-header-buttons"><button type="button" data-action="journal">Open Journal</button><button type="button" data-action="delete">Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<nav class="sm-tabs">${TABS.map(t=>`<button type="button" data-tab="${t}" class="${t===this.tab?'active':''}">${t}</button>`).join('')}</nav><div class="sm-content">${body}</div><footer class="sm-footer"><span>${this.dirty?'● Unsaved changes':'Changes saved'}</span><button type="button" data-action="save" ${this.busy?'disabled':''}>Save Sector</button></footer></section>`;
     }
     return `<style>
       .myz-sector-manager .sm-window-content{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;padding:0;overflow:hidden}
@@ -67,6 +70,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-sidebar{width:230px;box-sizing:border-box;flex:none;border-right:1px solid var(--color-border-light-primary,#777);padding:12px;display:flex;flex-direction:column;gap:10px;min-height:0}
       .myz-sector-manager .sm-toolbar,.myz-sector-manager .sm-sidebar>input{flex-shrink:0}
       .myz-sector-manager .sm-toolbar button{width:100%}
+      .myz-sector-manager .sm-list [hidden]{display:none!important}
       .myz-sector-manager .sm-sidebar input{width:100%;box-sizing:border-box}
       .myz-sector-manager .sm-list{overflow-y:auto;overflow-x:hidden;flex:1;min-height:0;display:flex;flex-direction:column;gap:4px;scrollbar-gutter:stable}
       .myz-sector-manager .sm-list button{height:auto;min-height:0;flex:0 0 auto;line-height:1.4;overflow-wrap:anywhere;align-items:stretch;text-align:left;padding:8px;display:flex;flex-direction:column;gap:2px;white-space:normal}
@@ -113,9 +117,15 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-supplies{width:100%;table-layout:auto;margin:0}
       .myz-sector-manager .sm-supplies th,.myz-sector-manager .sm-supplies td{padding:4px;text-align:left}
       .myz-sector-manager .sm-supplies th{font-size:.9em}
-      .myz-sector-manager .sm-supplies input[type=number]{width:65px;min-width:55px;box-sizing:border-box}
+      .myz-sector-manager .sm-supplies input[type=number]{width:38px;min-width:35px;text-align:center;box-sizing:border-box;padding:2px;appearance:textfield;-moz-appearance:textfield}
       .myz-sector-manager .sm-supplies td:last-child,.myz-sector-manager .sm-supplies th:last-child{text-align:center}
-      .myz-sector-manager .sm-supplies input[type=checkbox]{width:auto;margin:0;vertical-align:middle}
+      .myz-sector-manager .sm-supplies input[type=number]::-webkit-inner-spin-button,.myz-sector-manager .sm-supplies input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+      .myz-sector-manager .sm-supplies tbody tr:nth-child(even){background:rgba(128,128,128,.08)}
+      .myz-sector-manager .sm-supplies input[type=checkbox]{appearance:auto;-webkit-appearance:checkbox;width:18px;height:18px;min-width:18px;margin:0;vertical-align:middle;opacity:1;accent-color:#3875b4;outline:1px solid #808080;outline-offset:1px;filter:none}
+      .theme-dark .myz-sector-manager .sm-supplies input[type=checkbox],.myz-sector-manager.theme-dark .sm-supplies input[type=checkbox]{color-scheme:dark;accent-color:#7bbdff;outline-color:#ddd}
+      .theme-light .myz-sector-manager .sm-supplies input[type=checkbox],.myz-sector-manager.theme-light .sm-supplies input[type=checkbox]{color-scheme:light;outline-color:#555}
+      .myz-sector-manager .sm-supplies input[type=checkbox]:focus-visible{outline:2px solid #d49a3d;outline-offset:2px}
+      .myz-sector-manager .sm-supplies input[type=checkbox]::before,.myz-sector-manager .sm-supplies input[type=checkbox]::after{content:none!important}
       .myz-sector-manager .sm-empty{padding:22px;opacity:.8;overflow-wrap:anywhere}
       @container (min-width:650px){.myz-sector-manager .sm-consumables{width:50%}}
       @container (max-width:440px){.myz-sector-manager .sm-grid{grid-template-columns:1fr}}
@@ -124,6 +134,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   }
 
   async _onRender(context,options){await super._onRender(context,options);const el=this.element;
+    this.refreshZoneSummary();
     el.querySelectorAll('[data-reference]').forEach(zone=>{
       zone.addEventListener('dragover',event=>{event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy';});
       zone.addEventListener('drop',event=>this.dropReference(event,zone));
@@ -140,13 +151,26 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     }));
     el.querySelector('[data-expand-all]')?.addEventListener('click',()=>this.collapseAll(false));
     el.querySelector('[data-collapse-all]')?.addEventListener('click',()=>this.collapseAll(true));
-    el.querySelector('[data-filter]')?.addEventListener('input',e=>{this.filter=e.target.value;el.querySelectorAll('[data-open]').forEach(b=>{const label=b.textContent.toLowerCase();b.hidden=!label.includes(this.filter.toLowerCase());});});
+    el.querySelector('[data-filter]')?.addEventListener('input',e=>{this.filter=e.target.value;el.querySelectorAll('[data-open]').forEach(b=>{b.hidden=!b.dataset.search.includes(this.filter.toLowerCase());});const empty=el.querySelector('[data-sector-empty]');if(empty)empty.hidden=Array.from(el.querySelectorAll('[data-open]')).some(b=>!b.hidden);});
     el.querySelectorAll('.sm-content input,.sm-content select,.sm-content textarea').forEach(e=>e.addEventListener('input',()=>{
       this.markDirty();
       if(e.name?.endsWith('.title')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title)title.textContent=e.value||'Untitled Entry';}
     }));
   }
   capture(){if(!this.journal)return;const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){const parts=f.name.split('.');let target=this.draft;for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(f.name==='rot')v=Math.max(0,Number.parseInt(v,10)||0);target[parts.at(-1)]=v;}for(const key of Object.values(COLLECTIONS))this.entryState(key);}
+  refreshZoneSummary(){
+    const container=this.element?.querySelector('.sm-zone-summary');
+    if(!container)return;
+    container.innerHTML=zone.summary();zone.bindSummary(container);
+  }
+  async newSector(code=''){
+    const existing=code?zone.store.sectorRecords(code):[];
+    if(existing.length){await this.navigate(existing[0].id);return;}
+    if(!await this.confirmLose())return;
+    const data=DEFAULT();data.code=code;
+    const journal=await JournalEntry.create({name:code?`Sector ${code}`:`New Sector ${this.journals.length+1}`,ownership:{default:0},pages:[{name:'Sector Record',type:'text',text:{content:'<p>Sector record managed by MYZ Sector Manager. Use the Sector Manager to edit structured fields.</p>'}}],flags:{[MOD]:{[KEY]:data}}});
+    this.sectorId=journal.id;this.draft=normalize(data);this.tab='Overview';this.dirty=false;this.filter='';await this.render();
+  }
   markDirty(){this.dirty=true;const status=this.element.querySelector('.sm-footer span');if(status)status.textContent='● Unsaved changes';}
 
   entryState(key){
@@ -267,7 +291,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   async confirmLose(){if(!this.dirty)return true;return await foundry.applications.api.DialogV2.confirm({window:{title:'Unsaved Changes'},content:'Discard unsaved changes?'});}
   async navigate(id){if(id===this.sectorId)return;if(!await this.confirmLose())return;this.sectorId=id;this.draft=normalize(this.journal.getFlag(MOD,KEY));this.tab='Overview';this.dirty=false;await this.render();}
   async action(which,key){try{
-    if(which==='new'){if(!await this.confirmLose())return;const count=this.journals.length+1;const j=await JournalEntry.create({name:`New Sector ${count}`,ownership:{default:0},pages:[{name:'Sector Record',type:'text',text:{content:'<p>Sector record managed by MYZ Sector Manager. Use the Sector Manager to edit structured fields.</p>'}}]});await j.setFlag(MOD,KEY,DEFAULT());await this.navigate(j.id);return;}
+    if(which==='new'){await this.newSector();return;}
     if(which==='add'){this.capture();this.draft[key].push({title:'',status:'Active',details:'',uuid:'',category:'Weather',duration:''});this.dirty=true;await this.render();return;}
     if(which==='save'){this.capture();this.busy=true;const j=this.journal;if(!j)return;await j.update({name:this.draft.journalName?.trim()||j.name});delete this.draft.journalName;await j.setFlag(MOD,KEY,this.draft);this.dirty=false;this.busy=false;await this.render();ui.notifications.info('Sector saved.');return;}
     if(which==='journal'){this.journal?.sheet?.render(true);return;}
@@ -275,8 +299,15 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   }catch(err){this.busy=false;console.error(`${MOD} |`,err);ui.notifications.error(`Sector Manager: ${err.message}`);}}
 }
 let app;
+const zone=new ZoneRuntime({
+  onChange:()=>{if(app?.rendered)app.refreshZoneSummary();},
+  openSector:id=>game.myzSectorManager.open(id),
+  createSector:async code=>{const manager=await game.myzSectorManager.open();if(manager)await manager.newSector(code);}
+});
+Hooks.once('init',()=>zone.register());
 Hooks.once('ready',()=>{
   game.myzSectorManager={
+    zone:zone.api(),
     open:async(id=null)=>{
       if(!game.user.isGM){ui.notifications.warn('GM access only.');return;}
       if(app?.rendered){if(id && id!==app.sectorId)await app.navigate(id);app.bringToFront();return app;}
@@ -286,5 +317,6 @@ Hooks.once('ready',()=>{
     },
     getSector:(journalId)=>{if(!game.user.isGM)return null;const j=game.journal.get(journalId);return j?.getFlag(MOD,KEY)??null;}
   };
+  zone.start();
   console.info(`${MOD} | Ready. Run game.myzSectorManager.open() from a Script Macro.`);
 });
