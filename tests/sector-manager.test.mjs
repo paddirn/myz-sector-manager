@@ -184,3 +184,41 @@ test('Effects exposes an Actor drop reference without changing older record cate
   app.draft.effects=[{title:'Zone anomaly',category:'Phenomenon',duration:'One day',custom:{preserve:true}}];
   const before=JSON.stringify(app.draft);const html=app.build();assert.match(html,/data-reference data-type="Actor"/);assert.match(html,/name="effects.0.uuid"/);assert.match(html,/value="Phenomenon" selected/);assert.equal(JSON.stringify(app.draft),before);
 });
+
+test('Find the Path defaults are additive, independent and include eight core benefits plus talent metadata',()=>{
+  const {context,app}=fixture();const original={version:1,rot:'Custom Rot',terrain:'A bespoke place',pathStunts:{artifact:true,futureStunt:true},loot:[{title:'Keep'}]};
+  const data=context.normalizeSector(original);assert.equal(data.pathStunts.artifact,true);assert.equal(data.pathStunts.safePath,false);assert.equal(data.pathStunts.futureStunt,true);assert.equal(original.pathStunts.safePath,undefined);
+  data.pathStunts.bullets=true;assert.equal(context.normalizeSector({version:1}).pathStunts.bullets,false);
+  context.game.journal.get=()=>({name:'Sector',getFlag:()=>original});app.draft=data;app.tab='Find the Path';
+  const html=app.build();assert.equal((html.match(/name="pathStunts\./g)||[]).length,9);assert.match(html,/Talent Stunts/);assert.match(html,/Rot Finder talent; Core Rulebook p. 64/);assert.match(html,/once per Find the Path roll/);assert.match(html,/Checkboxes save automatically/);
+});
+
+test('stunt autosaves persist per sector across reopen without saving unrelated draft fields or overwriting old loot',async()=>{
+  const {context,app}=fixture();let stored={version:1,code:'A1',terrain:'Original',loot:[{title:'Keep'}]};
+  const j={id:'a',name:'A',getFlag:()=>stored,setFlag:async(mod,key,value)=>{stored=structuredClone(value);}};context.game.journal.get=id=>id==='a'?j:undefined;
+  app.sectorId='a';app.draft=context.normalizeSector(stored);app.draft.terrain='Unsaved terrain';app.draft.pathStunts.artifact=true;
+  const first=app.persistStunts();app.draft.pathStunts.bullets=true;const second=app.persistStunts();await Promise.all([first,second]);
+  const reopened=new context.Manager();await reopened.navigate('a');assert.equal(reopened.draft.pathStunts.artifact,true);assert.equal(reopened.draft.pathStunts.bullets,true);assert.equal(stored.terrain,'Original');assert.equal(stored.loot[0].title,'Keep');
+  assert.equal(context.normalizeSector({version:1,code:'B1'}).pathStunts.artifact,false);
+});
+
+test('reset stunts requires confirmation and persists only defined checkboxes for the current sector',async()=>{
+  const {context,app}=fixture();let stored={version:1,pathStunts:{artifact:true,saferRoute:true,futureStunt:true},loot:[{title:'Keep'}]};
+  context.game.journal.get=()=>({name:'A',getFlag:()=>stored,setFlag:async(mod,key,value)=>{stored=structuredClone(value);}});app.sectorId='a';app.draft=context.normalizeSector(stored);app.capture=()=>{};
+  context.foundry.applications.api.DialogV2={confirm:async()=>false};await app.action('reset-stunts');assert.equal(stored.pathStunts.artifact,true);
+  context.foundry.applications.api.DialogV2.confirm=async()=>true;await app.action('reset-stunts');assert.equal(stored.pathStunts.artifact,false);assert.equal(stored.pathStunts.saferRoute,false);assert.equal(stored.pathStunts.futureStunt,true);assert.equal(stored.loot[0].title,'Keep');
+});
+
+test('environment controls retain custom terrain and legacy Rot values, then capture selected numeric levels',()=>{
+  const {context,app}=fixture();context.game.journal.get=()=>({name:'A'});app.draft=context.normalizeSector({version:1,terrain:'My custom & unusual ruins',rot:'Deadly mist'});
+  let html=app.build();assert.match(html,/list="sm-terrain-options"/);assert.match(html,/My custom &amp; unusual ruins/);assert.match(html,/value="Deadly mist" selected/);assert.match(html,/Localized Rot hotspot; not a sector-wide level/);
+  app.element.querySelectorAll=()=>[{name:'terrain',type:'text',value:'Another custom terrain'},{name:'rot',type:'select-one',value:'Deadly mist'}];app.capture();assert.equal(app.draft.rot,'Deadly mist');assert.equal(app.draft.terrain,'Another custom terrain');
+  for(const level of [0,1,2,3]){app.element.querySelectorAll=()=>[{name:'rot',type:'select-one',value:String(level)}];app.capture();assert.equal(app.draft.rot,level);assert.match(app.build(),new RegExp(`value="${level}" selected`));}
+});
+
+test('terrain suggestions contain all 61 verified names, uniquely sorted, with exact rulebook spelling',()=>{
+  const {context,app}=fixture();context.game.journal.get=()=>({name:'A'});app.draft=context.normalizeSector({version:1,terrain:'Legacy unlisted location',rot:7});
+  const html=app.build(),list=html.match(/<datalist id="sm-terrain-options">(.*?)<\/datalist>/s)[1];
+  const options=Array.from(list.matchAll(/<option value="([^"]+)"><\/option>/g),match=>match[1]);
+  assert.equal(options.length,61);assert.equal(new Set(options).size,61);assert.deepEqual(options,[...options].sort((a,b)=>a.localeCompare(b,'en')));assert(options.includes('Glasified Field'));assert(options.includes('Shipwreck'));assert(options.includes('Purification Plant'));assert.equal(options[0],'Airplane Wreck');assert.equal(options.at(-1),'Windmill');assert.match(html,/value="Legacy unlisted location"/);assert.match(html,/value="7" selected/);
+});

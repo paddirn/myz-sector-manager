@@ -1,7 +1,7 @@
 import {ZoneRuntime} from './zone/runtime.mjs';
 const MOD = 'myz-sector-manager';
 const KEY = 'sector';
-const TABS = ['Overview', 'Locations', 'Encounters', 'Loot', 'Effects', 'Secrets', 'History'];
+const TABS = ['Overview', 'Find the Path', 'Locations', 'Encounters', 'Loot', 'Effects', 'Secrets', 'History'];
 const COLLECTIONS = {Locations:'locations', Encounters:'encounters', Loot:'loot', Effects:'effects', Secrets:'secrets', History:'history'};
 const REFERENCES = {locations:'Scene', encounters:'Actor', loot:'Item', effects:'Actor'};
 // Session-only UI identities: never written to Journal flags.
@@ -9,8 +9,41 @@ const ENTRY_UI = new Map();
 let entrySequence = 0;
 const SUPPLIES = {cleanGrub:'Clean Grub', rotGrub:'Rot Grub', cleanWater:'Clean Water', rotWater:'Rot Water', bullets:'Bullets', booze:'Booze'};
 const supplyDefaults = () => Object.fromEntries(Object.keys(SUPPLIES).map(key=>[key,{quantity:0,collected:false}]));
-const normalize = data => {const result=foundry.utils.deepClone(data); result.supplies ??= {}; for(const key of Object.keys(SUPPLIES)) result.supplies[key] ??= {quantity:0,collected:false}; return result;};
-const DEFAULT = () => ({version:1, code:'', terrain:'', rot:0, status:'Unexplored', description:'', notes:'', locations:[], encounters:[], loot:[], effects:[], secrets:[], history:[], supplies:supplyDefaults()});
+// Stable IDs and visibility metadata support future definitions without changing records.
+const PATH_STUNTS = [
+  ['safePath','Find a safe path and spot any threats.','Core Rulebook p. 56','standard'],
+  ['artifact','Find an artifact.','Core Rulebook p. 56','standard'],
+  ['assessRot',"Assess the sector's general Rot level.",'Core Rulebook p. 56','standard'],
+  ['bullets','Find D6 bullets.','Core Rulebook p. 56','standard'],
+  ['grub','Find D6 rations of Rot-contaminated grub.','Core Rulebook p. 56','standard'],
+  ['water','Find D6 rations of Rot-free water.','Core Rulebook p. 56','standard'],
+  ['halfTime','Explore the sector in half the normal time.','Core Rulebook p. 56','standard'],
+  ['rush','Rush through in one-quarter of normal exploration time.','Core Rulebook p. 56','standard','Avoid threats without fully exploring or collecting resources.'],
+  ['saferRoute','Find a safer route','Rot Finder talent; Core Rulebook p. 64','talent','Reduce effective Rot by one step for the current visit.']
+].map(([id,label,source,group,description=label])=>({id,label,source,group,description,visibility:'players'}));
+const ROT_LEVELS = [
+  {level:0,label:'Rot Oasis',exposure:'No Rot Points from environmental exposure.'},
+  {level:1,label:'Weak Rot',exposure:'1 Rot Point per day.'},
+  {level:2,label:'Rot-Heavy Area',exposure:'1 Rot Point per hour.'},
+  {level:3,label:'Rot Hotspot',exposure:'Localized Rot hotspot; not a sector-wide level.'}
+];
+// Verified Core Rulebook pp. 156–158 entries supplied by the user.
+const TERRAIN_OPTIONS = [
+  'Airplane Wreck','Amusement Park','Ash Desert','Battlefield','Bus Station','Car Park',
+  'Church','Cinema','Crater','Crumbling Ruins','Dead Woods','Decayed Ruins','Derelict Industries',
+  'Dilapidated Mansion','Factory','Fast Food Joint','Gas Station','Glasified Field','Highway',
+  'Hospital','Huge Crater','Hunting Store','Mall','Marina','Marshlands','Military Base','Museum',
+  'Office Building','Oil Cistern','Overgrown Park','Overgrown Ruins','Pipeline','Playground',
+  'Police Station','Power Line','Purification Plant','Radio Mast','Radio Station','Refinery',
+  'Residential Blocks','Road Tunnel','Rubbish Dump','Ruined Bridge','School','Scrublands',
+  'Settlement','Shelter','Shipwreck','Shooting Range','Skyscraper','Sports Center','Suburbia',
+  'Subway Station','Supermarket','Swimming Hall','Tank','Theater','Thick Woods','Train Station',
+  'Unscathed Ruins','Windmill'
+];
+const pathStunts = data => `<section class="sm-path"><p>Track benefits obtained during the current visit or exploration. Each stunt is available once per Find the Path roll, not once per sector forever. Checkboxes save automatically. Nothing resets automatically or awards resources, changes Rot, or alters travel time.</p>${['standard','talent'].map(group=>`<h3>${group==='standard'?'Standard Benefits and Stunts':'Talent Stunts'}</h3>${PATH_STUNTS.filter(stunt=>stunt.group===group).map(stunt=>`<label class="sm-stunt" title="${attr(stunt.description)}"><input type="checkbox" name="pathStunts.${stunt.id}" ${data.pathStunts?.[stunt.id]?'checked':''}><span>${escapeHTML(stunt.label)}${group==='talent'?` (${escapeHTML(stunt.source)})`:''}<small>${escapeHTML(stunt.description!==stunt.label?stunt.description:'')}</small></span></label>`).join('')}`).join('')}<button type="button" data-action="reset-stunts">Reset Stunts</button></section>`;
+const environmentFields = data => `<label class="sm-field"><span>Terrain</span><input name="terrain" type="text" list="sm-terrain-options" value="${attr(data.terrain)}"><datalist id="sm-terrain-options">${TERRAIN_OPTIONS.map(value=>`<option value="${attr(value)}"></option>`).join('')}</datalist></label><label class="sm-field"><span>Rot Level</span><select name="rot">${ROT_LEVELS.some(entry=>String(entry.level)===String(data.rot))?'':`<option value="${attr(data.rot)}" selected>Existing value: ${escapeHTML(data.rot)}</option>`}${ROT_LEVELS.map(entry=>`<option value="${entry.level}" ${String(entry.level)===String(data.rot)?'selected':''}>${entry.level} — ${entry.label}: ${entry.exposure}</option>`).join('')}</select><small data-rot-exposure>${escapeHTML(ROT_LEVELS.find(entry=>String(entry.level)===String(data.rot))?.exposure||'Existing value retained; select a level to change it.')}</small></label>`;
+const normalize = data => {const result=foundry.utils.deepClone(data); result.pathStunts ??= {}; for(const stunt of PATH_STUNTS) result.pathStunts[stunt.id] ??= false; result.supplies ??= {}; for(const key of Object.keys(SUPPLIES)) result.supplies[key] ??= {quantity:0,collected:false}; return result;};
+const DEFAULT = () => ({version:1, pathStunts:{}, code:'', terrain:'', rot:0, status:'Unexplored', description:'', notes:'', locations:[], encounters:[], loot:[], effects:[], secrets:[], history:[], supplies:supplyDefaults()});
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const attr = escapeHTML;
 const field = (label,name,value='',type='text') => `<label class="sm-field"><span>${escapeHTML(label)}</span><input name="${attr(name)}" type="${type}" value="${attr(value)}" ${type==='number'?'min="0" step="1"':''}></label>`;
@@ -52,7 +85,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     let main=`<section class="sm-main"><header class="sm-header"><h2>Zone Sectors</h2><div class="sm-header-buttons"><button type="button" disabled>Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<div class="sm-content"><div class="sm-empty"><p>Create a sector or select one from the list. Each record is a GM-only Journal Entry.</p></div></div></section>`;
     if(j){
       let body='';
-      if(this.tab==='Overview') body=`<div class="sm-grid">${field('Sector name','journalName',d.journalName??j.name)}${field('Sector ID / Coordinates','code',d.code)}${field('Terrain','terrain',d.terrain)}${field('Rot Level','rot',d.rot,'number')}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost'])}</div>${area('Description','description',d.description)}${area('GM Notes','notes',d.notes)}`;
+      if(this.tab==='Overview') body=`<div class="sm-grid">${field('Sector name','journalName',d.journalName??j.name)}${field('Sector ID / Coordinates','code',d.code)}${environmentFields(d)}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost'])}</div>${area('Description','description',d.description)}${area('GM Notes','notes',d.notes)}`;
+      else if(this.tab==='Find the Path') body=pathStunts(d);
       else {
         const key=COLLECTIONS[this.tab], arr=d[key]||[];
         const state=this.entryState(key);
@@ -126,6 +160,9 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .theme-light .myz-sector-manager .sm-supplies input[type=checkbox],.myz-sector-manager.theme-light .sm-supplies input[type=checkbox]{color-scheme:light;outline-color:#555}
       .myz-sector-manager .sm-supplies input[type=checkbox]:focus-visible{outline:2px solid #d49a3d;outline-offset:2px}
       .myz-sector-manager .sm-supplies input[type=checkbox]::before,.myz-sector-manager .sm-supplies input[type=checkbox]::after{content:none!important}
+      .myz-sector-manager .sm-stunt{display:flex;align-items:flex-start;gap:10px;margin:10px 0;cursor:pointer}
+      .myz-sector-manager .sm-stunt input{flex:none;appearance:auto;width:18px;height:18px;margin:2px;accent-color:var(--color-text-hyperlink,#3875b4)}
+      .myz-sector-manager .sm-stunt small{display:block;opacity:.85}
       .myz-sector-manager .sm-empty{padding:22px;opacity:.8;overflow-wrap:anywhere}
       @container (min-width:650px){.myz-sector-manager .sm-consumables{width:50%}}
       @container (max-width:440px){.myz-sector-manager .sm-grid{grid-template-columns:1fr}}
@@ -140,8 +177,16 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       zone.addEventListener('drop',event=>this.dropReference(event,zone));
       zone.querySelector('[data-reference-clear]').addEventListener('click',()=>this.clearReference(zone));
     });
-    el.querySelectorAll('[data-open]').forEach(b=>b.addEventListener('click',()=>this.navigate(b.dataset.open)));
-    el.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{this.capture();this.tab=b.dataset.tab;this.render();}));
+    // Delay pointer selection briefly so rerender cannot destroy the double-click target.
+    el.querySelectorAll('[data-open]').forEach(b=>{
+      b.addEventListener('click',event=>{clearTimeout(this.sidebarClick);if(event.detail===0){void this.navigate(b.dataset.open);return;}this.sidebarClick=setTimeout(()=>{void this.navigate(b.dataset.open);},300);});
+      b.addEventListener('dblclick',event=>{event.preventDefault();clearTimeout(this.sidebarClick);void this.centerSidebarSector(b.dataset.open);});
+    });
+    el.querySelectorAll('[name^="pathStunts."]').forEach(input=>input.addEventListener('change',()=>{this.capture();void this.persistStunts().catch(error=>{this.markDirty();ui.notifications.error(`Could not save stunts: ${error.message}. Use Save Sector to retry.`);});}));
+    el.querySelector('[name="rot"]')?.addEventListener('change',event=>{
+      const hint=el.querySelector('[data-rot-exposure]');if(hint)hint.textContent=ROT_LEVELS.find(entry=>String(entry.level)===event.target.value)?.exposure||'Existing value retained.';
+    });
+    el.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{clearTimeout(this.sidebarClick);this.capture();this.tab=b.dataset.tab;this.render();}));
     el.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>this.action(b.dataset.action,b.dataset.collection)));
     el.querySelectorAll('[data-remove]').forEach(b=>b.addEventListener('click',event=>{event.stopPropagation();const [key,id]=b.dataset.remove.split(':');this.removeEntry(key,id);}));
     el.querySelectorAll('[data-entry-header]').forEach(header=>header.addEventListener('click',event=>{
@@ -153,11 +198,11 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     el.querySelector('[data-collapse-all]')?.addEventListener('click',()=>this.collapseAll(true));
     el.querySelector('[data-filter]')?.addEventListener('input',e=>{this.filter=e.target.value;el.querySelectorAll('[data-open]').forEach(b=>{b.hidden=!b.dataset.search.includes(this.filter.toLowerCase());});const empty=el.querySelector('[data-sector-empty]');if(empty)empty.hidden=Array.from(el.querySelectorAll('[data-open]')).some(b=>!b.hidden);});
     el.querySelectorAll('.sm-content input,.sm-content select,.sm-content textarea').forEach(e=>e.addEventListener('input',()=>{
-      this.markDirty();
+      if(!e.name?.startsWith('pathStunts.'))this.markDirty();
       if(e.name?.endsWith('.title')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title)title.textContent=e.value||'Untitled Entry';}
     }));
   }
-  capture(){if(!this.journal)return;const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){const parts=f.name.split('.');let target=this.draft;for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(f.name==='rot')v=Math.max(0,Number.parseInt(v,10)||0);target[parts.at(-1)]=v;}for(const key of Object.values(COLLECTIONS))this.entryState(key);}
+  capture(){if(!this.journal)return;const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){const parts=f.name.split('.');let target=this.draft;for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;target[parts.at(-1)]=v;}for(const key of Object.values(COLLECTIONS))this.entryState(key);}
   refreshZoneSummary(){
     const container=this.element?.querySelector('.sm-zone-summary');
     if(!container)return;
@@ -288,12 +333,33 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       await doc._onClickDocumentLink(event);
     }catch(err){ui.notifications.error(`Unable to open reference: ${err.message}`);}
   }
+  async _onClose(options){clearTimeout(this.sidebarClick);await this.stuntWrite;return super._onClose(options);}
+  persistStunts(){
+    const journal=this.journal,states=foundry.utils.deepClone(this.draft.pathStunts);
+    const write=(this.stuntWrite||Promise.resolve()).catch(()=>{}).then(async()=>{
+      if(!game.user.isGM)throw new Error('GM access required');
+      const stored=foundry.utils.deepClone(journal.getFlag(MOD,KEY));
+      stored.pathStunts={...stored.pathStunts,...states};
+      await journal.setFlag(MOD,KEY,stored);
+    });
+    this.stuntWrite=write;return write;
+  }
+  async centerSidebarSector(id){
+    try{await this.navigate(id);const record=game.journal.get(id)?.getFlag(MOD,KEY);if(this.sectorId===id&&record)await zone.centerSector(record.code);}
+    catch(error){ui.notifications.error(`Zone Map: ${error.message}`);}
+  }
   async confirmLose(){if(!this.dirty)return true;return await foundry.applications.api.DialogV2.confirm({window:{title:'Unsaved Changes'},content:'Discard unsaved changes?'});}
-  async navigate(id){if(id===this.sectorId)return;if(!await this.confirmLose())return;this.sectorId=id;this.draft=normalize(this.journal.getFlag(MOD,KEY));this.tab='Overview';this.dirty=false;await this.render();}
+  async navigate(id){if(id===this.sectorId)return;if(!await this.confirmLose())return;await this.stuntWrite;this.sectorId=id;this.draft=normalize(this.journal.getFlag(MOD,KEY));this.tab='Overview';this.dirty=false;await this.render();}
   async action(which,key){try{
+    if(which==='reset-stunts'){
+      const sectorId=this.sectorId;
+      if(!await foundry.applications.api.DialogV2.confirm({window:{title:'Reset Stunts'},content:'Clear all Find the Path checkboxes for this sector?'}))return;
+      if(this.sectorId!==sectorId)return;
+      this.capture();for(const stunt of PATH_STUNTS)this.draft.pathStunts[stunt.id]=false;try{await this.persistStunts();}catch(error){this.markDirty();throw error;}await this.render();return;
+    }
     if(which==='new'){await this.newSector();return;}
     if(which==='add'){this.capture();this.draft[key].push({title:'',status:'Active',details:'',uuid:'',category:'Weather',duration:''});this.dirty=true;await this.render();return;}
-    if(which==='save'){this.capture();this.busy=true;const j=this.journal;if(!j)return;await j.update({name:this.draft.journalName?.trim()||j.name});delete this.draft.journalName;await j.setFlag(MOD,KEY,this.draft);this.dirty=false;this.busy=false;await this.render();ui.notifications.info('Sector saved.');return;}
+    if(which==='save'){const pendingStunts=this.stuntWrite;await pendingStunts?.catch(()=>{});this.capture();this.busy=true;const j=this.journal;if(!j)return;await j.update({name:this.draft.journalName?.trim()||j.name});delete this.draft.journalName;await j.setFlag(MOD,KEY,this.draft);if(this.stuntWrite===pendingStunts)this.stuntWrite=undefined;this.dirty=false;this.busy=false;await this.render();ui.notifications.info('Sector saved.');return;}
     if(which==='journal'){this.journal?.sheet?.render(true);return;}
     if(which==='delete'){if(!await foundry.applications.api.DialogV2.confirm({window:{title:'Delete Sector'},content:`Permanently delete the Journal Entry for ${escapeHTML(this.journal.name)}? This cannot be undone.`}))return;await this.journal.delete();ENTRY_UI.delete(this.sectorId);this.sectorId=null;this.draft=null;this.dirty=false;await this.render();return;}
   }catch(err){this.busy=false;console.error(`${MOD} |`,err);ui.notifications.error(`Sector Manager: ${err.message}`);}}
