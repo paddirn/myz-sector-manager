@@ -60,13 +60,14 @@ export class ZoneRuntime {
     if(config.arkCoordinate&&config.grid&&!coordinateToBounds(config.arkCoordinate,config.grid))warning+=(warning?' ':'')+'Ark is outside the configured grid; its map highlight is unavailable.';
     return `<style>.sm-zone-summary{flex-shrink:0;border-bottom:1px solid #888;padding:6px 12px;font-size:12px}.sm-zone-summary .zm-actions,.sm-zone-summary .zm-positions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}.sm-zone-summary button{width:auto;height:auto;white-space:normal}.sm-zone-summary .zm-positions{margin-top:4px}.sm-zone-summary p{margin:4px 0}.sm-zone-summary em{opacity:.8}.sm-zone-summary .zm-expedition{display:flex;gap:8px;align-items:center;max-width:100%}.sm-zone-summary .zm-group-location{min-width:0;overflow-wrap:anywhere}.sm-zone-summary .zm-portrait{width:36px;height:36px;flex:0 0 36px;padding:0;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center}.sm-zone-summary .zm-portrait img{width:100%;height:100%;object-fit:contain}.sm-zone-summary .zm-portrait:focus-visible{outline:2px solid #d49a3d;outline-offset:2px}</style>
       <details ${this.toolsOpen?'open':''}><summary>Zone Map / Tracking: <strong>${escapeHTML(scene?.name||config.sceneId||'Not configured')}</strong></summary><div class="zm-actions"><button type="button" data-zone-config>Configure / Tracking</button><button type="button" data-zone-view ${scene?'':'disabled'}>View Zone</button><button type="button" data-zone-select ${this.store.live&&config.grid?'':'disabled'}>Select on map</button><button type="button" data-zone-overlay aria-pressed="${Boolean(config.overlay.enabled)}" ${scene&&config.grid?'':'disabled'}>${config.overlay.enabled?'Hide':'Show'} overlay</button></div></details>
-      ${warning?`<p role="alert">${escapeHTML(warning)}</p>`:''}${config.sceneId||config.arkCoordinate?`<div class="zm-ark">⌂ Ark: <strong>${escapeHTML(config.arkCoordinate||'Not designated')}</strong></div>`:''}${tracks?`<div class="zm-positions">${tracks}</div>`:''}`;
+      ${warning?`<p role="alert">${escapeHTML(warning)}</p>`:''}${config.sceneId||config.arkCoordinate?`<div class="zm-ark zm-expedition">${config.grid&&coordinateToBounds(config.arkCoordinate,config.grid)?'<button type="button" class="zm-portrait" data-zone-ark title="Center on the Ark sector" aria-label="Center on the Ark sector"><i class="fa-solid fa-house" aria-hidden="true"></i></button>':'⌂'} Ark: <strong>${escapeHTML(config.arkCoordinate||'Not designated')}</strong></div>`:''}${tracks?`<div class="zm-positions">${tracks}</div>`:''}`;
   }
   bindSummary(container){
     if(!container||!this.store.isGM)return;
     container.querySelector('details')?.addEventListener('toggle',event=>{this.toolsOpen=event.target.open;});
     const run=handler=>async()=>{try{await handler();}catch(error){this.env.ui.notifications.error(`Zone Map: ${error.message}`);}};
     container.querySelector('[data-zone-config]')?.addEventListener('click',run(()=>this.configure()));
+    container.querySelector('[data-zone-ark]')?.addEventListener('click',run(()=>this.centerSector(this.store.config.arkCoordinate)));
     container.querySelector('[data-zone-view]')?.addEventListener('click',run(()=>this.store.scene?.view()));
     container.querySelector('[data-zone-overlay]')?.addEventListener('click',run(()=>this.toggleOverlay()));
     for(const button of container.querySelectorAll('[data-zone-center]')){button.addEventListener('click',run(()=>this.centerGroup(button.dataset.zoneCenter)));void this.attachPortrait(button,button.dataset.zoneCenter);}
@@ -92,6 +93,19 @@ export class ZoneRuntime {
       else{const icon=this.env.document.createElement('i');icon.className='fa-solid fa-user-group';icon.setAttribute('aria-hidden','true');button.replaceChildren(icon);}
     };
     image.addEventListener('error',next);next();
+  }
+  async centerSector(coordinate){
+    if(!this.store.isGM)return false;
+    const {scene,config}=this.store;
+    if(!scene||!config.grid){this.env.ui.notifications.warn('Configure a Zone Scene and grid in Zone Map / Tracking first.');return false;}
+    const gridSnapshot=JSON.stringify(config.grid);
+    const bounds=coordinateToBounds(coordinate,config.grid);
+    if(!bounds){this.env.ui.notifications.warn('This sector has no valid coordinates within the configured Zone grid.');return false;}
+    this.calibrator.cancel();
+    if(!this.store.live)await scene.view();
+    if(!this.store.isGM||!this.store.live||scene!==this.store.scene||gridSnapshot!==JSON.stringify(this.store.config.grid))return false;
+    await this.env.canvas.animatePan({x:bounds.x+bounds.width/2,y:bounds.y+bounds.height/2,duration:350});
+    return true;
   }
   async centerGroup(id){
     if(!this.store.isGM)return false;

@@ -200,3 +200,24 @@ unzip -p dist/myz-sector-manager-v0.1.4.zip module.json | cmp - module.json
 Open the failed Actions run and read the first failing step, or send its log to Codex. A tag/version mismatch or missing file must be fixed in a new reviewed commit before publishing a new version. Do not move an existing release tag.
 
 A repeated run for an existing release stops without changing that release or its assets. Concurrent runs for the same tag are serialized. If publishing creates a release but an upload fails, it may leave a partial release: inspect it before taking any action. The workflow never deletes releases or overwrites assets automatically. Ask for help recovering it, or publish a corrected new version. No release has been published by merely adding this workflow.
+
+### Sector navigation and exploration tracking (0.1.5)
+
+- Click the **house button beside the Ark coordinate** to view the Zone Scene and center on the Ark sector. No Ark token or sector record is needed. The button appears only for a coordinate within the configured grid.
+- **Double-click a sector card in the left sidebar** to select it and center the Zone Scene on its cell midpoint. Single-click still selects the record; pointer selection waits briefly to distinguish double-clicks. Keyboard selection remains immediate. Set up the Zone Scene/grid first; records with missing or out-of-bounds coordinates show a notification. These actions view the Scene only on your GM client.
+- **Find the Path** contains the main success benefit, seven standard stunts (Core Rulebook p. 56), and a separate **Talent Stunts** section starting with Rot Finder (p. 64). Checkboxes save automatically per sector, including when switching records or closing the application. **Reset Stunts** asks for confirmation and clears this sector's defined checkboxes. Other unsaved edits still use **Save Sector**. These are records for the current visit/exploration: the rule permits each stunt once per roll, and a previously checked benefit does not prevent its use on a later roll. Leaving a sector never resets them. Checking them awards no resources and changes neither Rot nor travel time.
+- **Terrain** offers the 61 verified names supplied from Core Rulebook pp. 156–158 in one alphabetically sorted suggestion list. Type to search suggestions, or enter any custom text. Existing values remain editable, including entries outside the list. Use the browser's native keyboard suggestion controls (typically Down/Up and Enter); presentation varies by browser.
+- **Rot Level** offers levels 0–3 with their exposure descriptions (Core Rulebook p. 158). The numeric level remains in the existing `rot` field. Unrecognized legacy values appear as a selected **Existing value** option and remain unchanged until you select a standard level. Level 3 denotes a localized hotspot; no exposure damage or time tracking is automated.
+
+Existing sector records keep schema version 1. The additive `pathStunts` map uses stable IDs; unknown/future keys and other sector fields are retained. Definitions include source, description, and visibility metadata for future extensions; the manager remains GM-only.
+
+Before releasing 0.1.5, test in a backed-up Foundry v14 world using the official MYZ system:
+
+1. From another Scene, use the Ark house and double-click a sector; verify the correct cell center and that another connected client stays on its current Scene. Also check an undesignated Ark, missing Scene, and blank/out-of-grid coordinates.
+2. Single-click and keyboard-select sectors; check sidebar search/scroll and unsaved-change confirmation. Double-click another sector and verify its normal selection behavior.
+3. On an older sector, check several standard and talent stunts, switch records, close/reopen, and restart Foundry. Confirm independent state, no automatic resource changes, cancellation of Reset Stunts, and a confirmed reset that persists.
+4. Choose suggested terrain (including **Glasified Field**), save custom terrain, and reopen a record with an older custom value. Test keyboard suggestions and checkboxes in light and dark themes.
+5. Select each Rot level; confirm its exposure text and saved numeric value. Reopen older records with nonstandard Rot values and confirm they are retained until explicitly changed.
+6. Confirm Scene configuration, fixed Ark position, expedition distances, overlays/shortcut, calibration, loot, references, and GM-only access still work.
+
+After testing, merge the feature PR into `main`. Then ask Codex to verify `main` and push `v0.1.5`, or follow the existing tag instructions above. GitHub Actions will publish the assets; this change does not create a tag or release itself.

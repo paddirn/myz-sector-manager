@@ -90,7 +90,7 @@ const path=require('node:path');
     await page.addScriptTag({type:'module',url:origin+'/scripts/sector-manager.mjs'});
     await page.evaluate(async()=>{for(const callback of initCallbacks)callback();ready();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
 
-    for(const tab of ['Overview','Locations','Encounters','Loot','Effects','Secrets','History']){
+    for(const tab of ['Overview','Find the Path','Locations','Encounters','Loot','Effects','Secrets','History']){
       await page.locator(`[data-tab="${tab}"]`).click();
       await page.waitForFunction(tab=>manager.tab===tab,tab);
       await page.locator('.sm-content').hover();await page.mouse.wheel(0,400);
@@ -101,7 +101,7 @@ const path=require('node:path');
       });
       assert(geometry.tabsInFrame&&geometry.footerInFrame,`${tab}: tabs/footer remain visible`);
     }
-    console.log('Mouse wheel works across all seven tabs; navigation/footer stay visible');
+    console.log('Mouse wheel works across all eight tabs; navigation/footer stay visible');
     const contentScroll=await page.locator('.sm-content').evaluate(el=>el.scrollTop);
     await page.locator('.sm-list').hover();await page.mouse.wheel(0,500);
     await page.waitForFunction(()=>document.querySelector('.sm-list').scrollTop>0);
@@ -230,6 +230,30 @@ const path=require('node:path');
     await page.waitForFunction(()=>canvas.scene?.id==='zone');
     assert.deepEqual(await page.evaluate(()=>lastPan),{x:650,y:60,duration:350});
     console.log('Fixed Ark, distance row, conflict-aware shortcut synchronization, portraits and GM-local keyboard centering pass');
+
+    await page.evaluate(async()=>{await game.scenes.get('combat').view();});
+    await page.locator('[data-zone-ark]').click();await page.waitForFunction(()=>canvas.scene?.id==='zone'&&lastPan?.x===250);
+    assert.deepEqual(await page.evaluate(()=>lastPan),{x:250,y:200,duration:350});
+    await page.locator('[data-filter]').fill('');
+    await page.locator('[data-open="sector2"]').dblclick();
+    await page.waitForFunction(()=>manager.sectorId==='sector2'&&lastPan?.y===1000);
+    assert.deepEqual(await page.evaluate(()=>lastPan),{x:250,y:1000,duration:350});
+    await page.locator('[data-open="sector1"]').click();await page.waitForFunction(()=>manager.sectorId==='sector1');
+    await page.locator('[data-tab="Find the Path"]').click();
+    await page.locator('[name="pathStunts.artifact"]').check();
+    await page.waitForFunction(()=>records.get('sector1').getFlag('myz-sector-manager','sector').pathStunts?.artifact===true);
+    await page.locator('[data-open="sector2"]').click();await page.waitForFunction(()=>manager.sectorId==='sector2');
+    await page.locator('[data-tab="Find the Path"]').click();assert.equal(await page.locator('[name="pathStunts.artifact"]').isChecked(),false);
+    await page.locator('[data-open="sector1"]').click();await page.waitForFunction(()=>manager.sectorId==='sector1');
+    await page.locator('[data-tab="Find the Path"]').click();assert.equal(await page.locator('[name="pathStunts.artifact"]').isChecked(),true);
+    await page.locator('[data-action="reset-stunts"]').click();await page.waitForFunction(()=>records.get('sector1').getFlag('myz-sector-manager','sector').pathStunts?.artifact===false);
+    await page.locator('[data-tab="Overview"]').click();
+    await page.locator('[name="terrain"]').fill('Custom terrain outside the tables');
+    await page.locator('[name="rot"]').selectOption('3');assert.match(await page.locator('[data-rot-exposure]').innerText(),/Localized Rot hotspot/);
+    await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    assert.equal(await page.evaluate(()=>records.get('sector1').getFlag('myz-sector-manager','sector').rot),3);
+    assert.equal(await page.evaluate(()=>records.get('sector1').getFlag('myz-sector-manager','sector').terrain),'Custom terrain outside the tables');
+    console.log('Ark house and sidebar double-click center cell midpoints; single-click selection, stunt autosave/reset/isolation, custom terrain and Rot exposure pass');
 
     // Three clicks preview in Scene coordinates under zoom without saving.
     await page.evaluate(()=>{canvas.stage.zoom=2;canvas.stage.pan={x:100,y:100};});
