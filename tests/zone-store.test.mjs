@@ -3,26 +3,11 @@ import assert from 'node:assert/strict';
 import {ZoneStore,MODULE,CONFIG_KEY,emptyConfiguration} from '../scripts/zone/store.mjs';
 import {ZoneRuntime} from '../scripts/zone/runtime.mjs';
 
-function fixture(){
-  let writes=0,creations=0;
-  const config={...emptyConfiguration(),sceneId:'zone',grid:{reference:'A1',originX:0,originY:0,width:500,height:400,columns:30,rows:30,columnAxis:'x',columnDirection:1,rowDirection:1},ark:{sceneId:'zone',tokenId:'ark'},groups:[{id:'group1',name:'Alpha',sceneId:'zone',tokenId:'party',actorUuid:''}]};
-  const zone={id:'zone',name:'The Zone',grid:{size:100},width:3000,height:3000,tokens:new Map()};
-  const combat={id:'combat',grid:{size:50},tokens:new Map()};
-  const token=(id,x,y,parent=zone)=>({id,x,y,width:1,height:1,parent});
-  zone.tokens.set('ark',token('ark',0,0));zone.tokens.set('party',token('party',500,0));combat.tokens.set('party',token('party',500,0,combat));
-  const configDoc={id:'config',getFlag:(module,key)=>key===CONFIG_KEY?configDoc.value:null,value:structuredClone(config),async setFlag(module,key,value){assert.equal(module,MODULE);assert.equal(key,CONFIG_KEY);writes++;this.value=structuredClone(value);}};
-  const journal=[configDoc,{id:'sector',getFlag:(mod,key)=>key==='sector'?{version:1,code:'a-01',custom:{keep:true}}:null}];journal.get=id=>journal.find(doc=>doc.id===id);
-  const callbacks=new Map();let sequence=0;
-  const Hooks={on:(name,fn)=>{const id=++sequence;if(!callbacks.has(name))callbacks.set(name,new Map());callbacks.get(name).set(id,fn);return id;},off:(name,id)=>callbacks.get(name)?.delete(id),call:(name,...args)=>{for(const fn of callbacks.get(name)?.values()||[])fn(...args);}};
-  const settings=new Map([['zoneConfigurationId','config']]);
-  const env={game:{user:{id:'gm',isGM:true},users:{activeGM:{id:'gm'}},journal,scenes:new Map([['zone',zone],['combat',combat]]),settings:{register(){},get:(module,key)=>settings.get(key),set:async(module,key,value)=>settings.set(key,value)}},canvas:{ready:true,scene:zone},Hooks,ui:{notifications:{error(){},warn(){},info(){}}},JournalEntry:{create:async data=>{creations++;const doc={...configDoc,id:'newConfig',value:data.flags[MODULE][CONFIG_KEY],ownership:data.ownership};journal.push(doc);return doc;}},foundry:{applications:{api:{DialogV2:{confirm:async()=>true}}}},fromUuid:async uuid=>uuid==='Actor.valid'?{documentName:'Actor'}:null};
-  const store=new ZoneStore(env);store.reload();
-  return {store,env,zone,combat,configDoc,config,settings,callbacks,writes:()=>writes,creations:()=>creations};
-}
+import {fixture} from './helpers/zone-fixture.mjs';
 
 test('tracking persists crossings once and skips same-sector, unrelated updates and combat Scene movement',async()=>{
   const f=fixture();await f.store.refreshTracking();assert.equal(f.writes(),1);
-  assert.equal(f.store.config.ark.lastKnown,'A1');assert.equal(f.store.config.groups[0].lastKnown,'B1');
+  assert.equal(f.store.config.arkCoordinate,'A1');assert.equal(f.store.config.groups[0].lastKnown,'B1');
   f.zone.tokens.get('party').x=550;await f.store.tokenChanged(f.zone.tokens.get('party'),{x:550});assert.equal(f.writes(),1);
   await f.store.tokenChanged(f.combat.tokens.get('party'),{x:5000});assert.equal(f.writes(),1);
   f.zone.tokens.get('party').x=1000;await f.store.tokenChanged(f.zone.tokens.get('party'),{x:1000});assert.equal(f.writes(),2);assert.equal(f.store.config.groups[0].lastKnown,'C1');
@@ -34,8 +19,8 @@ test('missing/deleted and off-map tokens keep last-known coordinates and do not 
   const f=fixture();const original=structuredClone(f.env.game.journal[1].getFlag(MODULE,'sector'));
   await f.store.refreshTracking();const token=f.zone.tokens.get('party');f.zone.tokens.delete('party');await f.store.tokenChanged(token);
   assert.equal(f.store.config.groups[0].lastKnown,'B1');assert.equal(f.store.trackingRows()[1].status,'missing-token');
-  f.zone.tokens.get('ark').x=-1000;await f.store.tokenChanged(f.zone.tokens.get('ark'),{x:-1000});assert.equal(f.store.config.ark.lastKnown,'A1');assert.equal(f.store.trackingRows()[0].status,'outside');
-  f.env.game.scenes.delete('zone');await f.store.refreshTracking();assert.equal(f.store.trackingRows()[0].status,'missing-scene');assert.equal(f.store.config.ark.lastKnown,'A1');
+  f.zone.tokens.get('ark').x=-1000;await f.store.tokenChanged(f.zone.tokens.get('ark'),{x:-1000});assert.equal(f.store.config.arkCoordinate,'A1');assert.equal(f.store.trackingRows()[0].status,'fixed');
+  f.env.game.scenes.delete('zone');await f.store.refreshTracking();assert.equal(f.store.trackingRows()[1].status,'missing-scene');assert.equal(f.store.config.arkCoordinate,'A1');
   assert.deepEqual(f.env.game.journal[1].getFlag(MODULE,'sector'),original);
 });
 test('only the active GM writes movement state and players cannot access integration data or save configuration',async()=>{
@@ -45,7 +30,7 @@ test('only the active GM writes movement state and players cannot access integra
 });
 test('configuration rejects foreign, duplicated or missing tokens and wrong Actor references',async()=>{
   const f=fixture();
-  for(const change of [{ark:{sceneId:'combat',tokenId:'party'}},{ark:{sceneId:'zone',tokenId:'newMissing'}},{ark:{sceneId:'zone',tokenId:'party'}},{groups:[{...f.config.groups[0],actorUuid:'Item.wrong'}]}])await assert.rejects(f.store.save({...structuredClone(f.config),...change}));
+  for(const change of [{groups:[{...f.config.groups[0],sceneId:'combat'}]},{groups:[{...f.config.groups[0],tokenId:'newMissing'}]},{groups:[f.config.groups[0],{...f.config.groups[0],id:'group2'}]},{groups:[{...f.config.groups[0],actorUuid:'Item.wrong'}]}])await assert.rejects(f.store.save({...structuredClone(f.config),...change}));
   await f.store.save({...structuredClone(f.config),groups:[{...f.config.groups[0],actorUuid:'Actor.valid'}]});
   assert.equal(f.store.config.groups[0].actorUuid,'Actor.valid');
 });
