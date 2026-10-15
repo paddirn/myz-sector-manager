@@ -76,3 +76,24 @@ export function updateLocation(track,location,now=Date.now()) {
   if(location.coordinate){track.lastKnown=location.coordinate;track.lastSeenAt=now;}
   return true;
 }
+
+export function sectorDistance(from,to,kmPerSector=1.6) {
+  const a=parseCoordinate(from),b=parseCoordinate(to);
+  if(!a||!b||!Number.isFinite(kmPerSector)||kmPerSector<=0)return null;
+  const sectors=Math.max(Math.abs(a.column-b.column),Math.abs(a.row-b.row));
+  const kilometers=sectors*kmPerSector;
+  return Number.isFinite(kilometers)?{sectors,kilometers}:null;
+}
+export function formatDistance(distance) {
+  if(!distance)return 'Distance unavailable';
+  const km=distance.kilometers.toFixed(1).replace(/\.0$/,'');
+  return `${distance.sectors} sectors (${km} km)`;
+}
+export function gridFromCorners(topLeft,topRight,bottomLeft,base) {
+  for(const point of [topLeft,topRight,bottomLeft])if(!Number.isFinite(point?.x)||!Number.isFinite(point?.y))throw new Error('Select three finite Scene-local points.');
+  const width=topRight.x-topLeft.x,height=bottomLeft.y-topLeft.y;
+  if(width<=.001||height<=.001)throw new Error('Corners must produce positive width and height. Click top-left, top-right, then bottom-left of the same sector.');
+  // Small click imprecision is tolerated, but rotated/skewed maps are unsupported.
+  if(Math.abs(topRight.y-topLeft.y)>Math.max(1,width*.005)||Math.abs(bottomLeft.x-topLeft.x)>Math.max(1,height*.005))throw new Error('This grid appears rotated or skewed. Only axis-aligned rectangular sectors are supported; retry with aligned corners or use an aligned map.');
+  return validateGrid({...base,reference:canonicalCoordinate(base.reference)||'A1',originX:topLeft.x,originY:topLeft.y,width,height});
+}

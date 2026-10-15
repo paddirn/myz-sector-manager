@@ -68,7 +68,7 @@ const path=require('node:path');
       globalThis.records=Array.from({length:70},(_,i)=>({id:'sector'+i,name:i===1?'A very long sector name that must wrap rather than being clipped':'Sector '+i,flags:structuredClone({...data,code:'A'+(i+1)}),getFlag(mod,key){return key==='sector'?this.flags:undefined;},async update(update){this.name=update.name;},async setFlag(mod,key,flags){this.flags=structuredClone(flags);}}));
       records.get=id=>records.find(j=>j.id===id);
       const settings=new Map(),settingOptions=new Map();
-      globalThis.game={journal:records,user:{id:'gm',isGM:true},users:{activeGM:{id:'gm'}},scenes:new Map(),settings:{register:(mod,key,options)=>{settingOptions.set(key,options);if(!settings.has(key))settings.set(key,options.default);},get:(mod,key)=>settings.get(key),set:async(mod,key,value)=>{settings.set(key,value);settingOptions.get(key)?.onChange?.(value);}}};
+      globalThis.game={keybindings:{actions:new Map([['core.undo',{editable:[{key:'KeyZ',modifiers:['Control']}],reservedModifiers:['Shift']}]]),bindings:new Map(),register(module,id,options){this.actions.set(module+'.'+id,options);this.bindings.set(module+'.'+id,options.editable);},get(module,id){return this.bindings.get(module+'.'+id)||[];}},journal:records,user:{id:'gm',isGM:true},users:{activeGM:{id:'gm'}},scenes:new Map(),settings:{register:(mod,key,options)=>{settingOptions.set(key,options);if(!settings.has(key))settings.set(key,options.default);},get:(mod,key)=>settings.get(key),set:async(mod,key,value)=>{settings.set(key,value);settingOptions.get(key)?.onChange?.(value);}}};
       globalThis.JournalEntry={create:async data=>{
         const doc={id:'created'+(++identity),name:data.name,ownership:data.ownership,value:data.flags||{},getFlag(mod,key){return this.value[mod]?.[key];},async setFlag(mod,key,value){this.value[mod]??={};this.value[mod][key]=structuredClone(value);Hooks.call('updateJournalEntry',this);},async update(update){this.name=update.name;}};
         records.push(doc);Hooks.call('createJournalEntry',doc);return doc;
@@ -79,10 +79,10 @@ const path=require('node:path');
       globalThis.PIXI={Container,Graphics,Text,Point:class{constructor(x,y){this.x=x;this.y=y;}}};
       const board=document.createElement('canvas');board.width=1400;board.height=900;board.style.cssText='position:fixed;left:0;top:0;width:1400px;height:900px';document.body.prepend(board);
       const stage=new Container();stage.zoom=1;stage.pan={x:0,y:0};stage.toLocal=point=>({x:(point.x-stage.pan.x)/stage.zoom,y:(point.y-stage.pan.y)/stage.zoom});
-      globalThis.canvas={ready:false,scene:null,stage,app:{view:board,screen:{width:1400,height:900}}};
+      globalThis.lastPan=null;globalThis.canvas={animatePan:async point=>{lastPan=point;},ready:false,scene:null,stage,app:{view:board,screen:{width:1400,height:900}}};
       for(const id of ['zone','combat']){
-        const scene={id,name:id==='zone'?'Zone Map':'Combat Map',width:6000,height:6000,grid:{size:100},dimensions:{sceneRect:{x:0,y:0,width:6000,height:6000}},tokens:new Map(),async view(){canvas.ready=true;canvas.scene=this;Hooks.call('canvasReady');}};
-        for(const [tokenId,name,x] of [['ark','Ark marker',10],['party','Expedition marker',600]])scene.tokens.set(tokenId,{id:tokenId,name,x,y:10,width:1,height:1,parent:scene});
+        const scene={id,name:id==='zone'?'Zone Map':'Combat Map',width:6000,height:6000,grid:{size:100},dimensions:{sceneRect:{x:0,y:0,width:6000,height:6000}},tokens:new Map(),async view(){if(canvas.ready)Hooks.call('canvasTearDown');canvas.ready=true;canvas.scene=this;Hooks.call('canvasReady');}};
+        for(const [tokenId,name,x] of [['ark','Ark marker',10],['party','Expedition marker',600]])scene.tokens.set(tokenId,{id:tokenId,name,x,y:10,width:1,height:1,texture:{src:'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'},parent:scene});
         game.scenes.set(id,scene);
       }
       globalThis.zoneState=()=>records.get(game.settings.get('myz-sector-manager','zoneConfigurationId'))?.getFlag('myz-sector-manager','zoneConfiguration');
@@ -197,7 +197,7 @@ const path=require('node:path');
     await dialog.locator('[name="unit"]').selectOption('cells');
     await page.waitForFunction(()=>document.querySelector('.zm-config [name="width"]').value==='10');
     await dialog.locator('[name="width"]').fill('5');await dialog.locator('[name="height"]').fill('4');
-    await dialog.locator('[name="ark"]').selectOption('ark');
+    await dialog.locator('[name="arkCoordinate"]').fill('A1');
     await dialog.locator('[data-add-group]').click();await dialog.locator('[data-group]').waitFor();
     await dialog.locator('[name="group-name"]').fill('Expedition Alpha');await dialog.locator('[name="group-token"]').selectOption('party');
     await dialog.locator('.zm-actor').evaluate(el=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({type:'Actor',uuid:'Actor.one'}));el.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));});
@@ -212,6 +212,52 @@ const path=require('node:path');
     await page.waitForFunction(()=>game.myzSectorManager.zone.tracking()[1].live);
     await page.locator('[data-zone-overlay]').click();await page.waitForFunction(()=>canvas.stage.children.some(child=>child.name==='myz-zone-overlay'));
     assert(await page.evaluate(()=>canvas.stage.children.every(child=>child.eventMode==='none'&&!child.interactiveChildren)));
+
+    // Shortcut choice uses the loaded action registry (Ctrl+Shift+Z conflicts
+    // with core undo's reserved Shift, so this fixture chooses Ctrl+Alt+Shift+Z).
+    assert.deepEqual(await page.evaluate(()=>game.keybindings.get('myz-sector-manager','toggleZoneOverlay')[0].modifiers),['Control','Alt','Shift']);
+    await page.evaluate(()=>game.keybindings.actions.get('myz-sector-manager.toggleZoneOverlay').onDown());
+    await page.waitForFunction(()=>!zoneState().overlay.enabled);assert.equal(await page.evaluate(()=>canvas.stage.children.length),0);
+    assert.match(await page.locator('[data-zone-overlay]').innerText(),/Show/);
+    await page.evaluate(()=>game.keybindings.actions.get('myz-sector-manager.toggleZoneOverlay').onDown());await page.waitForFunction(()=>zoneState().overlay.enabled);
+    assert.equal(await page.evaluate(()=>zoneState().arkCoordinate),'A1');
+    assert.match(await page.locator('.zm-positions').innerText(),/1 sectors \(1.6 km\)/);
+    await page.locator('[data-zone-center] img').waitFor();
+    const portrait=page.locator('[data-zone-center]').first();await portrait.click();
+    assert.deepEqual(await page.evaluate(()=>lastPan),{x:650,y:60,duration:350});
+    await page.evaluate(async()=>{await game.scenes.get('combat').view();});
+    await page.locator('[data-zone-center]').first().focus();await page.keyboard.press('Enter');
+    await page.waitForFunction(()=>canvas.scene?.id==='zone');
+    assert.deepEqual(await page.evaluate(()=>lastPan),{x:650,y:60,duration:350});
+    console.log('Fixed Ark, distance row, conflict-aware shortcut synchronization, portraits and GM-local keyboard centering pass');
+
+    // Three clicks preview in Scene coordinates under zoom without saving.
+    await page.evaluate(()=>{canvas.stage.zoom=2;canvas.stage.pan={x:100,y:100};});
+    await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
+    await dialog.locator('[data-calibrate-grid]').click();await page.waitForSelector('.myz-zone-calibration');
+    await page.mouse.click(100,780);await page.mouse.click(300,780);await page.mouse.click(100,850);
+    await page.locator('[data-calibration-confirm]').waitFor({state:'visible'});
+    assert.equal(await page.evaluate(()=>zoneState().grid.width),500);
+    await page.locator('[data-calibration-retry]').click();
+    await page.mouse.click(120,780);await page.mouse.click(320,780);await page.mouse.click(120,860);
+    await page.locator('[data-calibration-confirm]').click();
+    await dialog.locator('[name="width"]').waitFor({state:'visible'});
+    assert.equal(await dialog.locator('[name="width"]').inputValue(),'100');assert.equal(await dialog.locator('[name="height"]').inputValue(),'40');
+    assert.equal(await page.evaluate(()=>zoneState().grid.width),500); // Confirm applies only to unsaved form.
+    assert.equal(await page.locator('.myz-zone-calibration').count(),0);
+    await dialog.locator('[data-cancel-zone]').click();
+    await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
+    await dialog.locator('[data-calibrate-grid]').click();await page.waitForSelector('.myz-zone-calibration');
+    await page.mouse.click(100,780);await page.keyboard.press('Escape');
+    await dialog.locator('[name="width"]').waitFor({state:'visible'});assert.equal(await page.locator('.myz-zone-calibration').count(),0);
+    assert.equal(await page.evaluate(()=>zoneState().overlay.enabled),true);assert.equal(await page.evaluate(()=>canvas.stage.children.length),1);
+    await dialog.locator('[data-cancel-zone]').click();
+    await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
+    await dialog.locator('[data-calibrate-grid]').click();await page.waitForSelector('.myz-zone-calibration');
+    await page.mouse.click(100,780);await page.evaluate(async()=>{await game.scenes.get('combat').view();});
+    await dialog.locator('[name="width"]').waitFor({state:'visible'});assert.equal(await page.locator('.myz-zone-calibration').count(),0);assert.equal(await page.evaluate(()=>canvas.stage.children.length),0);
+    await dialog.locator('[data-cancel-zone]').click();await page.locator('[data-zone-view]').click();await page.waitForFunction(()=>canvas.scene?.id==='zone');
+    console.log('Calibration preview/retry/confirm/Escape/Scene teardown restores visibility and leaves saved grid unchanged');
 
     // One-shot point selection uses canvas transforms, leaves normal controls alone,
     // and creates only the confirmed map cell rather than filling the whole map.
@@ -235,7 +281,7 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>zoneState().groups[0].lastKnown),'C1');assert.equal(await page.evaluate(()=>canvas.stage.children.length),0);
     await page.evaluate(async()=>{globalThis.manager=await game.myzSectorManager.open('sector1');});
     await page.waitForFunction(()=>document.querySelector('.zm-positions').textContent.includes('last known'));
-    assert.match(await page.locator('.zm-positions').innerText(),/Expedition Alpha: C1/);
+    assert.match(await page.locator('.zm-positions').innerText(),/Expedition Alpha\s*C1/);
     await page.evaluate(async()=>{await game.scenes.get('zone').view();});await page.waitForFunction(()=>canvas.stage.children.length===1);
     await page.evaluate(()=>{const scene=game.scenes.get('zone'),token=scene.tokens.get('party');scene.tokens.delete('party');Hooks.call('deleteToken',token);});
     await page.waitForFunction(()=>zoneState().groups[0].location.status==='missing-token');
