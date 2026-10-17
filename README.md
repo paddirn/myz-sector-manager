@@ -261,3 +261,13 @@ Manual testing in a backed-up Foundry v14 world with the official MYZ system rem
 3. On an existing sector, cancel both Randomize dialogs. Then confirm generation; check terrain/Rot/mood, normal versus industrial ruins, numeric Threat Level and one shared dice pool, threat severity, multiple artifacts, and resource quantities/classifications. Verify Thick Woods never generates artifacts, Settlement requests manual design, and the 1d3 threat option is clearly labeled as a house rule. Reopen/restart and confirm persistence and preservation of manual notes/entries, supplies, stunts, settings, and custom data.
 4. Remove a required table or return an invalid category; verify a helpful error and an unchanged sector. Test players cannot generate and a second GM's edits invalidate a pending preview.
 5. Edit/delete/add blank and meaningful entries, toggle stunts, and confirm tab muting updates without disabling tabs or muting Randomize. Recheck scrolling, references, overlays, and tracking.
+
+### Parser and dialog follow-up (0.1.7)
+
+This patch integrates the previously unmerged `9108f11` parser fix onto the latest main branch. The exact combined Environment results `Thick Woods, Ruin:No, Threat:Yes, Artifact:No` and `Unscathed Ruins, Ruin:Yes, Threat:Yes, Artifact:Yes` are accepted without changing world RollTables. Explicit eligibility remains authoritative, and malformed results still abort without partial writes.
+
+Tracking now labels the original distance **Party is N sectors (K km) from the Ark**, the selected-sector distance **N sectors (K km) from the Ark**, and its party distance **N sectors (K km) from the Party**. One sector uses the singular. Values still use the configured kilometer scale and existing calculations, refresh with selection/position changes, and retain the coordinate buttons. Multiple expedition groups use their names on the Ark row; unavailable positions remain clearly labeled.
+
+Previously, both randomization dialogs inherited Foundry's default width. They now target half the runtime numeric default, with a 320px minimum target; an automatic/unspecified default uses 320px. Viewport caps allow narrower screens, and long text wraps with vertical scrolling. Both the method dropdown and preview/confirmation controls remain available. Randomization rules and save behavior are unchanged.
+
+Cloud checks simulate Foundry's frame/APIs. After updating in a backed-up v14 world, check live labels and singular/plural wording, both randomization dialogs at narrow widths with long results, and generation using your exact combined Environment strings. The patch preserves existing sector records, settings, and the stable update manifest URL.

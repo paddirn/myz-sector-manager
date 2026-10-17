@@ -12,7 +12,7 @@ function fixture(){
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
   const context=vm.createContext({console,ZoneRuntime,tabHasContent,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
-  vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;',context);
+  vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
 }
@@ -223,4 +223,13 @@ test('terrain suggestions contain all 61 verified names, uniquely sorted, with e
   const html=app.build(),list=html.match(/<datalist id="sm-terrain-options">(.*?)<\/datalist>/s)[1];
   const options=Array.from(list.matchAll(/<option value="([^"]+)"><\/option>/g),match=>match[1]);
   assert.equal(options.length,61);assert.equal(new Set(options).size,61);assert.deepEqual(options,[...options].sort((a,b)=>a.localeCompare(b,'en')));assert(options.includes('Glasified Field'));assert(options.includes('Shipwreck'));assert(options.includes('Purification Plant'));assert.equal(options[0],'Airplane Wreck');assert.equal(options.at(-1),'Windmill');assert.match(html,/value="Legacy unlisted location"/);assert.match(html,/value="7" selected/);
+});
+
+
+test('randomization dialog targets half the inherited width with a usable minimum and auto-width fallback',()=>{
+  const {context}=fixture();context.foundry.applications.api.DialogV2={DEFAULT_OPTIONS:{position:{width:800}}};
+  assert.equal(context.dialogOptions().position.width,400);
+  context.foundry.applications.api.DialogV2.DEFAULT_OPTIONS.position.width=400;assert.equal(context.dialogOptions().position.width,320);
+  context.foundry.applications.api.DialogV2.DEFAULT_OPTIONS.position.width='auto';assert.equal(context.dialogOptions().position.width,320);
+  assert.equal(context.dialogOptions().classes[0],'myz-sector-randomize-dialog');
 });

@@ -221,7 +221,7 @@ const path=require('node:path');
     assert.match(await page.locator('[data-zone-overlay]').innerText(),/Show/);
     await page.evaluate(()=>game.keybindings.actions.get('myz-sector-manager.toggleZoneOverlay').onDown());await page.waitForFunction(()=>zoneState().overlay.enabled);
     assert.equal(await page.evaluate(()=>zoneState().arkCoordinate),'A1');
-    assert.match(await page.locator('.zm-ark').innerText(),/1 sectors \(1.6 km\)/);
+    assert.match(await page.locator('.zm-ark').innerText(),/1 sector \(1.6 km\)/);
     assert.doesNotMatch(await page.locator('.zm-group-location').innerText(),/sectors/);
     await page.locator('[data-zone-center] img').waitFor();
     const portrait=page.locator('[data-zone-center]').first();await portrait.click();
@@ -264,14 +264,15 @@ const path=require('node:path');
       globalThis.Roll=class{constructor(formula){this.formula=formula;}async evaluate(){return {total:1,dice:[{results:this.formula==='2d6'?[{result:1,active:true},{result:6,active:true}]:[{result:1,active:true}]}]};}};
       await game.settings.set('myz-sector-manager','threatGenerationMode','core');
       globalThis.beforeRandomization=structuredClone(records.get('sector1').flags);
-      foundry.applications.api.DialogV2.wait=async()=>null;
+      foundry.applications.api.DialogV2.DEFAULT_OPTIONS={position:{width:800}};
+      foundry.applications.api.DialogV2.wait=async options=>{globalThis.methodDialogOptions=options;return null;};
     });
     await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing);
     assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector1').flags)===JSON.stringify(beforeRandomization)),true);
     await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>options.buttons.find(button=>button.action==='randomize').callback(null,null,{element:{querySelector:()=>({value:'core'})}});foundry.applications.api.DialogV2.confirm=async()=>false;});
     await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing);
     assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector1').flags)===JSON.stringify(beforeRandomization)),true);
-    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async options=>{globalThis.generationPreview=options.content;return true;};});
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async options=>{globalThis.generationPreview=options.content;globalThis.previewDialogOptions=options;return true;};});
     await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing&&manager.draft.randomization?.method==='core');
     assert.match(await page.evaluate(()=>generationPreview),/Threat Level: 2/);assert.match(await page.evaluate(()=>generationPreview),/Threat severity \(1s\): 1/);assert.match(await page.evaluate(()=>generationPreview),/Artifacts \(eligible 6s\): 1/);
     assert.equal(await page.locator('[name="terrain"]').inputValue(),'Overgrown Ruins');assert.equal(await page.locator('[name="mood"]').inputValue(),'A distant howl');
@@ -286,6 +287,38 @@ const path=require('node:path');
     await page.locator('[data-zone-coordinate]').first().click();await page.waitForFunction(()=>lastPan?.x===250&&lastPan?.y===600);
     assert.equal(await page.locator('.zm-selected button').first().innerText(),'A2');
     console.log('Generation cancellation/preview/persistence, preserved notes, live tab indicators, and selected-sector coordinate navigation pass');
+    assert.match(await page.locator('.zm-ark .zm-original-distance').innerText(),/Party is 1 sector \(1.6 km\) from the Ark/);
+    assert.match(await page.locator('.zm-ark .zm-selected').innerText(),/1 sector \(1.6 km\) from the Ark/);
+    assert.match(await page.locator('.zm-positions .zm-selected').innerText(),/1 sector \(1.6 km\) from the Party/);
+    await page.evaluate(()=>{const token=game.scenes.get('zone').tokens.get('party');token.x=1100;Hooks.call('updateToken',token,{x:1100});});
+    await page.waitForFunction(()=>document.querySelector('.zm-ark .zm-original-distance').textContent.includes('Party is 2 sectors (3.2 km) from the Ark'));
+    assert.match(await page.locator('.zm-positions .zm-selected').innerText(),/2 sectors \(3.2 km\) from the Party/);
+    await page.evaluate(()=>{const token=game.scenes.get('zone').tokens.get('party');token.x=600;Hooks.call('updateToken',token,{x:600});});
+    await page.waitForFunction(()=>document.querySelector('.zm-ark .zm-original-distance').textContent.includes('Party is 1 sector'));
+    // Render the real generated dialog options/content in a simulated DialogV2 frame.
+    // This verifies CSS geometry without claiming licensed Foundry dialog integration.
+    for(const viewportWidth of [1400,360,280]){
+      await page.setViewportSize({width:viewportWidth,height:900});
+      const geometry=await page.evaluate(()=>{
+        const measurements=[];
+        for(const options of [methodDialogOptions,previewDialogOptions]){
+          const frame=document.createElement('div');frame.className='application '+options.classes.join(' ');frame.style.cssText='left:12px;top:12px;width:'+options.position.width+'px;height:auto';
+          frame.innerHTML='<header class="window-header">Randomize</header><section class="window-content"><div class="dialog-content">'+options.content+'</div><footer class="dialog-buttons"><button type="button">Cancel</button><button type="button">Confirm</button></footer></section>';
+          document.body.append(frame);
+          const content=frame.querySelector('.sm-randomize-content');const paragraph=document.createElement('p');paragraph.textContent='LongPreview'.repeat(4000);content.append(paragraph);
+          const scroll=frame.querySelector('.dialog-content'),footer=frame.querySelector('footer');
+          const select=frame.querySelector('select');if(select){select.value='core';if(select.value!=='core')throw new Error('Method dropdown unusable');}
+          const rect=frame.getBoundingClientRect();measurements.push({target:options.position.width,width:rect.width,right:rect.right,bottom:rect.bottom,overflow:scroll.scrollWidth>scroll.clientWidth+1,scrollable:scroll.scrollHeight>scroll.clientHeight,buttons:footer.querySelectorAll('button').length});
+          scroll.scrollTop=scroll.scrollHeight;if(scroll.scrollTop===0)throw new Error('Long preview cannot scroll');
+          frame.remove();
+        }
+        return measurements;
+      });
+      for(const measurement of geometry){assert.equal(measurement.target,400);assert(measurement.width<=400);assert(measurement.right<=viewportWidth);assert(measurement.bottom<=900);assert.equal(measurement.overflow,false);assert(measurement.scrollable);assert.equal(measurement.buttons,2);}
+    }
+    await page.setViewportSize({width:1400,height:900});
+    console.log('Origin labels update live with singular/plural wording; half-width method/preview dialogs wrap and scroll on desktop and narrow viewports');
+
 
     // Three clicks preview in Scene coordinates under zoom without saving.
     await page.evaluate(()=>{canvas.stage.zoom=2;canvas.stage.pan={x:100,y:100};});

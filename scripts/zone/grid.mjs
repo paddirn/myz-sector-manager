@@ -87,7 +87,7 @@ export function sectorDistance(from,to,kmPerSector=1.6) {
 export function formatDistance(distance) {
   if(!distance)return 'Distance unavailable';
   const km=distance.kilometers.toFixed(1).replace(/\.0$/,'');
-  return `${distance.sectors} sectors (${km} km)`;
+  return `${distance.sectors} ${distance.sectors===1?'sector':'sectors'} (${km} km)`;
 }
 export function gridFromCorners(topLeft,topRight,bottomLeft,base) {
   for(const point of [topLeft,topRight,bottomLeft])if(!Number.isFinite(point?.x)||!Number.isFinite(point?.y))throw new Error('Select three finite Scene-local points.');
