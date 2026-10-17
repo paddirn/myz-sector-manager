@@ -1,3 +1,5 @@
+import {canonicalCoordinate} from '../scripts/zone/grid.mjs';
+import {sectorIndicators,iconMarkup} from '../scripts/sector-icons.mjs';
 import {travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS} from '../scripts/travel-time.mjs';
 import {sectorNaming,sectorName,ensureJournalFolders,JournalOrganization} from '../scripts/journal-organization.mjs';
 import {generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS} from '../scripts/sector-randomizer.mjs';
@@ -13,7 +15,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -271,4 +273,31 @@ test('old conflicting travel flags use saved stunts, preserve Rot Finder and cle
   assert.equal(app.draft.travel.stalker,true);assert.equal(app.draft.travel.rushed,false);assert.equal(app.draft.pathStunts.saferRoute,true);assert.deepEqual(stored,before);
   app.draft.notes='Unrelated draft';await app.persistStunts();assert.equal(writes,1);assert.equal(stored.travel.stalker,undefined);assert.equal(stored.travel.rushed,undefined);assert.equal(stored.travel.mode,'vehicle');assert.equal(stored.travel.open,true);assert.equal(stored.notes,'Original notes');assert.deepEqual(stored.loot,before.loot);
   const reopened=context.normalizeSector(stored);assert.equal(reopened.travel.stalker,true);assert.equal(reopened.travel.rushed,false);assert.equal(reopened.pathStunts.saferRoute,true);
+});
+
+test('new-sector dialog prefills coordinates, cancels without writes, canonicalizes input and checks scene validity',async()=>{
+  const {context,app}=fixture();const created=[];app.newSector=async code=>created.push(code);let options;
+  context.foundry.applications.api.DialogV2={wait:async value=>{options=value;return null;}};
+  await app.promptNewSector('B7');assert.match(options.content,/name="newSectorCode" value="B7"/);assert.deepEqual(created,[]);
+  context.foundry.applications.api.DialogV2.wait=async()=> 'b-07';await app.promptNewSector('B7');assert.deepEqual(created,['B7']);
+  await app.promptNewSector('B7',()=>false);assert.equal(created.length,1);
+  context.foundry.applications.api.DialogV2.wait=async()=>'<bad>';await assert.rejects(app.promptNewSector('B7'),/Enter coordinates/);assert.equal(created.length,1);
+});
+test('manager fields and section headings reuse shared icons even with zero entry counts',()=>{
+  const {app,context}=fixture();const data=entries();data.loot=[];data.status='Scouted';data.rot=0;data.terrain='Thick Woods';context.game.journal.get=()=>({name:'Sector',getFlag:()=>data});app.draft=data;app.tab='Overview';
+  let html=app.build();for(const key of ['terrain','rot','status']){const info=sectorIndicators(data)[key];assert(html.includes(iconMarkup(info.icon,info.title)));}
+  for(const [tab,key] of [['Encounters','encounters'],['Effects','phenomena'],['Loot','loot']]){app.tab=tab;const info=sectorIndicators(data)[key];assert(app.build().includes(iconMarkup(info.icon,info.title)));}
+});
+
+test('manager icon slots refresh current values, status, counts and collected resources without replacing controls',()=>{
+  const {app}=fixture();const slots=['rot','status','encounters','phenomena','loot'].map(iconSlot=>({dataset:{iconSlot},innerHTML:''}));app.element.querySelectorAll=()=>slots;
+  app.draft={rot:0,status:'Scouted',encounters:[],effects:[],supplies:{bullets:{quantity:1,collected:false}}};app.refreshSectorIcons();assert(slots[0].innerHTML.includes('Rot Level: 0'));assert(slots[4].innerHTML.includes('Uncollected Loot Available'));
+  app.draft.rot=2;app.draft.status='Explored';app.draft.encounters=[{}];app.draft.effects=[{category:'Weather'},{category:'Phenomenon'}];app.draft.supplies.bullets.collected=true;app.refreshSectorIcons();
+  assert(slots[0].innerHTML.includes('Rot Level: 2'));assert(slots[1].innerHTML.includes('data-sector-icon="explored"'));assert(slots[2].innerHTML.includes('1 Encounter'));assert(slots[3].innerHTML.includes('1 Phenomenon'));assert(slots[4].innerHTML.includes('No Uncollected Loot'));
+});
+test('a coordinate duplicate discovered during folder initialization respects cancelled unsaved-change navigation',async()=>{
+  const {app,context}=fixture();context.ensureJournalFolders=async()=>({sectors:{id:'folder'}});app.sectorId='original';app.tab='Loot';app.confirmLose=async()=>true;app.navigate=async()=>{};
+  // The VM keeps the same runtime/store instance used by newSector.
+  vm.runInContext("zone.store.sectorRecords=()=>globalThis.coordinateChecks++===0?[]:[{id:'duplicate'}];",context);context.coordinateChecks=0;
+  await app.newSector('B7');assert.equal(app.sectorId,'original');assert.equal(app.tab,'Loot');
 });
