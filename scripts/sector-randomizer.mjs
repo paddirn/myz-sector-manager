@@ -1,4 +1,4 @@
-import {sectorName} from './journal-organization.mjs';
+import {sectorNaming,sectorName} from './journal-organization.mjs';
 import {CONSUMABLES} from './sector-content.mjs';
 // Table-driven generation: no Journal writes, chat messages, or drawn-result mutation.
 export const RANDOMIZATION_METHODS = [{id:'core',label:'Core Rulebook Tables',generate:generateSector}];
@@ -270,8 +270,8 @@ export async function saveGeneratedSector(journal,expected,next,env=globalThis){
   if(!env.game.user.isGM)throw new Error('Only a GM can randomize sectors.');
   if(JSON.stringify(journal.getFlag('myz-sector-manager','sector'))!==JSON.stringify(expected))throw new Error('This sector changed while generation was running. Nothing was saved; review it and try again.');
   // One Document flag update commits the complete generation; no preceding field writes.
-  const stored=structuredClone(next);delete stored.journalName;
-  const name=sectorName(next);
+  const stored=({...sectorNaming(expected,journal.name),...structuredClone(next)});delete stored.journalName;
+  const name=sectorName(stored);
   if(name&&name!==journal.name)await journal.update({name,'flags.myz-sector-manager.sector':stored});
   else await journal.setFlag('myz-sector-manager','sector',stored);
 }

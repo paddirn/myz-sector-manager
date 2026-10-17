@@ -2,9 +2,19 @@ import {canonicalCoordinate} from './zone/grid.mjs';
 const MODULE='myz-sector-manager';
 const values=collection=>Array.from(collection?.values?collection.values():collection||[]);
 const folderId=folder=>typeof folder==='string'?folder:folder?.id||null;
-export function sectorName(data={}){
+export function defaultSectorName(data={}){
   const raw=String(data.code??'').trim();
   return `${canonicalCoordinate(raw)||raw||'-#'} - ${String(data.terrain??'').trim()||'Unknown Terrain'}`;
+}
+// Missing state is migrated from the existing Journal title; explicit false means automatic.
+export function sectorNaming(data={}, title=''){
+  if(typeof data.nameOverride==='boolean')return {...data};
+  const custom=title&&title!==defaultSectorName(data)?title:'';
+  return {...data,nameOverride:Boolean(custom),customName:custom};
+}
+export function sectorName(data={}, title=''){
+  const state=sectorNaming(data,title);
+  return state.nameOverride?String(state.customName??''):defaultSectorName(state);
 }
 export const activeGM=env=>Boolean(env.game.user.isGM&&env.game.users?.activeGM?.id===env.game.user.id);
 const queues=new WeakMap();
@@ -28,7 +38,11 @@ export function organizationUpdate(document,folders,configId=''){
   if(!kind)return {changes:{},unmanaged:true};
   const changes={};const target=kind==='sector'?folders.sectors.id:folders.root.id;
   if(folderId(document.folder)!==target)changes.folder=target;
-  if(kind==='sector'&&document.name!==sectorName(sector))changes.name=sectorName(sector);
+  if(kind==='sector'){
+    const state=sectorNaming(sector,document.name);
+    if(typeof sector.nameOverride!=='boolean')changes[`flags.${MODULE}.sector`]=state;
+    if(document.name!==sectorName(state))changes.name=sectorName(state);
+  }
   return {changes};
 }
 export class JournalOrganization {

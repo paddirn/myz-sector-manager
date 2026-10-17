@@ -116,7 +116,7 @@ test('document and nested table results preserve references and provenance; miss
 });
 test('single flag write persists generation, preserves unrelated fields, and rejects stale sectors or players',async()=>{
   const f=fixture(),output=await generateSector(f.existing,f.options);let stored=structuredClone(f.existing),writes=0;const journal={getFlag:()=>stored,update:async changes=>{writes++;stored=structuredClone(changes['flags.myz-sector-manager.sector']);},setFlag:async(mod,key,value)=>{writes++;stored=structuredClone(value);}};
-  await saveGeneratedSector(journal,f.existing,output,f.env);assert.equal(writes,1);assert.deepEqual(stored,output);assert.deepEqual(stored.randomization.baseDice,[1,6]);await assert.rejects(saveGeneratedSector(journal,f.existing,output,f.env),/changed/);assert.equal(writes,1);f.env.game.user.isGM=false;await assert.rejects(saveGeneratedSector(journal,stored,output,f.env),/Only a GM/);
+  await saveGeneratedSector(journal,f.existing,output,f.env);assert.equal(writes,1);assert.deepEqual(stored,{nameOverride:false,customName:'',...output});assert.deepEqual(stored.randomization.baseDice,[1,6]);await assert.rejects(saveGeneratedSector(journal,f.existing,output,f.env),/changed/);assert.equal(writes,1);f.env.game.user.isGM=false;await assert.rejects(saveGeneratedSector(journal,stored,output,f.env),/Only a GM/);
 });
 test('empty tab detection ignores defaults and placeholders and recognizes meaningful content',()=>{
   const empty={version:1,code:'A1',rot:0,status:'Unexplored',terrain:' ',encounters:[{title:'',status:'Active'}],effects:[{category:'Weather'}],loot:[],supplies:{bullets:{quantity:0,collected:false}}};
@@ -128,7 +128,7 @@ test('inline UUIDs and legacy table document references keep Item links',async()
   table.roll=async()=>({results:[{description:'@UUID[Item.rifle]{Old Rifle}'}]});let result=await rollTable(table,f.env);assert.equal(result.text,'Old Rifle');assert.equal(result.uuid,item.uuid);table.roll=async()=>({results:[{text:'Old table text',documentCollection:'Item',documentId:'rifle'}]});result=await rollTable(table,f.env);assert.equal(result.uuid,item.uuid);
 });
 test('rename and generated data commit in a single update without temporary journalName',async()=>{
-  const f=fixture(),next=await generateSector(f.existing,f.options);next.journalName='A new name';let stored=f.existing,updates=0;const journal={name:'Old name',getFlag:()=>stored,setFlag:()=>assert.fail('must use one update'),update:async changes=>{updates++;assert.equal(changes.name,'A7 - Overgrown Ruins');stored=changes['flags.myz-sector-manager.sector'];}};
+  const f=fixture(),next=await generateSector(f.existing,f.options);next.journalName='A new name';next.nameOverride=false;let stored=f.existing,updates=0;const journal={name:'Old name',getFlag:()=>stored,setFlag:()=>assert.fail('must use one update'),update:async changes=>{updates++;assert.equal(changes.name,'A7 - Overgrown Ruins');stored=changes['flags.myz-sector-manager.sector'];}};
   await saveGeneratedSector(journal,f.existing,next,f.env);assert.equal(updates,1);assert.equal(stored.journalName,undefined);
 });
 
@@ -207,4 +207,10 @@ test('Core and house modes share severity and artifact counts; neither bypasses 
 
 test('a Core identity roll cannot silently create multiple final threats',async()=>{
   const f=fixture();f.tables.get(TABLE_UUIDS.humanoid).roll=async()=>({results:[{description:'One'},{description:'Two'}]});const before=structuredClone(f.existing);await assert.rejects(generateSector(f.existing,f.options),/exactly one threat result/);assert.deepEqual(f.existing,before);
+});
+
+test('randomization and atomic persistence preserve custom names and travel planning states',async()=>{
+  const f=fixture();f.existing.nameOverride=true;f.existing.customName='The Last Tower';f.existing.travel={mode:'vehicle',night:true};
+  const next=await generateSector(f.existing,f.options);let stored;const journal={name:'The Last Tower',getFlag:()=>f.existing,setFlag:async(m,k,value)=>{stored=value;},update:()=>assert.fail('custom title must not be replaced')};
+  await saveGeneratedSector(journal,f.existing,next,f.env);assert.equal(stored.customName,'The Last Tower');assert.equal(stored.nameOverride,true);assert.deepEqual(stored.travel,f.existing.travel);
 });
