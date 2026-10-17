@@ -241,3 +241,17 @@ test('Encounter and Effect reference drops accept Actors and Journal Entries, re
   }
   documents.set('Item.bad',{uuid:'Item.bad',documentName:'Item'});const prior=input.value;await app.dropReference({payload:{uuid:'Item.bad'},preventDefault(){},stopPropagation(){}},zone);assert.equal(input.value,prior);
 });
+
+test('Consumables defaults and transition-based collapse preserve manual overrides without persisting UI state',()=>{
+  const {app,context}=fixture();app.sectorId='a';app.draft=context.normalizeSector({version:1,supplies:{bullets:{quantity:0,collected:false}}});
+  let state=app.consumablesState();assert.equal(state.collapsed,true);state.collapsed=false;assert.equal(app.consumablesState().collapsed,false);
+  app.draft.supplies.bullets.quantity=3;assert.equal(app.consumablesState().collapsed,false);app.draft.supplies.bullets.collected=true;assert.equal(app.consumablesState().collapsed,true);
+  state.collapsed=false;assert.equal(app.consumablesState().collapsed,false);app.draft.supplies.bullets.collected=false;assert.equal(app.consumablesState().collapsed,false);app.draft.supplies.bullets.quantity=0;assert.equal(app.consumablesState().collapsed,true);assert.equal(app.draft.collapsed,undefined);
+  app.sectorId='b';assert.equal(app.consumablesState().collapsed,true);
+});
+test('Locations accept Scene, Journal Entry and Page drops and preserve native page opening',async()=>{
+  const {app,documents}=fixture();app.capture=()=>{};app.renderReference=async()=>{};const input={value:''},zone={dataset:{type:'Scene|JournalEntry|JournalEntryPage'},querySelector:()=>input};
+  for(const [uuid,type] of [['Scene.a','Scene'],['JournalEntry.j','JournalEntry'],['JournalEntry.j.JournalEntryPage.p','JournalEntryPage']]){
+    let opened=0;documents.set(uuid,{uuid,documentName:type,_onClickDocumentLink:async()=>opened++});await app.dropReference({payload:{uuid},preventDefault(){},stopPropagation(){}},zone);assert.equal(input.value,uuid);await app.openReference(zone);assert.equal(opened,1);
+  }
+});

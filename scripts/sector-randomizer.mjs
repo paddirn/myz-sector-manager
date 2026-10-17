@@ -32,7 +32,7 @@ export async function resolveTables(env=globalThis){
   }
   return tables;
 }
-export async function rollTable(table,env=globalThis,stack=[],{resolveNested=true}={}){
+export async function rollTable(table,env=globalThis,stack=[],{resolveNested=true,allowMissing=false}={}){
   if(stack.length>=8||stack.includes(table.uuid))throw new Error(`Recursive RollTable cycle/depth at ${table.name} (${table.uuid}).`);
   const output=await table.roll({recursive:false});
   if(!output?.results?.length)throw new Error(`RollTable ${table.name} (${table.uuid}) returned no usable results.`);
@@ -42,17 +42,19 @@ export async function rollTable(table,env=globalThis,stack=[],{resolveNested=tru
     const inline=[...String(description).matchAll(/@UUID\[([^\]]+)\](?:\{([^}]+)\})?/g)];
     let uuid=result.documentUuid||(inline.length===1?inline[0][1]:'');
     if(!uuid&&result.documentCollection&&result.documentId)uuid=result.documentCollection.includes('.')?`Compendium.${result.documentCollection}.${result.documentId}`:`${result.documentCollection}.${result.documentId}`;
-    let document;
-    if(uuid){try{document=await env.fromUuid(uuid);}catch(error){throw new Error(`Result reference ${uuid} from ${table.name} is unavailable: ${error.message}`);}if(!document)throw new Error(`Result reference ${uuid} from ${table.name} is missing.`);}
-    if(!document&&typeof result.getDocument==='function'&&(result.documentId||(result.type!==undefined&&!['text',0].includes(result.type)))){try{document=await result.getDocument();}catch(error){throw new Error(`Cannot resolve result document from ${table.name}: ${error.message}`);}if(!document)throw new Error(`Result document from ${table.name} is missing.`);}
+    let document,referenceWarning;
+    try{
+      if(uuid){document=await env.fromUuid(uuid);if(!document)throw new Error(`Reference ${uuid} is missing.`);}
+      if(!document&&typeof result.getDocument==='function'&&(result.documentId||(result.type!==undefined&&!['text',0].includes(result.type)))){document=await result.getDocument();if(!document)throw new Error('Result document is missing.');}
+    }catch(error){if(!allowMissing)throw new Error(`Result reference from ${table.name} is missing or unavailable: ${error.message}`);referenceWarning=`Journal could not be resolved: ${error.message}`;}
     const source={tableUuid:table.uuid,tableName:table.name,originTableUuid:result.parent?.documentName==='RollTable'?result.parent.uuid:table.uuid,resultId:result.id||result._id||'',documentUuid:document?.uuid||uuid};
     if(document?.documentName==='RollTable'&&resolveNested){
-      const nested=await rollTable(document,env,[...stack,table.uuid]);mapped.push(...nested.entries.map(entry=>({...entry,sources:[source,...entry.sources]})));continue;
+      const nested=await rollTable(document,env,[...stack,table.uuid],{allowMissing});mapped.push(...nested.entries.map(entry=>({...entry,sources:[source,...entry.sources]})));continue;
     }
     const label=String(description).replace(/@UUID\[([^\]]+)\](?:\{([^}]+)\})?/g,(match,uuid,label)=>label||document?.name||uuid);
-    const text=plainText(label||document?.name,env);
+    const text=plainText(label||document?.name||(allowMissing?uuid:''),env);
     if(!text)throw new Error(`RollTable ${table.name} (${table.uuid}) returned an empty result.`);
-    mapped.push({text,documentTitle:document?.name||'',uuid:document?.uuid||uuid,documentType:document?.documentName||null,sources:[source],mapping:result.flags?.['myz-sector-manager']?.randomization||{}});
+    mapped.push({text,referenceWarning,documentTitle:document?.name||'',uuid:document?.uuid||uuid,documentType:document?.documentName||null,sources:[source],mapping:result.flags?.['myz-sector-manager']?.randomization||{}});
   }
   return {entries:mapped,text:mapped.map(result=>result.text).join('; '),uuid:mapped.length===1?mapped[0].uuid:'',documentType:mapped.length===1?mapped[0].documentType:null,sources:mapped.flatMap(result=>result.sources),mapping:mapped.length===1?mapped[0].mapping:{},documentTitle:mapped.length===1?mapped[0].documentTitle:''};
 }
@@ -154,7 +156,7 @@ export function mapThreatType(result){
   if(matches.length!==1)throw new Error(`Unrecognized Threat Type result: ${result.text}. Expected Humanoid, D66 Encounters, Monster, or Phenomena.`);
   return matches[0][0];
 }
-const generatedEntry=(result,kind,quantity)=>({title:result.text,status:'Active',details:result.text,uuid:({locations:['Scene'],encounters:['Actor','JournalEntry'],effects:['Actor','JournalEntry'],loot:['Item']}[kind]||[]).includes(result.documentType)?result.uuid:'',...(quantity===undefined?{}:{quantity}),...(kind==='effects'?{category:'Phenomenon',duration:''}:{}),generated:{method:'core',sources:result.sources}});
+const generatedEntry=(result,kind,quantity)=>({title:result.text,status:'Active',details:result.text,uuid:({locations:['Scene','JournalEntry','JournalEntryPage'],encounters:['Actor','JournalEntry'],effects:['Actor','JournalEntry'],loot:['Item']}[kind]||[]).includes(result.documentType)?result.uuid:'',...(quantity===undefined?{}:{quantity}),...(kind==='effects'?{category:'Phenomenon',duration:''}:{}),generated:{method:'core',sources:result.sources}});
 // Preserve category before resolving its nested table; final names never classify threats.
 export async function rollThreat(tables,env=globalThis){
   const selection=await rollTable(tables.threatType,env,[],{resolveNested:false});
@@ -184,6 +186,26 @@ export async function rollThreat(tables,env=globalThis){
   }
   return threats;
 }
+export async function resolveRuinJournal(result,env=globalThis){
+  if(['JournalEntry','JournalEntryPage'].includes(result.documentType)&&result.uuid)return result;
+  if(result.referenceWarning)return result; // Never replace a broken explicit reference with a guessed match.
+  if(result.uuid)return {...result,referenceWarning:`Journal could not be resolved for ${result.text}: result references ${result.documentType||'an unsupported document'}.`};
+  const matches=new Map();let incomplete=false;
+  for(const document of env.game.journal?.values?env.game.journal.values():env.game.journal||[])if(document.name===result.text.trim()&&document.uuid&&document.visible!==false)matches.set(document.uuid,document);
+  for(const pack of env.game.packs?.values?env.game.packs.values():env.game.packs||[]){
+    if((pack.documentName||pack.metadata?.type)!=='JournalEntry'||pack.visible===false)continue;
+    try{
+      const index=await pack.getIndex({fields:['name']});
+      for(const row of index)if(row.name===result.text.trim()){
+        const document=await pack.getDocument(row._id||row.id);
+        if(!document?.uuid){incomplete=true;continue;}
+        matches.set(document.uuid,document);
+      }
+    }catch{incomplete=true;}
+  }
+  if(!incomplete&&matches.size===1){const document=[...matches.values()][0];return {...result,uuid:document.uuid,documentType:'JournalEntry',documentTitle:document.name};}
+  return {...result,referenceWarning:`Journal could not be resolved for ${result.text}: ${incomplete?'some Journal collections could not be searched':matches.size?'multiple exact matches':'no exact match'}.`};
+}
 export async function rollBasePool(level,env=globalThis){
   if(level===0)return [];
   const pool=await new env.Roll(`${level}d6`).evaluate();
@@ -210,7 +232,10 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   for(const key of ['locations','encounters','effects','loot'])output[key]=(output[key]||[]).filter(entry=>entry.generated?.method!=='core'||(key==='loot'&&(Boolean(entry.resource)||entry.title==='COMPONENTS')));
   output.terrain=eligibility.name;output.rot=mapRot(rot);output.mood=mood.text;
   const add=(key,result,quantity)=>{const entry=generatedEntry(result,key,quantity);output[key].push(entry);return entry;};
-  if(eligibility.ruins)add('locations',await take(eligibility.ruins==='normal'?'ruinsA':'ruinsB'));
+  if(eligibility.ruins){
+    const ruins=await rollTable(tables[eligibility.ruins==='normal'?'ruinsA':'ruinsB'],env,[],{allowMissing:true});
+    for(const result of ruins.entries){const resolved=await resolveRuinJournal(result,env);const entry=add('locations',resolved);if(resolved.referenceWarning)entry.referenceWarning=resolved.referenceWarning;}
+  }
   let threatCount=0;
   if(severity){
     const rolls=options.threatMode==='individual-d3'?await dice('1d3'):1;
