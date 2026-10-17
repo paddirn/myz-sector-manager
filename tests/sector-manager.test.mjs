@@ -1,4 +1,5 @@
-import {sectorName,ensureJournalFolders,JournalOrganization} from '../scripts/journal-organization.mjs';
+import {travelOptions,travelTimes,formatDuration} from '../scripts/travel-time.mjs';
+import {sectorNaming,sectorName,ensureJournalFolders,JournalOrganization} from '../scripts/journal-organization.mjs';
 import {generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS} from '../scripts/sector-randomizer.mjs';
 import {tabHasContent,CONSUMABLES} from '../scripts/sector-content.mjs';
 import {test} from 'node:test';
@@ -12,7 +13,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,travelOptions,travelTimes,formatDuration,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -25,7 +26,7 @@ test('coordinates sort naturally with names as fallback and sidebar text is esca
   assert.deepEqual(Array.from(app.journals,x=>x.id),['one','two','ten','none']);
   context.game.journal.get=()=>undefined;
   const html=app.build();
-  assert.match(html,/data-sector-label>A2 - Unknown Terrain<\/strong>/);assert.doesNotMatch(html,/No coordinates/);
+  assert.match(html,/data-sector-label>&lt;Long sector&gt;<\/strong>/);assert.doesNotMatch(html,/No coordinates/);
   assert.match(html,/height:auto;min-height:0;flex:0 0 auto/);
 });
 

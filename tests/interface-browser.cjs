@@ -63,7 +63,7 @@ const path=require('node:path');
       globalThis.Hooks={once:(name,callback)=>{if(name==='ready')ready=callback;else initCallbacks.push(callback);},on:(name,callback)=>{if(!hookCallbacks.has(name))hookCallbacks.set(name,new Map());const id=++identity;hookCallbacks.get(name).set(id,callback);return id;},off:(name,id)=>hookCallbacks.get(name)?.delete(id),call:(name,...args)=>{for(const callback of hookCallbacks.get(name)?.values()||[])callback(...args);}};
       globalThis.fromUuid=async uuid=>docs.get(uuid);
       globalThis.ui={notifications:{info(){},warn(){},error:message=>notifyErrors.push(message)}};
-      const data={version:1,code:'A2',status:'Explored',terrain:'Forest',rot:0,description:'Long description',notes:'GM notes',supplies:{cleanGrub:{quantity:2.75,collected:true}}};
+      const data={version:1,nameOverride:false,code:'A2',status:'Explored',terrain:'Forest',rot:0,description:'Long description',notes:'GM notes',supplies:{cleanGrub:{quantity:2.75,collected:true}}};
       for(const key of ['locations','encounters','loot','effects','secrets','history'])data[key]=Array.from({length:20},(_,i)=>({title:'Entry '+(i+1),details:'Existing notes '+i,uuid:key==='locations'?'Scene.one':key==='encounters'?'Actor.one':key==='loot'?'Item.one':''}));
       globalThis.records=Array.from({length:70},(_,i)=>({id:'sector'+i,name:i===1?'A very long sector name that must wrap rather than being clipped':'Sector '+i,flags:structuredClone({...data,code:'A'+(i+1)}),getFlag(mod,key){return key==='sector'?this.flags:undefined;},async update(update){Object.assign(this,update);if(update['flags.myz-sector-manager.sector'])this.flags=structuredClone(update['flags.myz-sector-manager.sector']);},async setFlag(mod,key,flags){this.flags=structuredClone(flags);}}));
       records.get=id=>records.find(j=>j.id===id);
@@ -275,6 +275,47 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>records.get('sector1').getFlag('myz-sector-manager','sector').rot),3);
     assert.equal(await page.evaluate(()=>records.get('sector1').getFlag('myz-sector-manager','sector').terrain),'Custom terrain outside the tables');
     console.log('Ark house and sidebar double-click center cell midpoints; single-click selection, stunt autosave/reset/isolation, custom terrain and Rot exposure pass');
+    // Editable names synchronize draft labels, persist and reset to generated naming.
+    await page.locator('[data-sector-name]').fill('The Last Tower');
+    await page.locator('[name="code"]').fill('B7');assert.equal(await page.locator('[data-sector-name]').inputValue(),'The Last Tower');
+    await page.locator('[name="code"]').fill('A2');
+    await page.locator('[name="terrain"]').fill('Thick Woods');
+    assert.equal(await page.locator('[data-sector-name]').inputValue(),'The Last Tower');
+    assert.equal(await page.locator('[data-open="sector1"] [data-sector-label]').innerText(),'The Last Tower');
+    await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    assert.equal(await page.evaluate(()=>records.get('sector1').name),'The Last Tower');
+    await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');});
+    assert.equal(await page.locator('[data-sector-name]').inputValue(),'The Last Tower');
+    await page.locator('[data-action="reset-name"]').click();
+    assert.equal(await page.locator('[data-sector-name]').inputValue(),'A2 - Thick Woods');
+    await page.locator('[name="terrain"]').fill('Custom terrain outside the tables');
+    await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    await page.locator('[data-tab="Find the Path"]').click();
+    assert.equal(await page.locator('[data-explore-time]').innerText(),'4 hours');
+    assert.equal(await page.locator('[data-pass-time]').innerText(),'1 hour');
+    const otherBefore=await page.evaluate(()=>JSON.stringify(records.get('sector2').flags));
+    await page.locator('[name="travel.mode"][value="vehicle"]').check();
+    await page.locator('[name="travel.rushed"]').check();await page.locator('[name="travel.stalker"]').check();await page.locator('[name="travel.open"]').check();
+    assert.equal(await page.locator('[data-explore-time]').innerText(),'7.5 minutes');
+    assert.equal(await page.locator('[data-pass-time]').innerText(),'30 minutes');
+    await page.locator('[name="travel.difficult"]').check();assert.equal(await page.locator('[name="travel.open"]').isChecked(),false);
+    await page.locator('[name="travel.difficulty"]').fill('3');assert.equal(await page.locator('[data-explore-time]').innerText(),'45 minutes');
+    await page.locator('[name="travel.open"]').check();assert.equal(await page.locator('[name="travel.difficult"]').isChecked(),false);
+    await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');manager.tab='Find the Path';await manager.render();});
+    assert.equal(await page.locator('[data-explore-time]').innerText(),'7.5 minutes');
+    assert.equal(await page.locator('[name="travel.difficulty"]').inputValue(),'3');
+    assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector2').flags)),otherBefore);
+    assert.deepEqual(await page.locator('.sm-stunt-columns > div').evaluateAll(columns=>columns.map(c=>[...c.querySelectorAll('input')].map(i=>i.name))),[['pathStunts.safePath','pathStunts.artifact','pathStunts.assessRot','pathStunts.bullets'],['pathStunts.grub','pathStunts.water','pathStunts.halfTime','pathStunts.rush']]);
+    for(const width of [1100,520]){
+      await page.evaluate(width=>manager.element.style.width=width+'px',width);
+      const boxes=await page.locator('.sm-stunt-columns > div').evaluateAll(columns=>columns.map(c=>({x:c.getBoundingClientRect().x,y:c.getBoundingClientRect().y,width:c.getBoundingClientRect().width})));
+      if(width===1100){assert(boxes[1].x>boxes[0].x);assert(Math.abs(boxes[0].width-boxes[1].width)<1);}else{assert.equal(boxes[0].x,boxes[1].x);assert(boxes[1].y>boxes[0].y);}
+    }
+    await page.evaluate(()=>manager.element.style.width='1100px');
+    await page.locator('[data-tab="Overview"]').click();
+    console.log('Custom names/reset, independent travel calculations, terrain exclusivity, persistence/isolation and responsive stunt columns pass');
+
 
     // Generation uses fixture RollTables; these examples are not rulebook table data.
     await page.evaluate(async()=>{
