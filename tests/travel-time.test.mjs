@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {travelOptions,travelTimes,formatDuration} from '../scripts/travel-time.mjs';
+import {travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel} from '../scripts/travel-time.mjs';
 import {sectorNaming,sectorName} from '../scripts/journal-organization.mjs';
 test('foot and vehicle durations are independent of exploration modifiers',()=>{
   assert.deepEqual(travelTimes(),{explore:240,pass:60});assert.deepEqual(travelTimes({mode:'vehicle'}),{explore:120,pass:30});
@@ -29,4 +29,15 @@ test('legacy names migrate conservatively; explicit overrides survive terrain ch
   assert.equal(sectorName({...custom,code:'B7',terrain:'Thick Woods'}),'The Old Tower');
   assert.equal(sectorName({...custom,nameOverride:false}),'A3 - Overgrown Ruins');
   assert.equal(data.nameOverride,undefined);assert.deepEqual(custom.loot,data.loot);
+});
+
+test('linked stunt multipliers are authoritative and apply exactly once, including when combined',()=>{
+  for(const [halfTime,rush,expected] of [[false,false,240],[true,false,120],[false,true,60],[true,true,30]]){
+    const data={pathStunts:{halfTime,rush},travel:{stalker:!halfTime,rushed:!rush,night:true}};
+    const options=sectorTravelOptions(data);assert.equal(options.stalker,halfTime);assert.equal(options.rushed,rush);
+    assert.deepEqual(travelTimes({...options,night:false}),{explore:expected,pass:60});
+    assert.deepEqual(travelTimes(options),{explore:expected*2,pass:60});
+    assert.deepEqual(storedTravel(options),{mode:'foot',open:false,difficult:false,difficulty:2,night:true});
+  }
+  assert.equal(sectorTravelOptions({travel:{stalker:true,rushed:true}}).stalker,false);
 });

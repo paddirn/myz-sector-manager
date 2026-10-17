@@ -1,4 +1,4 @@
-import {travelOptions,travelTimes,formatDuration} from '../scripts/travel-time.mjs';
+import {travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS} from '../scripts/travel-time.mjs';
 import {sectorNaming,sectorName,ensureJournalFolders,JournalOrganization} from '../scripts/journal-organization.mjs';
 import {generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS} from '../scripts/sector-randomizer.mjs';
 import {tabHasContent,CONSUMABLES} from '../scripts/sector-content.mjs';
@@ -13,7 +13,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,travelOptions,travelTimes,formatDuration,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -194,7 +194,7 @@ test('Find the Path defaults are additive, independent and include eight core be
   const data=context.normalizeSector(original);assert.equal(data.pathStunts.artifact,true);assert.equal(data.pathStunts.safePath,false);assert.equal(data.pathStunts.futureStunt,true);assert.equal(original.pathStunts.safePath,undefined);
   data.pathStunts.bullets=true;assert.equal(context.normalizeSector({version:1}).pathStunts.bullets,false);
   context.game.journal.get=()=>({name:'Sector',getFlag:()=>original});app.draft=data;app.tab='Find the Path';
-  const html=app.build();assert.equal((html.match(/name="pathStunts\./g)||[]).length,9);assert.match(html,/Talent Stunts/);assert.match(html,/Rot Finder talent; Core Rulebook p. 64/);assert.match(html,/once per Find the Path roll/);assert.match(html,/Checkboxes save automatically/);
+  const html=app.build();assert.equal((html.match(/name="pathStunts\./g)||[]).length,9);assert.doesNotMatch(html,/Talent Stunts|Standard Benefits and Stunts/);assert(html.indexOf('<h3>Find the Path Stunts</h3>')<html.indexOf('<h3>Exploration &amp; Travel Time</h3>'));assert.match(html,/Rot Finder talent; Core Rulebook p. 64/);assert.match(html,/once per Find the Path roll/);assert.match(html,/Checkboxes save automatically/);
 });
 
 test('stunt autosaves persist per sector across reopen without saving unrelated draft fields or overwriting old loot',async()=>{
@@ -263,4 +263,12 @@ test('new sectors use the shared name and Sectors folder, preserving their coord
   context.ensureJournalFolders=async()=>({sectors:{id:'sector-folder'}});
   context.JournalEntry={create:async data=>{created=data;return {id:'stable-id',name:data.name};}};
   await app.newSector('a-03');assert.equal(created.folder,'sector-folder');assert.equal(created.name,'A3 - Unknown Terrain');assert.equal(created.flags['myz-sector-manager'].sector.code,'a-03');assert.equal(app.sectorId,'stable-id');
+});
+
+test('old conflicting travel flags use saved stunts, preserve Rot Finder and clean up only redundant values',async()=>{
+  const {context,app}=fixture();let stored={version:1,pathStunts:{halfTime:true,rush:false,saferRoute:true,artifact:true},travel:{stalker:false,rushed:true,mode:'vehicle',open:true,difficulty:4},notes:'Original notes',loot:[{title:'Keep'}]};
+  const before=structuredClone(stored);let writes=0;context.game.journal.get=()=>({name:'A',getFlag:()=>stored,setFlag:async(m,k,value)=>{writes++;stored=structuredClone(value);}});app.sectorId='a';app.draft=context.normalizeSector(stored);
+  assert.equal(app.draft.travel.stalker,true);assert.equal(app.draft.travel.rushed,false);assert.equal(app.draft.pathStunts.saferRoute,true);assert.deepEqual(stored,before);
+  app.draft.notes='Unrelated draft';await app.persistStunts();assert.equal(writes,1);assert.equal(stored.travel.stalker,undefined);assert.equal(stored.travel.rushed,undefined);assert.equal(stored.travel.mode,'vehicle');assert.equal(stored.travel.open,true);assert.equal(stored.notes,'Original notes');assert.deepEqual(stored.loot,before.loot);
+  const reopened=context.normalizeSector(stored);assert.equal(reopened.travel.stalker,true);assert.equal(reopened.travel.rushed,false);assert.equal(reopened.pathStunts.saferRoute,true);
 });
