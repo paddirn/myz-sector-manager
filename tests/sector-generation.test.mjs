@@ -23,7 +23,7 @@ test('all supplied UUIDs must resolve before rolling, with clear errors for each
 test('core pool preserves manual data, replaces generated entries, and routes artifacts, mood, threats and resources',async()=>{
   const f=fixture(),before=structuredClone(f.existing);const output=await generateSector(f.existing,f.options);
   assert.deepEqual(f.existing,before);assert.equal(output.terrain,'Overgrown Ruins');assert.equal(output.rot,2);assert.equal(output.mood,'A distant howl');assert.equal(output.locations[0].title,'Manual location');assert.equal(output.locations[1].title,'Hospital');assert.equal(output.encounters[0].title,'Zone Ghouls');assert.equal(output.loot[0].title,'Manual treasure');
-  assert.deepEqual(output.loot.slice(1).map(entry=>entry.title),['Ancient Rifle','Clean Grub','Clean Water','Bullets','Copper wire']);assert.equal(output.loot[2].quantity,1);assert.equal(output.loot[2].classification,'clean');assert.equal(output.randomization.threatLevel,'fringe');assert.equal(output.randomization.numericThreatLevel,2);assert.equal(output.notes,'Keep manual notes');assert.deepEqual(output.supplies,before.supplies);assert.deepEqual(output.custom,before.custom);assert.deepEqual(output.pathStunts,before.pathStunts);assert.equal(output.locations[1].generated.sources[0].tableUuid,TABLE_UUIDS.ruinsA);assert.deepEqual(f.pools,[2]);
+  assert.deepEqual(output.loot.slice(1).map(entry=>entry.title),['Ancient Rifle','Copper wire']);assert.equal(output.supplies.cleanGrub.quantity,1);assert.equal(output.supplies.rotGrub.quantity,0);assert.equal(output.randomization.threatLevel,'fringe');assert.equal(output.randomization.numericThreatLevel,2);assert.equal(output.notes,'Keep manual notes');assert.equal(output.supplies.cleanGrub.collected,true);assert.deepEqual(output.custom,before.custom);assert.deepEqual(output.pathStunts,before.pathStunts);assert.equal(output.locations[1].generated.sources[0].tableUuid,TABLE_UUIDS.ruinsA);assert.deepEqual(f.pools,[2]);
 });
 test('all p.156 environments use independent eligibility columns; Settlement requires GM-authored details',async()=>{
   assert.equal(Object.keys(ENVIRONMENTS).length,13);
@@ -77,11 +77,29 @@ test('default Base Dice API evaluates Nd6 once and retains individual active fac
   const formulas=[];const env={Roll:class{constructor(formula){formulas.push(formula);}async evaluate(){return {dice:[{results:[{result:1,active:true},{result:6,active:true},{result:5,active:false}]}]};}}};
   assert.deepEqual(await rollBasePool(2,env),[1,6]);assert.deepEqual(formulas,['2d6']);assert.deepEqual(await rollBasePool(0,env),[]);assert.equal(formulas.length,1);
 });
-test('resources remain independent house-rule additions: Rot grub/water, quantities, Components and absence',async()=>{
-  const f=fixture({environment:'Thick Woods'},{'1d10000':[1,9000,1,9000,1,1,9000],'1d6':[2,3,4],'1d3':[3]});
-  const loot=(await generateSector(f.existing,f.options)).loot;
-  assert.equal(loot.find(entry=>entry.title==='Rot Grub').quantity,2);assert.equal(loot.find(entry=>entry.title==='Rot Water').quantity,3);assert.equal(loot.find(entry=>entry.title==='Bullets').quantity,4);assert.equal(loot.find(entry=>entry.title==='COMPONENTS').quantity,3);assert.equal(loot.find(entry=>entry.title==='Rot Water').classification,'rot');
-  const empty=fixture({}, {'1d10000':Array(4).fill(10000)},[3,4]);assert.deepEqual((await generateSector(empty.existing,empty.options)).loot,[{title:'Manual treasure'}]);
+test('consumable quantities use existing fields, classifications are exclusive, and scrap remains a loot entry',async()=>{
+  const f=fixture({environment:'Thick Woods'},{'1d10000':[1,9000,1,9000,1,1,1,1],'1d6':[2,3,4,5],'1d3':[2,3]});
+  const output=await generateSector(f.existing,f.options);
+  assert.equal(output.supplies.rotGrub.quantity,2);assert.equal(output.supplies.cleanGrub.quantity,0);assert.equal(output.supplies.rotWater.quantity,3);assert.equal(output.supplies.cleanWater.quantity,0);assert.equal(output.supplies.bullets.quantity,4);assert.equal(output.supplies.booze.quantity,2);assert.equal(output.supplies.components.quantity,3);
+  assert.deepEqual(output.loot.map(entry=>entry.title),['Manual treasure','Copper wire']);assert.equal(output.loot[1].quantity,5);
+  const empty=fixture({}, {'1d10000':Array(6).fill(10000)},[3,4]);const none=await generateSector(empty.existing,empty.options);assert.deepEqual(none.loot,[{title:'Manual treasure'}]);assert(Object.values(none.supplies).every(entry=>entry.quantity===0));
+});
+test('Booze and Components independently use 25 percent thresholds, including simultaneous presence',async()=>{
+  for(const [booze,components] of [[1,1],[2500,2501],[2501,2500],[10000,10000]]){
+    const f=fixture({}, {'1d10000':[10000,10000,10000,booze,components,10000],'1d3':[3,3]},[2,3]);
+    const output=await generateSector(f.existing,f.options);assert.equal(output.supplies.booze.quantity,booze<=2500?3:0);assert.equal(output.supplies.components.quantity,components<=2500?3:0);assert.deepEqual(output.loot,[{title:'Manual treasure'}]);
+  }
+});
+test('repeat generation resets quantities without duplicating loot or deleting manual/historical resources',async()=>{
+  const f=fixture();f.existing.loot.push({title:'COMPONENTS',quantity:9},{title:'COMPONENTS',quantity:2,generated:{method:'core'}},{title:'Clean Grub',quantity:4,resource:'grub',generated:{method:'core'}});
+  const first=await generateSector(f.existing,f.options);const second=await generateSector(first,f.options);assert.deepEqual(second.loot,first.loot);assert.deepEqual(second.supplies,first.supplies);
+  const zero=fixture({}, {'1d10000':Array(6).fill(10000)},[2,3]);const third=await generateSector(second,zero.options);assert(Object.values(third.supplies).every(entry=>entry.quantity===0));assert.equal(third.supplies.cleanGrub.collected,true);assert(third.loot.some(entry=>entry.title==='COMPONENTS'&&entry.quantity===9));assert(third.loot.some(entry=>entry.resource==='grub'&&entry.quantity===4));assert(third.loot.some(entry=>entry.title==='COMPONENTS'&&entry.generated?.method==='core'));
+});
+test('only Components can populate Loot and its value persists through a sector save/reload',async()=>{
+  const f=fixture({environment:'Thick Woods'}, {'1d10000':[10000,10000,10000,10000,1,10000],'1d3':[2]},[3,4]);f.existing.loot=[];
+  const output=await generateSector(f.existing,f.options);assert.deepEqual(output.loot,[]);assert.equal(output.supplies.components.quantity,2);assert(tabHasContent(output,'Loot'));
+  let stored=structuredClone(f.existing);const journal={getFlag:()=>stored,setFlag:async(mod,key,value)=>{stored=structuredClone(value);}};await saveGeneratedSector(journal,f.existing,output,f.env);assert.equal(journal.getFlag().supplies.components.quantity,2);
+  assert.equal(tabHasContent({...output,supplies:Object.fromEntries(Object.keys(output.supplies).map(key=>[key,{quantity:0,collected:false}]))},'Loot'),false);
 });
 test('unusable results, contradictory environment data, invalid pools and options abort without modifying source data',async()=>{
   for(const overrides of [{environment:'Anything goes'},{rot:'Unknown'},{threatType:'Something else'},{mood:''},{threatLevel:'Unknown'},{threatLevel:'Fringe and Central'}]){
@@ -155,4 +173,14 @@ test('classification tables support compound text and preserve raw details; malf
   assert.equal(mapThreatType({text:'Monster, Threat Type:Monster, Description:Hostile beast',mapping:{}}),'monster');
   assert.equal(mapThreatType({text:'Threat Type:Phenomenon, Description:Hazard',mapping:{}}),'phenomenon');
   for(const [parser,text] of [[mapRot,'Weak Rot, Rot Level:1, Rot Level:2'],[mapThreatLevel,'Central Zone, Level:7, Threat Level:2'],[mapThreatType,'Monster, Threat Type:Unknown']])assert.throws(()=>parser({text,mapping:{}}));
+});
+
+test('grub and water each use a single 50 percent presence roll and a single 25/75 classification roll',async()=>{
+  for(const resource of ['Grub','Water'])for(const [presence,classification] of [[5000,2500],[5000,2501],[5001,1]]){
+    const present=presence<=5000;
+    const categoryRolls=present?[presence,classification]:[presence];
+    const rolls=resource==='Grub'?[...categoryRolls,10000,10000,10000,10000,10000]:[10000,...categoryRolls,10000,10000,10000,10000];
+    const f=fixture({}, {'1d10000':rolls,'1d6':[6]},[2,3]);const output=await generateSector(f.existing,f.options);
+    assert.equal(output.supplies['clean'+resource].quantity,present&&classification<=2500?6:0);assert.equal(output.supplies['rot'+resource].quantity,present&&classification>2500?6:0);
+  }
 });

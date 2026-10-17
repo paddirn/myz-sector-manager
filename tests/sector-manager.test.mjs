@@ -1,5 +1,5 @@
 import {generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS} from '../scripts/sector-randomizer.mjs';
-import {tabHasContent} from '../scripts/sector-content.mjs';
+import {tabHasContent,CONSUMABLES} from '../scripts/sector-content.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -11,7 +11,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,ZoneRuntime,tabHasContent,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -31,7 +31,7 @@ test('coordinates sort naturally with names as fallback and sidebar text is esca
 test('older records receive independent supply defaults without modifying existing loot or source',()=>{
   const {context}=fixture();const original=journal('old','A1').getFlag();
   const data=context.normalizeSector(original);
-  assert.equal(Object.keys(data.supplies).length,6);
+  assert.equal(Object.keys(data.supplies).length,7);
   assert.equal(data.loot[0].uuid,'Item.old');
   assert.equal(original.supplies,undefined);
   data.supplies.cleanGrub.quantity=1.25;
@@ -79,11 +79,11 @@ test('saving and reopening preserves fractional supplies, collected state and ex
   const j={id:'old',name:'Old sector',getFlag:()=>stored,update:async()=>{},setFlag:async(mod,key,data)=>{stored=structuredClone(data);}};
   context.game.journal.get=()=>j;context.ui.notifications.info=()=>{};
   app.sectorId='old';app.draft=context.normalizeSector(stored);app.capture=()=>{};
-  app.draft.supplies.cleanWater={quantity:3.5,collected:true};
+  app.draft.supplies.cleanWater={quantity:3.5,collected:true};app.draft.supplies.components={quantity:2.75,collected:false};
   await app.action('save');
   const reopened=new context.Manager();await reopened.navigate('old');
   assert.equal(reopened.draft.supplies.cleanWater.quantity,3.5);
-  assert.equal(reopened.draft.supplies.cleanWater.collected,true);
+  assert.equal(reopened.draft.supplies.cleanWater.collected,true);assert.equal(reopened.draft.supplies.components.quantity,2.75);
   assert.equal(reopened.draft.loot[0].uuid,'Item.old');
 });
 

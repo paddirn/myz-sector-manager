@@ -1,3 +1,4 @@
+export const CONSUMABLES=Object.freeze({cleanGrub:'Clean Grub',rotGrub:'Rot Grub',cleanWater:'Clean Water',rotWater:'Rot Water',bullets:'Bullets',booze:'Booze',components:'Components'});
 // Meaningful content, independent of presentation and schema defaults.
 const text=value=>typeof value==='string'&&value.trim().length>0;
 const entryContent=entry=>['title','details','uuid','duration'].some(key=>text(entry?.[key]))||Number(entry?.quantity)>0;
