@@ -15,3 +15,12 @@ export function formatDuration(minutes){
   const hours=Math.floor(minutes/60),rest=Number((minutes-hours*60).toPrecision(12));
   return [hours?`${hours} hour${hours===1?'':'s'}`:'',rest||!hours?`${rest} minute${rest===1?'':'s'}`:''].filter(Boolean).join(' ');
 }
+
+// Existing stunt flags are authoritative, including when old travel flags disagree.
+export const LINKED_STUNTS={'travel.stalker':'pathStunts.halfTime','travel.rushed':'pathStunts.rush'};
+export function sectorTravelOptions(data={}){
+  return {...travelOptions(data.travel),stalker:Boolean(data.pathStunts?.halfTime),rushed:Boolean(data.pathStunts?.rush)};
+}
+export function storedTravel(value={}){
+  const {stalker,rushed,...rest}=value;return rest;
+}

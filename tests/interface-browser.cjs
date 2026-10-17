@@ -294,6 +294,26 @@ const path=require('node:path');
     assert.equal(await page.locator('[data-explore-time]').innerText(),'4 hours');
     assert.equal(await page.locator('[data-pass-time]').innerText(),'1 hour');
     const otherBefore=await page.evaluate(()=>JSON.stringify(records.get('sector2').flags));
+    assert.deepEqual(await page.locator('.sm-path h3').allTextContents(),['Find the Path Stunts','Exploration & Travel Time']);
+    assert.equal(await page.locator('[name="pathStunts.saferRoute"]').count(),1);
+    assert.deepEqual(await page.locator('.sm-modifier-columns > div').evaluateAll(columns=>columns.map(c=>[...c.querySelectorAll('input[type=checkbox]')].map(i=>i.name))),[['travel.rushed','travel.stalker','travel.open'],['travel.difficult','travel.night']]);
+    await page.evaluate(()=>{const j=records.get('sector1'),original=j.setFlag.bind(j);globalThis.stuntWrites=0;j.setFlag=async(...args)=>{stuntWrites++;return original(...args);};});
+    for(const [stunt,modifier,expected] of [['halfTime','stalker','2 hours'],['rush','rushed','1 hour']]){
+      for(const source of [`pathStunts.${stunt}`,`travel.${modifier}`]){
+        const before=await page.evaluate(()=>stuntWrites);
+        await page.locator(`[name="${source}"]`).check();
+        assert.equal(await page.locator(`[name="pathStunts.${stunt}"]`).isChecked(),true);assert.equal(await page.locator(`[name="travel.${modifier}"]`).isChecked(),true);
+        assert.equal(await page.locator('[data-explore-time]').innerText(),expected);
+        await page.waitForFunction(({before,stunt})=>stuntWrites===before+1&&records.get('sector1').flags.pathStunts[stunt],{before,stunt});
+        await page.locator(`[name="${source}"]`).uncheck();
+        assert.equal(await page.locator(`[name="pathStunts.${stunt}"]`).isChecked(),false);assert.equal(await page.locator(`[name="travel.${modifier}"]`).isChecked(),false);
+        assert.equal(await page.locator('[data-explore-time]').innerText(),'4 hours');
+        await page.waitForFunction(({before,stunt})=>stuntWrites===before+2&&!records.get('sector1').flags.pathStunts[stunt],{before,stunt});
+      }
+    }
+    await page.locator('[name="pathStunts.saferRoute"]').check();
+    await page.waitForFunction(()=>records.get('sector1').flags.pathStunts.saferRoute);
+
     await page.locator('[name="travel.mode"][value="vehicle"]').check();
     await page.locator('[name="travel.rushed"]').check();await page.locator('[name="travel.stalker"]').check();await page.locator('[name="travel.open"]').check();
     assert.equal(await page.locator('[data-explore-time]').innerText(),'7.5 minutes');
@@ -305,16 +325,20 @@ const path=require('node:path');
     await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');manager.tab='Find the Path';await manager.render();});
     assert.equal(await page.locator('[data-explore-time]').innerText(),'7.5 minutes');
     assert.equal(await page.locator('[name="travel.difficulty"]').inputValue(),'3');
+    for(const name of ['pathStunts.halfTime','pathStunts.rush','pathStunts.saferRoute','travel.rushed','travel.stalker'])assert.equal(await page.locator(`[name="${name}"]`).isChecked(),true);
+    assert.equal(await page.evaluate(()=>records.get('sector1').flags.travel.rushed),undefined);
     assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector2').flags)),otherBefore);
-    assert.deepEqual(await page.locator('.sm-stunt-columns > div').evaluateAll(columns=>columns.map(c=>[...c.querySelectorAll('input')].map(i=>i.name))),[['pathStunts.safePath','pathStunts.artifact','pathStunts.assessRot','pathStunts.bullets'],['pathStunts.grub','pathStunts.water','pathStunts.halfTime','pathStunts.rush']]);
+    assert.deepEqual(await page.locator('.sm-stunt-columns > div').evaluateAll(columns=>columns.map(c=>[...c.querySelectorAll('input')].map(i=>i.name))),[['pathStunts.safePath','pathStunts.artifact','pathStunts.assessRot','pathStunts.bullets','pathStunts.grub'],['pathStunts.water','pathStunts.halfTime','pathStunts.rush','pathStunts.saferRoute']]);
     for(const width of [1100,520]){
       await page.evaluate(width=>manager.element.style.width=width+'px',width);
-      const boxes=await page.locator('.sm-stunt-columns > div').evaluateAll(columns=>columns.map(c=>({x:c.getBoundingClientRect().x,y:c.getBoundingClientRect().y,width:c.getBoundingClientRect().width})));
+      for(const selector of ['.sm-stunt-columns > div','.sm-modifier-columns > div']){
+      const boxes=await page.locator(selector).evaluateAll(columns=>columns.map(c=>({x:c.getBoundingClientRect().x,y:c.getBoundingClientRect().y,width:c.getBoundingClientRect().width})));
       if(width===1100){assert(boxes[1].x>boxes[0].x);assert(Math.abs(boxes[0].width-boxes[1].width)<1);}else{assert.equal(boxes[0].x,boxes[1].x);assert(boxes[1].y>boxes[0].y);}
+      }
     }
     await page.evaluate(()=>manager.element.style.width='1100px');
     await page.locator('[data-tab="Overview"]').click();
-    console.log('Custom names/reset, independent travel calculations, terrain exclusivity, persistence/isolation and responsive stunt columns pass');
+    console.log('Custom names/reset, bidirectional stunt sync with one autosave per change, travel calculations, Rot Finder persistence, sector isolation and responsive stunt/modifier columns pass');
 
 
     // Generation uses fixture RollTables; these examples are not rulebook table data.
@@ -336,7 +360,7 @@ const path=require('node:path');
     await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>options.buttons.find(button=>button.action==='randomize').callback(null,null,{element:{querySelector:()=>({value:'core'})}});foundry.applications.api.DialogV2.confirm=async()=>false;});
     await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing);
     assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector1').flags)===JSON.stringify(beforeRandomization)),true);
-    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async options=>{globalThis.generationPreview=options.content;globalThis.previewDialogOptions=options;return true;};});
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async options=>{if(options.window?.title==='Save Randomized Sector?'){globalThis.generationPreview=options.content;globalThis.previewDialogOptions=options;}return true;};});
     await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing&&manager.draft.randomization?.method==='core');
     assert.match(await page.evaluate(()=>generationPreview),/Threat Level: 2/);assert.match(await page.evaluate(()=>generationPreview),/Threat severity \(1s\): 1/);assert.match(await page.evaluate(()=>generationPreview),/Artifacts \(eligible 6s\): 1/);
     assert.equal(await page.evaluate(()=>manager.draft.effects.find(entry=>entry.generated?.threatCategory==='phenomenon').uuid),'JournalEntry.wind');
@@ -355,7 +379,14 @@ const path=require('node:path');
     await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
     await page.locator('[data-tab="Loot"]').click();assert.equal(await page.locator('[name="supplies.components.quantity"]').inputValue(),'2.75');
 
-    await page.locator('[data-tab="Find the Path"]').click();assert(await page.locator('[data-tab="Find the Path"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
+    await page.locator('[data-tab="Find the Path"]').click();
+    for(const name of ['pathStunts.halfTime','pathStunts.rush','pathStunts.saferRoute','travel.rushed','travel.stalker'])assert.equal(await page.locator(`[name="${name}"]`).isChecked(),true);
+    assert.equal(await page.locator('[data-tab="Find the Path"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);
+    await page.locator('[data-action="reset-stunts"]').click();
+    await page.waitForFunction(()=>!records.get('sector1').flags.pathStunts.halfTime&&!records.get('sector1').flags.pathStunts.rush);
+    for(const name of ['pathStunts.halfTime','pathStunts.rush','pathStunts.saferRoute','travel.rushed','travel.stalker'])assert.equal(await page.locator(`[name="${name}"]`).isChecked(),false);
+    assert.equal(await page.locator('[data-explore-time]').innerText(),'1 hour');
+    assert(await page.locator('[data-tab="Find the Path"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
     await page.locator('[name="pathStunts.bullets"]').check();await page.waitForFunction(()=>!document.querySelector('[data-tab="Find the Path"]').classList.contains('sm-tab-empty'));
     await page.locator('[data-tab="Effects"]').click();assert.equal(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);
     await page.evaluate(async()=>{manager.draft.effects=[];await manager.render();});assert(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')));

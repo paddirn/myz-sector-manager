@@ -214,3 +214,10 @@ test('randomization and atomic persistence preserve custom names and travel plan
   const next=await generateSector(f.existing,f.options);let stored;const journal={name:'The Last Tower',getFlag:()=>f.existing,setFlag:async(m,k,value)=>{stored=value;},update:()=>assert.fail('custom title must not be replaced')};
   await saveGeneratedSector(journal,f.existing,next,f.env);assert.equal(stored.customName,'The Last Tower');assert.equal(stored.nameOverride,true);assert.deepEqual(stored.travel,f.existing.travel);
 });
+
+test('randomization preserves all nine stunts and only removes redundant travel aliases when saving',async()=>{
+  const f=fixture();f.existing.pathStunts={safePath:true,artifact:true,assessRot:true,bullets:true,grub:true,water:true,halfTime:true,rush:true,saferRoute:true};f.existing.travel={mode:'vehicle',night:true,stalker:false,rushed:false,difficulty:3};
+  const next=await generateSector(f.existing,f.options);assert.deepEqual(next.pathStunts,f.existing.pathStunts);let stored;
+  const journal={getFlag:()=>f.existing,update:async changes=>{stored=changes['flags.myz-sector-manager.sector'];},setFlag:async(m,k,value)=>{stored=value;}};
+  await saveGeneratedSector(journal,f.existing,next,f.env);assert.deepEqual(stored.pathStunts,f.existing.pathStunts);assert.deepEqual(stored.travel,{mode:'vehicle',night:true,difficulty:3});
+});
