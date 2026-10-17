@@ -1,3 +1,4 @@
+import {CONSUMABLES} from './sector-content.mjs';
 // Table-driven generation: no Journal writes, chat messages, or drawn-result mutation.
 export const RANDOMIZATION_METHODS = [{id:'core',label:'Core Rulebook Tables',generate:generateSector}];
 export const TABLE_UUIDS = Object.freeze({
@@ -206,7 +207,7 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   const ones=baseDice.filter(face=>face===1).length,sixes=baseDice.filter(face=>face===6).length;
   const severity=eligibility.threats?ones:0,artifactCount=eligibility.artifacts?sixes:0;
   const output=structuredClone(existing);
-  for(const key of ['locations','encounters','effects','loot'])output[key]=(output[key]||[]).filter(entry=>entry.generated?.method!=='core');
+  for(const key of ['locations','encounters','effects','loot'])output[key]=(output[key]||[]).filter(entry=>entry.generated?.method!=='core'||(key==='loot'&&(Boolean(entry.resource)||entry.title==='COMPONENTS')));
   output.terrain=eligibility.name;output.rot=mapRot(rot);output.mood=mood.text;
   const add=(key,result,quantity)=>{const entry=generatedEntry(result,key,quantity);output[key].push(entry);return entry;};
   if(eligibility.ruins)add('locations',await take(eligibility.ruins==='normal'?'ruinsA':'ruinsB'));
@@ -222,16 +223,17 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
     }
   }
   for(let i=0;i<artifactCount;i++)add('loot',await take('artifact'));
-  for(const [resource,clean,contaminated] of [['grub','Clean Grub','Rot Grub'],['water','Clean Water','Rot Water'],['bullets','Bullets','Bullets']]){
+  output.supplies??={};
+  for(const key of Object.keys(CONSUMABLES))output.supplies[key]={...output.supplies[key],quantity:0,collected:output.supplies[key]?.collected??false};
+  for(const [clean,contaminated] of [['cleanGrub','rotGrub'],['cleanWater','rotWater']]){
     if(!await chance(.5))continue;
     const quantity=await dice('1d6');
-    const title=resource==='bullets'?clean:await chance(.25)?clean:contaminated;
-    const entry=generatedEntry({text:title,sources:[],documentType:null},'loot',quantity);entry.resource=resource;entry.classification=title.startsWith('Rot ')?'rot':resource==='bullets'?null:'clean';entry.details=`${quantity} ${title}`;output.loot.push(entry);
+    output.supplies[await chance(.25)?clean:contaminated].quantity=quantity;
   }
-  if(await chance(.5)){
-    if(await chance(.5))add('loot',await take('scrap'),await dice('1d6'));
-    else add('loot',{text:'COMPONENTS',sources:[],documentType:null},await dice('1d3'));
-  }
+  if(await chance(.5))output.supplies.bullets.quantity=await dice('1d6');
+  if(await chance(.25))output.supplies.booze.quantity=await dice('1d3');
+  if(await chance(.25))output.supplies.components.quantity=await dice('1d3');
+  if(await chance(.5))add('loot',await take('scrap'),await dice('1d6'));
   output.randomization={method:'core',threatLevel:threat.category,numericThreatLevel:threat.level,levelSelection:threat.selection,environment:eligibility,baseDice,rolledOnes:ones,rolledSixes:sixes,threatSeverity:severity,threatCount,artifactCount,threatMode:options.threatMode,sources:[...environment.sources,...rot.sources,...threatLevel.sources,...mood.sources]};
   return output;
 }

@@ -290,6 +290,16 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>manager.draft.effects.find(entry=>entry.generated?.threatCategory==='phenomenon').title),'Rot Wind');
     assert.equal(await page.locator('[name="terrain"]').inputValue(),'Overgrown Ruins');assert.equal(await page.locator('[name="mood"]').inputValue(),'A distant howl');
     assert.equal(await page.evaluate(()=>records.get('sector1').flags.notes===beforeRandomization.notes),true);
+    assert.match(await page.evaluate(()=>generationPreview),/Components: 1/);
+    await page.locator('[data-tab="Loot"]').click();
+    assert.equal(await page.locator('[name="supplies.components.quantity"]').inputValue(),'1');
+    assert.equal(await page.locator('.sm-supplies tbody tr').last().locator('th').innerText(),'Components');
+    assert.equal(await page.locator('.sm-supplies tbody tr').last().locator('input[type="number"]').evaluate(el=>Math.round(el.getBoundingClientRect().width)),38);
+    assert.equal(await page.evaluate(()=>manager.draft.loot.some(entry=>['Clean Grub','Rot Grub','Clean Water','Rot Water','Bullets','Booze','COMPONENTS'].includes(entry.title))),false);
+    await page.locator('[name="supplies.components.quantity"]').fill('2.75');await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
+    await page.locator('[data-tab="Loot"]').click();assert.equal(await page.locator('[name="supplies.components.quantity"]').inputValue(),'2.75');
+
     await page.locator('[data-tab="Find the Path"]').click();assert(await page.locator('[data-tab="Find the Path"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
     await page.locator('[name="pathStunts.bullets"]').check();await page.waitForFunction(()=>!document.querySelector('[data-tab="Find the Path"]').classList.contains('sm-tab-empty'));
     await page.locator('[data-tab="Effects"]').click();assert.equal(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);
@@ -308,6 +318,18 @@ const path=require('node:path');
     assert.match(await page.locator('.zm-positions .zm-selected').innerText(),/2 sectors \(3.2 km\) from the Party/);
     await page.evaluate(()=>{const token=game.scenes.get('zone').tokens.get('party');token.x=600;Hooks.call('updateToken',token,{x:600});});
     await page.waitForFunction(()=>document.querySelector('.zm-ark .zm-original-distance').textContent.includes('Party is 1 sector'));
+    for(const width of [1100,920,700,520]){
+      await page.evaluate(width=>{manager.element.style.width=width+'px';},width);
+      const layout=await page.evaluate(()=>{
+        const summary=document.querySelector('.sm-zone-summary'),ark=summary.querySelector('.zm-ark'),party=summary.querySelector('.zm-positions .zm-expedition');
+        const selected=Array.from(summary.querySelectorAll('.zm-selected'));const labels=selected.map(el=>el.querySelector('span').getBoundingClientRect());
+        return {overflow:summary.scrollWidth>summary.clientWidth+1,first:ark.children[1].getBoundingClientRect().width,central:ark.querySelector('.zm-original-distance').getBoundingClientRect(),labels:labels.map(rect=>({height:rect.height})),aligned:Math.abs(ark.querySelector('.zm-selected').getBoundingClientRect().left-party.querySelector('.zm-selected').getBoundingClientRect().left)<1};
+      });
+      assert.equal(layout.overflow,false,'tracking horizontal overflow at '+width);assert(layout.aligned);
+      if(width>=920){assert(layout.first<=88);assert(layout.central.width>layout.first);assert(layout.central.height<24);assert(layout.labels.every(label=>label.height<24));}
+    }
+    await page.evaluate(()=>{manager.element.style.width='1100px';});
+    console.log('Generated Consumables update immediately; Components decimals persist; desktop tracking distances stay on one line and narrow widths do not overflow');
     // Render the real generated dialog options/content in a simulated DialogV2 frame.
     // This verifies CSS geometry without claiming licensed Foundry dialog integration.
     for(const viewportWidth of [1400,360,280]){
