@@ -48,7 +48,7 @@ const path=require('node:path');
         async close(){await this._onClose({});this.element.remove();this.rendered=false;}
       }
       globalThis.docs=new Map();
-      for(const [uuid,name,type] of [['Scene.one','The Zone','Scene'],['Actor.one','Zone Ghoul','Actor'],['Item.one','Artifact','Item'],['Compendium.world.items.Item.one','Compendium Artifact','Item']]){
+      for(const [uuid,name,type] of [['Scene.one','The Zone','Scene'],['Actor.one','Zone Ghoul','Actor'],['Item.one','Artifact','Item'],['JournalEntry.wind','Rot Wind','JournalEntry'],['Compendium.world.items.Item.one','Compendium Artifact','Item']]){
         docs.set(uuid,{uuid,name,documentName:type,_onClickDocumentLink:async()=>nativeClicks.push(uuid)});
       }
       const editor={
@@ -188,6 +188,15 @@ const path=require('node:path');
     assert.equal(await effect.locator('select[name$=".category"]').inputValue(),'Weather');
     await effect.locator('[data-entry-toggle]').click();assert(await effect.locator('.sm-entry-body').isHidden());await effect.locator('[data-entry-toggle]').click();
     console.log('Sidebar search restores after rerenders; New Sector is beside Delete; Effects accepts native Actor references');
+    for(const tab of ['Encounters','Effects']){
+      await page.locator('[data-tab="'+tab+'"]').click();
+      await page.locator('.sm-entry [data-reference]').first().evaluate(el=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({type:'JournalEntry',uuid:'JournalEntry.wind'}));el.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));});
+      await page.waitForFunction(()=>document.querySelector('.sm-entry input[name$=".uuid"]').value==='JournalEntry.wind');
+      const link=page.locator('.sm-entry a.content-link').first();await link.focus();await page.keyboard.press('Enter');
+      await page.waitForFunction(()=>nativeClicks.includes('JournalEntry.wind'));
+    }
+    console.log('Encounter and Effect Journal Entry drops and native keyboard links pass alongside existing Actor references');
+
 
     // Configure one Scene with multi-cell sectors and two different tracked tokens.
     await page.locator('.sm-zone-summary summary').click();
@@ -259,8 +268,10 @@ const path=require('node:path');
     // Generation uses fixture RollTables; these examples are not rulebook table data.
     await page.evaluate(async()=>{
       const {TABLE_UUIDS}=await import('/scripts/sector-randomizer.mjs');
-      const texts={environment:'Overgrown Ruins, Ruin:Yes, Threat:Yes, Artifact:Yes',ruinsA:'Hospital',ruinsB:'Factory',rot:'Weak Rot',threatLevel:'2',threatType:'Phenomena',humanoid:'Humanoid fixture',monster:'Monster fixture',phenomenon:'Fog fixture',artifact:'Artifact fixture',mood:'A distant howl',scrap:'Scrap fixture'};
+      const texts={environment:'Overgrown Ruins, Ruin:Yes, Threat:Yes, Artifact:Yes',ruinsA:'Hospital',ruinsB:'Factory',rot:'Weak Rot',threatLevel:'2',threatType:'Phenomena',humanoid:'Humanoid fixture',encounter:'Wanderers',monster:'Monster fixture',phenomenon:'Fog fixture',artifact:'Artifact fixture',mood:'A distant howl',scrap:'Scrap fixture'};
       for(const [key,uuid] of Object.entries(TABLE_UUIDS))docs.set(uuid,{uuid,name:key,documentName:'RollTable',roll:async()=>({results:[{description:texts[key]}]})});
+      docs.get(TABLE_UUIDS.threatType).roll=async()=>({results:[{documentUuid:TABLE_UUIDS.phenomenon}]});
+      docs.get(TABLE_UUIDS.phenomenon).roll=async()=>({results:[{documentUuid:'JournalEntry.wind',description:'Phenomenon label'}]});
       globalThis.Roll=class{constructor(formula){this.formula=formula;}async evaluate(){return {total:1,dice:[{results:this.formula==='2d6'?[{result:1,active:true},{result:6,active:true}]:[{result:1,active:true}]}]};}};
       await game.settings.set('myz-sector-manager','threatGenerationMode','core');
       globalThis.beforeRandomization=structuredClone(records.get('sector1').flags);
@@ -275,6 +286,8 @@ const path=require('node:path');
     await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async options=>{globalThis.generationPreview=options.content;globalThis.previewDialogOptions=options;return true;};});
     await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing&&manager.draft.randomization?.method==='core');
     assert.match(await page.evaluate(()=>generationPreview),/Threat Level: 2/);assert.match(await page.evaluate(()=>generationPreview),/Threat severity \(1s\): 1/);assert.match(await page.evaluate(()=>generationPreview),/Artifacts \(eligible 6s\): 1/);
+    assert.equal(await page.evaluate(()=>manager.draft.effects.find(entry=>entry.generated?.threatCategory==='phenomenon').uuid),'JournalEntry.wind');
+    assert.equal(await page.evaluate(()=>manager.draft.effects.find(entry=>entry.generated?.threatCategory==='phenomenon').title),'Rot Wind');
     assert.equal(await page.locator('[name="terrain"]').inputValue(),'Overgrown Ruins');assert.equal(await page.locator('[name="mood"]').inputValue(),'A distant howl');
     assert.equal(await page.evaluate(()=>records.get('sector1').flags.notes===beforeRandomization.notes),true);
     await page.locator('[data-tab="Find the Path"]').click();assert(await page.locator('[data-tab="Find the Path"]').evaluate(el=>el.classList.contains('sm-tab-empty')));

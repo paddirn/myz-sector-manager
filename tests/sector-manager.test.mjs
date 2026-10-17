@@ -184,7 +184,7 @@ test('all repeatable tabs have accessible entry toggles; Overview remains a form
 test('Effects exposes an Actor drop reference without changing older record category or custom data',()=>{
   const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='sector';app.draft=entries();app.tab='Effects';
   app.draft.effects=[{title:'Zone anomaly',category:'Phenomenon',duration:'One day',custom:{preserve:true}}];
-  const before=JSON.stringify(app.draft);const html=app.build();assert.match(html,/data-reference data-type="Actor"/);assert.match(html,/name="effects.0.uuid"/);assert.match(html,/value="Phenomenon" selected/);assert.equal(JSON.stringify(app.draft),before);
+  const before=JSON.stringify(app.draft);const html=app.build();assert.match(html,/data-reference data-type="Actor\|JournalEntry"/);assert.match(html,/name="effects.0.uuid"/);assert.match(html,/value="Phenomenon" selected/);assert.equal(JSON.stringify(app.draft),before);
 });
 
 test('Find the Path defaults are additive, independent and include eight core benefits plus talent metadata',()=>{
@@ -232,4 +232,12 @@ test('randomization dialog targets half the inherited width with a usable minimu
   context.foundry.applications.api.DialogV2.DEFAULT_OPTIONS.position.width=400;assert.equal(context.dialogOptions().position.width,320);
   context.foundry.applications.api.DialogV2.DEFAULT_OPTIONS.position.width='auto';assert.equal(context.dialogOptions().position.width,320);
   assert.equal(context.dialogOptions().classes[0],'myz-sector-randomize-dialog');
+});
+
+test('Encounter and Effect reference drops accept Actors and Journal Entries, reject Items, and open native journal links',async()=>{
+  const {app,documents}=fixture();app.capture=()=>{};app.renderReference=async()=>{};const input={value:''};const zone={dataset:{type:'Actor|JournalEntry'},querySelector:()=>input};
+  for(const [uuid,type] of [['Actor.a','Actor'],['JournalEntry.j','JournalEntry'],['Compendium.world.encounters.JournalEntry.c','JournalEntry']]){
+    let opens=0;documents.set(uuid,{uuid,documentName:type,_onClickDocumentLink:async()=>opens++});await app.dropReference({payload:{uuid},preventDefault(){},stopPropagation(){}},zone);assert.equal(input.value,uuid);await app.openReference(zone);assert.equal(opens,1);
+  }
+  documents.set('Item.bad',{uuid:'Item.bad',documentName:'Item'});const prior=input.value;await app.dropReference({payload:{uuid:'Item.bad'},preventDefault(){},stopPropagation(){}},zone);assert.equal(input.value,prior);
 });

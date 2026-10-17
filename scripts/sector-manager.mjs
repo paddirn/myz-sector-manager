@@ -5,7 +5,7 @@ const MOD = 'myz-sector-manager';
 const KEY = 'sector';
 const TABS = ['Overview', 'Find the Path', 'Locations', 'Encounters', 'Loot', 'Effects', 'Secrets', 'History'];
 const COLLECTIONS = {Locations:'locations', Encounters:'encounters', Loot:'loot', Effects:'effects', Secrets:'secrets', History:'history'};
-const REFERENCES = {locations:'Scene', encounters:'Actor', loot:'Item', effects:'Actor'};
+const REFERENCES = {locations:'Scene', encounters:'Actor|JournalEntry', loot:'Item', effects:'Actor|JournalEntry'};
 // Session-only UI identities: never written to Journal flags.
 const ENTRY_UI = new Map();
 let entrySequence = 0;
@@ -53,7 +53,7 @@ const area = (label,name,value='') => `<label class="sm-field"><span>${escapeHTM
 const select = (label,name,value,opts) => `<label class="sm-field"><span>${escapeHTML(label)}</span><select name="${attr(name)}">${opts.map(x=>`<option value="${attr(x)}" ${x===value?'selected':''}>${escapeHTML(x)}</option>`).join('')}</select></label>`;
 const reference = (key,i,uuid='') => `<div class="sm-reference" data-reference data-type="${REFERENCES[key]||''}">
   <input type="hidden" name="${key}.${i}.uuid" value="${attr(uuid)}">
-  <span class="sm-reference-label">Reference${REFERENCES[key]?` · Drop ${REFERENCES[key]}`:' · Drop a document'}</span>
+  <span class="sm-reference-label">Reference${REFERENCES[key]?` · Drop ${REFERENCES[key].replaceAll('|',' or ').replace('JournalEntry','Journal Entry')}`:' · Drop a document'}</span>
   <div class="sm-reference-row"><span data-reference-link role="status">${uuid?'Loading reference…':'Drop a document here'}</span><button type="button" data-reference-clear title="Remove reference" aria-label="Remove reference" ${uuid?'':'disabled'}><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
 </div>`;
 const supplies = data => `<section class="sm-consumables"><h3>Consumables</h3><table class="sm-supplies"><thead><tr><th>Resource</th><th>Quantity</th><th>Collected</th></tr></thead><tbody>${Object.entries(SUPPLIES).map(([key,label])=>{const value=data.supplies?.[key]??{quantity:0,collected:false};return `<tr><th scope="row">${label}</th><td><input aria-label="${label} quantity" name="supplies.${key}.quantity" type="number" min="0" step="any" value="${attr(value.quantity)}"></td><td><input aria-label="${label} collected" name="supplies.${key}.collected" type="checkbox" ${value.collected?'checked':''}></td></tr>`;}).join('')}</tbody></table><p>Collected marks the recorded quantity; it does not transfer resources or subtract them.</p></section>`;
@@ -339,7 +339,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       const doc=await fromUuid(payload.uuid);
       if(this.draft!==draft || !this.element.contains(zone))return;
       if(!doc)throw new Error('Reference could not be found.');
-      if(zone.dataset.type && doc.documentName!==zone.dataset.type){ui.notifications.warn(`This entry expects a ${zone.dataset.type}.`);return;}
+      if(zone.dataset.type && !zone.dataset.type.split('|').includes(doc.documentName)){ui.notifications.warn(`This entry expects a ${zone.dataset.type.replaceAll('|',' or ').replace('JournalEntry','Journal Entry')}.`);return;}
       zone.querySelector('input').value=doc.uuid;
       this.capture();this.markDirty();
       await this.renderReference(zone);
