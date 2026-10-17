@@ -75,7 +75,7 @@ const path=require('node:path');
         records.push(doc);Hooks.call('createJournalEntry',doc);return doc;
       }};
       class Container{constructor(){this.children=[];}addChild(child){this.children.push(child);child.parent=this;return child;}removeChild(child){this.children=this.children.filter(item=>item!==child);child.parent=null;}destroy(){this.destroyed=true;for(const child of this.children)child.destroy?.();}}
-      class Graphics extends Container{lineStyle(){return this;}moveTo(){return this;}lineTo(){return this;}beginFill(){return this;}drawRect(){return this;}endFill(){return this;}}
+      class Graphics extends Container{clear(){return this;}drawCircle(){return this;}lineStyle(){return this;}moveTo(){return this;}lineTo(){return this;}beginFill(){return this;}drawRect(){return this;}endFill(){return this;}}
       class Text extends Container{constructor(){super();this.position={set(){}};}}
       globalThis.PIXI={Container,Graphics,Text,Point:class{constructor(x,y){this.x=x;this.y=y;}}};
       const board=document.createElement('canvas');board.width=1400;board.height=900;board.style.cssText='position:fixed;left:0;top:0;width:1400px;height:900px';document.body.prepend(board);
@@ -270,7 +270,10 @@ const path=require('node:path');
     await page.locator('[data-tab="Overview"]').click();
     await page.locator('[name="terrain"]').fill('Custom terrain outside the tables');
     assert.equal(await page.locator('[data-open="sector1"] [data-sector-label]').innerText(),'A2 - Custom terrain outside the tables');
-    await page.locator('[name="rot"]').selectOption('3');assert.match(await page.locator('[data-rot-exposure]').innerText(),/Localized Rot hotspot/);
+    await page.locator('[name="rot"]').selectOption('3');assert.equal(await page.locator('[data-icon-slot="rot"] svg').getAttribute('aria-label'),'Rot Level: 3');
+    await page.locator('[name="status"]').selectOption('Scouted');assert.equal(await page.locator('[data-icon-slot="status"] svg').getAttribute('data-sector-icon'),'scouted');
+    await page.locator('[name="status"]').selectOption('Explored');assert.equal(await page.locator('[data-icon-slot="status"] svg').getAttribute('data-sector-icon'),'explored');
+    assert.match(await page.locator('[data-rot-exposure]').innerText(),/Localized Rot hotspot/);
     await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
     assert.equal(await page.evaluate(()=>records.get('sector1').getFlag('myz-sector-manager','sector').rot),3);
     assert.equal(await page.evaluate(()=>records.get('sector1').getFlag('myz-sector-manager','sector').terrain),'Custom terrain outside the tables');
@@ -493,10 +496,27 @@ const path=require('node:path');
     await dialog.locator('[data-cancel-zone]').click(); // discard the origin preview without touching saved config
     // Pick cleanup was already one-shot; restore the configured origin and scale.
     await page.evaluate(()=>{canvas.stage.zoom=1;canvas.stage.pan={x:0,y:0};});
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>{if(options.window.title!=='+New Sector')throw new Error('Expected New Sector dialog');if(!options.content.includes('value="C3"'))throw new Error('Coordinates not prefilled');return options.buttons.find(b=>b.action==='create').callback(null,null,{element:{querySelector:()=>({value:'C3'})}});};});
     await page.locator('[data-zone-select]').click();await page.mouse.click(1300,850); // C3: no existing record
     await page.waitForFunction(()=>manager.draft?.code==='C3');
     assert.equal(await page.evaluate(()=>records.filter(j=>j.getFlag('myz-sector-manager','sector')?.code==='C3').length),1);
     assert.equal(await page.evaluate(()=>records.filter(j=>j.getFlag('myz-sector-manager','sector')?.version===1).length),71);
+
+    // Enabled overlay background clicks reuse the manager and open Overview.
+    await page.evaluate(()=>{globalThis.beforeOverlaySelection=JSON.stringify(records.map(j=>({id:j.id,flags:j.flags,name:j.name})));globalThis.sameManager=manager;manager.tab='Loot';});
+    await page.mouse.click(1300,850);await page.waitForFunction(()=>manager.tab==='Overview');
+    assert.equal(await page.evaluate(()=>manager===sameManager),true);
+    assert.equal(await page.evaluate(()=>JSON.stringify(records.map(j=>({id:j.id,flags:j.flags,name:j.name})))===beforeOverlaySelection),true);
+    // Empty-square selection presents prefilled coordinates and cancellation creates nothing.
+    await page.evaluate(()=>{globalThis.emptyDialogs=0;foundry.applications.api.DialogV2.wait=async options=>{if(options.window.title!=='+New Sector'||!options.content.includes('value="C2"'))throw new Error('Wrong empty-square dialog');emptyDialogs++;return null;};});
+    await page.mouse.click(1300,650);await page.waitForFunction(()=>emptyDialogs===1);
+    assert.equal(await page.evaluate(()=>records.some(j=>j.getFlag('myz-sector-manager','sector')?.code==='C2')),false);
+    // A sector appearing while the dialog is open is selected rather than duplicated.
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>{if(!options.content.includes('value="C2"'))throw new Error('Wrong duplicate-test dialog');records.get('sector2').flags.code='C2';return 'C2';};});
+    await page.mouse.click(1300,650);await page.waitForFunction(()=>manager.draft?.code==='C2');
+    assert.equal(await page.evaluate(()=>records.filter(j=>j.getFlag('myz-sector-manager','sector')?.code==='C2').length),1);
+    assert.equal(await page.locator('.myz-sector-manager').count(),1);
+    console.log('Overlay navigation reuses Overview without writes; empty-cell coordinates, cancellation and duplicate prevention pass');
 
     // Tracking operates without a Sector Manager window and never reads Combat tokens.
     await page.evaluate(async()=>{await manager.close();const token=game.scenes.get('zone').tokens.get('party');token.x=1200;Hooks.call('updateToken',token,{x:1200});});

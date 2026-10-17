@@ -1,7 +1,7 @@
 import {ZoneOverlay} from '../../scripts/zone/overlay.mjs';
 export function overlayFixture(){
   class Container{constructor(){this.children=[];}addChild(child){this.children.push(child);child.parent=this;return child;}removeChild(child){this.children=this.children.filter(item=>item!==child);child.parent=null;}destroy(){this.destroyed=true;for(const child of this.children)child.destroy?.();}}
-  class Graphics extends Container{lineStyle(){return this;}moveTo(){return this;}lineTo(){return this;}beginFill(){return this;}drawRect(){return this;}endFill(){return this;}}
+  class Graphics extends Container{clear(){return this;}drawCircle(){return this;}lineStyle(){return this;}moveTo(){return this;}lineTo(){return this;}beginFill(){return this;}drawRect(){return this;}endFill(){return this;}}
   class Text extends Container{constructor(text){super();this.text=text;this.position={set:(x,y)=>{this.x=x;this.y=y;}};}}
   const board=new EventTarget();board.style={cursor:'default'};board.getBoundingClientRect=()=>({left:20,top:20,width:400,height:200});
   const document=new EventTarget();

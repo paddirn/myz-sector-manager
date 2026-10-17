@@ -59,7 +59,7 @@ test('runtime hooks keep tracking when closed, ignore other Scenes, and do not d
   runtime.stop();assert.equal(runtime.hooks.length,0);for(const values of f.callbacks.values())assert.equal(values.size,0);
 });
 test('map selection opens existing records, creates only after confirmation, and rejects outside points',async()=>{
-  const f=fixture(),opened=[],created=[];const runtime=new ZoneRuntime({openSector:async id=>opened.push(id),createSector:async code=>created.push(code)},f.env);runtime.store.reload();
+  const f=fixture(),opened=[],created=[];const runtime=new ZoneRuntime({openSector:async id=>opened.push(id),createSector:async(code,valid)=>{if(await f.env.foundry.applications.api.DialogV2.confirm()&&valid())created.push(code);}},f.env);runtime.store.reload();
   await runtime.selectPoint({x:100,y:100});assert.deepEqual(opened,['sector']);
   await runtime.selectPoint({x:600,y:100});assert.deepEqual(created,['B1']);
   f.env.foundry.applications.api.DialogV2.confirm=async()=>false;await runtime.selectPoint({x:1100,y:100});assert.equal(created.length,1);
@@ -70,7 +70,7 @@ test('map selection opens existing records, creates only after confirmation, and
 test('a pending map-create confirmation cannot create a record after the Zone Scene changes',async()=>{
   const f=fixture();let confirm;const created=[];
   f.env.foundry.applications.api.DialogV2.confirm=()=>new Promise(resolve=>confirm=resolve);
-  const runtime=new ZoneRuntime({createSector:async code=>created.push(code)},f.env);runtime.store.reload();
+  const runtime=new ZoneRuntime({createSector:async(code,valid)=>{if(await f.env.foundry.applications.api.DialogV2.confirm()&&valid())created.push(code);}},f.env);runtime.store.reload();
   const pending=runtime.selectPoint({x:600,y:100});runtime.store.config.sceneId='combat';confirm(true);await pending;assert.deepEqual(created,[]);
 });
 test('viewing or resizing other Scenes never modifies saved grid calibration',async()=>{

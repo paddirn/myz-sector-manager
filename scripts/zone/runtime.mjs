@@ -9,7 +9,7 @@ import {registerOverlayShortcut,warnShortcutConflict} from './shortcut.mjs';
 
 export class ZoneRuntime {
   constructor({onChange=()=>{},openSector=async()=>{},createSector=async()=>{}}={},env=globalThis){
-    this.env=env;this.store=new ZoneStore(env);this.overlay=new ZoneOverlay(this.store,env);this.calibrator=new ZoneCalibration(this.store,this.overlay,env);
+    this.env=env;this.store=new ZoneStore(env);this.overlay=new ZoneOverlay(this.store,env);this.overlay.onSelect=code=>this.selectCoordinate(code);this.calibrator=new ZoneCalibration(this.store,this.overlay,env);
     this.onChange=onChange;this.openSector=openSector;this.createSector=createSector;this.hooks=[];this.suspended=false;this.pending=false;
   }
   register(){this.store.register();this.env.Hooks.once('setup',()=>registerOverlayShortcut(this));}
@@ -26,6 +26,7 @@ export class ZoneRuntime {
     const refresh=()=>{void this.store.refreshTracking().catch(()=>{});};
     this.unsubscribe=this.store.subscribe(()=>this.schedule());
     this.store.reload();
+    on('canvasPan',()=>this.schedule());
     on('canvasReady',()=>{this.suspended=false;this.store.emit();refresh();});
     on('canvasTearDown',()=>{if(this.calibrator.active)this.calibrator.cancel();this.suspended=true;this.overlay.stop();});
     on('updateToken',(token,changes)=>{void this.store.tokenChanged(token,changes).catch(()=>{});});
@@ -142,12 +143,13 @@ export class ZoneRuntime {
       if(matches.length>1)this.env.ui.notifications.warn(`Multiple sector records match ${code}; opening the first. Use the sidebar to choose another.`);
       await this.openSector(matches[0].id);return;
     }
-    if(!await this.env.foundry.applications.api.DialogV2.confirm({window:{title:`No record for ${code}`},content:`Create a GM-only sector record for ${code}?`}))return;
-    if(sceneId!==this.store.config.sceneId||!this.store.live)return;
-    // Another GM may have created it while the confirmation was open.
-    matches=this.store.sectorRecords(code);
-    if(matches.length)await this.openSector(matches[0].id);else await this.createSector(code);
+    await this.createSector(code,()=>sceneId===this.store.config.sceneId&&this.store.live);
   }
+  async selectCoordinate(code){
+    const bounds=this.store.config.grid&&coordinateToBounds(code,this.store.config.grid);
+    if(bounds)await this.selectPoint({x:bounds.x+bounds.width/2,y:bounds.y+bounds.height/2});
+  }
+
   api(){
     return {
       configure:()=>this.configure(),

@@ -1,3 +1,5 @@
+import {canonicalCoordinate} from './zone/grid.mjs';
+import {sectorIndicators,iconMarkup} from './sector-icons.mjs';
 import {travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS} from './travel-time.mjs';
 import {sectorNaming,sectorName,ensureJournalFolders,JournalOrganization} from './journal-organization.mjs';
 import {saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS} from './sector-randomizer.mjs';
@@ -52,7 +54,8 @@ const travelCalculator=data=>{
   return `<section class="sm-travel"><h3>Exploration &amp; Travel Time</h3><p>Explore Sector: <strong data-explore-time>${formatDuration(t.explore)}</strong></p><p>Pass Through Explored Sector: <strong data-pass-time>${formatDuration(t.pass)}</strong></p><fieldset><legend>Travel Mode</legend>${[['foot','On Foot'],['vehicle','Vehicle']].map(([value,label])=>`<label><input type="radio" name="travel.mode" value="${value}" ${o.mode===value?'checked':''}> ${label}</label>`).join(' ')}</fieldset><fieldset><legend>Exploration Modifiers</legend><div class="sm-modifier-columns">${[modifiers.slice(0,3),modifiers.slice(3)].map(column=>`<div>${column.map(([key,label,tip])=>`<label class="sm-stunt" title="${tip}"><input type="checkbox" name="travel.${key}" ${o[key]?'checked':''}>${label}${key==='difficult'?` <input aria-label="Difficult Terrain multiplier" name="travel.difficulty" type="number" min="2" step="any" value="${o.difficulty}">`:''}</label>`).join('')}</div>`).join('')}</div></fieldset><small>Planning reference only. Linked time stunts save automatically; other options save with Save Sector. Does not advance time, move the party, consume resources, or perform rolls.</small></section>`;
 };
 const pathStunts = data => `<section class="sm-path"><p>Track benefits obtained during the current visit or exploration. Each stunt is available once per Find the Path roll (p. 56). The repeat-search guidance also limits each stunt to once per sector (p. 160). The GM controls resets; these checkboxes do not enforce either restriction. Checkboxes save automatically. Nothing resets automatically, awards resources, changes Rot, or advances world time. Linked time stunts update the reference calculator below.</p><h3>Find the Path Stunts</h3><div class="sm-stunt-columns">${[PATH_STUNTS.slice(0,5),PATH_STUNTS.slice(5)].map(column=>`<div>${column.map(stunt=>stuntLabel(stunt,data)).join('')}</div>`).join('')}</div><button type="button" data-action="reset-stunts">Reset Stunts</button>${travelCalculator(data)}</section>`;
-const environmentFields = data => `<label class="sm-field"><span>Terrain</span><input name="terrain" type="text" list="sm-terrain-options" value="${attr(data.terrain)}"><datalist id="sm-terrain-options">${TERRAIN_OPTIONS.map(value=>`<option value="${attr(value)}"></option>`).join('')}</datalist></label><label class="sm-field"><span>Rot Level</span><select name="rot">${ROT_LEVELS.some(entry=>String(entry.level)===String(data.rot))?'':`<option value="${attr(data.rot)}" selected>Existing value: ${escapeHTML(data.rot)}</option>`}${ROT_LEVELS.map(entry=>`<option value="${entry.level}" ${String(entry.level)===String(data.rot)?'selected':''}>${entry.level} — ${entry.label}: ${entry.exposure}</option>`).join('')}</select><small data-rot-exposure>${escapeHTML(ROT_LEVELS.find(entry=>String(entry.level)===String(data.rot))?.exposure||'Existing value retained; select a level to change it.')}</small></label>`;
+const sectorIcon=(data,key)=>{const info=sectorIndicators(data)[key];return `<span data-icon-slot="${key}">${iconMarkup(info.icon,info.title)}</span>`;};
+const environmentFields = data => `<label class="sm-field"><span>${sectorIcon(data,'terrain')} Terrain</span><input name="terrain" type="text" list="sm-terrain-options" value="${attr(data.terrain)}"><datalist id="sm-terrain-options">${TERRAIN_OPTIONS.map(value=>`<option value="${attr(value)}"></option>`).join('')}</datalist></label><label class="sm-field"><span>${sectorIcon(data,'rot')} Rot Level</span><select name="rot">${ROT_LEVELS.some(entry=>String(entry.level)===String(data.rot))?'':`<option value="${attr(data.rot)}" selected>Existing value: ${escapeHTML(data.rot)}</option>`}${ROT_LEVELS.map(entry=>`<option value="${entry.level}" ${String(entry.level)===String(data.rot)?'selected':''}>${entry.level} — ${entry.label}: ${entry.exposure}</option>`).join('')}</select><small data-rot-exposure>${escapeHTML(ROT_LEVELS.find(entry=>String(entry.level)===String(data.rot))?.exposure||'Existing value retained; select a level to change it.')}</small></label>`;
 const normalize = (data,title='') => {const result=sectorNaming(foundry.utils.deepClone(data),title);  result.pathStunts ??= {}; for(const stunt of PATH_STUNTS) result.pathStunts[stunt.id] ??= false; result.travel=sectorTravelOptions(result); result.supplies ??= {}; for(const key of Object.keys(SUPPLIES)) result.supplies[key] ??= {quantity:0,collected:false}; return result;};
 const DEFAULT = () => ({version:1, nameOverride:false, customName:'', pathStunts:{}, code:'', terrain:'', rot:0, status:'Unexplored', description:'', notes:'', locations:[], encounters:[], loot:[], effects:[], secrets:[], history:[], supplies:supplyDefaults()});
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -112,12 +115,12 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     let main=`<section class="sm-main"><header class="sm-header"><h2>Zone Sectors</h2><div class="sm-header-buttons"><button type="button" disabled>Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<div class="sm-content"><div class="sm-empty"><p>Create a sector or select one from the list. Each record is a GM-only Journal Entry.</p></div></div></section>`;
     if(j){
       let body='';
-      if(this.tab==='Overview') body=`<div class="sm-grid"><div class="sm-field"><label for="sm-sector-name">Sector name</label><div class="sm-name-control"><input id="sm-sector-name" data-sector-name value="${attr(sectorName(d))}"><button type="button" data-action="reset-name">Reset to Default</button></div></div>${field('Sector ID / Coordinates','code',d.code)}${environmentFields(d)}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost'])}</div>${area('Mood','mood',d.mood||'')}${area('Description','description',d.description)}${area('GM Notes','notes',d.notes)}`;
+      if(this.tab==='Overview') body=`<div class="sm-grid"><div class="sm-field"><label for="sm-sector-name">Sector name</label><div class="sm-name-control"><input id="sm-sector-name" data-sector-name value="${attr(sectorName(d))}"><button type="button" data-action="reset-name">Reset to Default</button></div></div>${field('Sector ID / Coordinates','code',d.code)}${environmentFields(d)}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost']).replace('<span>Exploration Status</span>',`<span>${sectorIcon(d,'status')} Exploration Status</span>`)}</div>${area('Mood','mood',d.mood||'')}${area('Description','description',d.description)}${area('GM Notes','notes',d.notes)}`;
       else if(this.tab==='Find the Path') body=pathStunts(d);
       else {
         const key=COLLECTIONS[this.tab], arr=d[key]||[];
         const state=this.entryState(key);
-        body=(this.tab==='Loot'?supplies(d,this.consumablesState().collapsed):'')+`<div class="sm-section-header"><p>${this.tab==='Effects'?'Track weather, Zone phenomena, hazards, and special environmental effects.':`Track sector ${this.tab.toLowerCase()} as individual editable records.`}</p><div class="sm-entry-controls">${arr.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}">+ Add Entry</button></div></div>`+
+        body=({Encounters:'encounters',Effects:'phenomena',Loot:'loot'}[this.tab]?`<h3 data-sector-section>${sectorIcon(d,{Encounters:'encounters',Effects:'phenomena',Loot:'loot'}[this.tab])} ${escapeHTML(this.tab)}</h3>`:'')+(this.tab==='Loot'?supplies(d,this.consumablesState().collapsed):'')+`<div class="sm-section-header"><p>${this.tab==='Effects'?'Track weather, Zone phenomena, hazards, and special environmental effects.':`Track sector ${this.tab.toLowerCase()} as individual editable records.`}</p><div class="sm-entry-controls">${arr.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}">+ Add Entry</button></div></div>`+
           arr.map((item,i)=>{const id=state.entries[i].id, collapsed=state.collapsed.has(id);return `<article class="sm-entry ${collapsed?'is-collapsed':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body"><span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span><strong data-entry-title>${escapeHTML(item.title||`Entry ${i+1}`)}</strong></button><button type="button" data-remove="${key}:${id}" title="Remove entry" aria-label="Remove ${attr(item.title||`Entry ${i+1}`)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}><div class="sm-grid">${field('Title',`${key}.${i}.title`,item.title||'')}${this.tab==='Loot'&&item.quantity!==undefined?field('Quantity',`${key}.${i}.quantity`,item.quantity,'number'):''}${select('Status',`${key}.${i}.status`,item.status||'Active',['Active','Hidden','Discovered','Resolved','Collected','Depleted','Inactive'])}${this.tab==='Effects'?select('Category',`${key}.${i}.category`,item.category||'Weather',['Weather','Phenomenon','Special Effect','Hazard'])+reference(key,i,item.uuid||''):reference(key,i,item.uuid||'')}</div>${item.referenceWarning?`<p class="sm-reference-missing" data-reference-warning role="status">${escapeHTML(item.referenceWarning)}</p>`:''}${area('Details / Rules / Notes',`${key}.${i}.details`,item.details||'')}${this.tab==='Effects'?field('Duration / Trigger',`${key}.${i}.duration`,item.duration||''):''}</div></article>`;}).join('')+
           (!arr.length?`<div class="sm-empty">No ${escapeHTML(this.tab.toLowerCase())} yet. Add an entry to get started.</div>`:'');
       }
@@ -244,7 +247,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       if(e.name==='travel.open'&&e.checked){this.draft.travel.difficult=false;el.querySelector('[name="travel.difficult"]').checked=false;}
       if(e.name==='travel.difficult'&&e.checked){this.draft.travel.open=false;el.querySelector('[name="travel.open"]').checked=false;}
       this.capture();if(e.name?.startsWith('travel.')||e.name?.startsWith('pathStunts.'))this.refreshTravelTimes();
-      if(e.name?.startsWith('supplies.'))this.refreshConsumables();this.refreshTabIndicators();if(e.matches('[data-sector-name]')||['code','terrain'].includes(e.name)){this.refreshSectorLabels();this.refreshZoneSummary();}
+      if(e.name?.startsWith('supplies.'))this.refreshConsumables();this.refreshTabIndicators();this.refreshSectorIcons();if(e.matches('[data-sector-name]')||['code','terrain'].includes(e.name)){this.refreshSectorLabels();this.refreshZoneSummary();}
       if(e.name?.endsWith('.title')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title)title.textContent=e.value||'Untitled Entry';}
     }));
   }
@@ -276,6 +279,10 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const heading=this.element.querySelector('[data-sector-heading]');if(heading)heading.textContent=label;
     const field=this.element.querySelector('[data-sector-name]');if(field)field.value=label;
   }
+  refreshSectorIcons(){
+    const info=sectorIndicators(this.data);
+    for(const slot of this.element.querySelectorAll('[data-icon-slot]')){const item=info[slot.dataset.iconSlot];slot.innerHTML=iconMarkup(item.icon,item.title);}
+  }
   refreshTabIndicators(){
     for(const button of this.element.querySelectorAll('[data-tab]'))button.classList.toggle('sm-tab-empty',!tabHasContent(this.data,button.dataset.tab));
   }
@@ -285,12 +292,27 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     if(!container)return;
     container.innerHTML=zone.summary(this.journal?this.data:null);zone.bindSummary(container);
   }
-  async newSector(code=''){
+  async promptNewSector(code='',valid=()=>true){
+    if(this.creatingSector)return;
+    this.creatingSector=true;
+    try{
+      const value=await foundry.applications.api.DialogV2.wait({window:{title:'+New Sector'},content:`<label>Coordinates<input name="newSectorCode" value="${attr(code)}" placeholder="A1"></label><p>Create a GM-only sector with the usual default values.</p>`,buttons:[{action:'cancel',label:'Cancel',default:true,callback:()=>null},{action:'create',label:'Create Sector',callback:(event,button,dialog)=>dialog.element.querySelector('[name="newSectorCode"]').value}],close:()=>null,rejectClose:false});
+      if(value===null||value===undefined||!valid())return;
+      const input=String(value).trim();
+      const canonical=input?canonicalCoordinate(input):'';
+      if(input&&!canonical)throw new Error('Enter coordinates such as A1 or AA10.');
+      await this.newSector(canonical,valid);
+    }finally{this.creatingSector=false;}
+  }
+  async newSector(code='',valid=()=>true){
+    if(!game.user.isGM||!valid())return;
     const existing=code?zone.store.sectorRecords(code):[];
-    if(existing.length){await this.navigate(existing[0].id);return;}
-    if(!await this.confirmLose())return;
+    if(existing.length){await this.navigate(existing[0].id);if(this.sectorId===existing[0].id){this.tab='Overview';await this.render();}return;}
+    if(!await this.confirmLose()||!valid())return;
     const data=DEFAULT();data.code=code;
     const folders=await ensureJournalFolders();
+    if(!valid())return;
+    const duplicate=code?zone.store.sectorRecords(code):[];if(duplicate.length){await this.navigate(duplicate[0].id);if(this.sectorId===duplicate[0].id){this.tab='Overview';await this.render();}return;}
     const journal=await JournalEntry.create({name:sectorName(data),folder:folders.sectors.id,ownership:{default:0},pages:[{name:'Sector Record',type:'text',text:{content:'<p>Sector record managed by MYZ Sector Manager. Use the Sector Manager to edit structured fields.</p>'}}],flags:{[MOD]:{[KEY]:data}}});
     this.sectorId=journal.id;this.draft=normalize(data);this.tab='Overview';this.dirty=false;this.filter='';await this.render();
   }
@@ -465,7 +487,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       if(this.sectorId!==sectorId)return;
       this.capture();for(const stunt of PATH_STUNTS)this.draft.pathStunts[stunt.id]=false;try{await this.persistStunts();}catch(error){this.markDirty();throw error;}await this.render();return;
     }
-    if(which==='new'){await this.newSector();return;}
+    if(which==='new'){await this.promptNewSector();return;}
     if(which==='add'){this.capture();this.draft[key].push({title:'',status:'Active',details:'',uuid:'',category:'Weather',duration:''});this.dirty=true;await this.render();return;}
     if(which==='save'){const pendingStunts=this.stuntWrite;await pendingStunts?.catch(()=>{});this.capture();this.busy=true;const j=this.journal;if(!j)return;const name=sectorName(this.draft);delete this.draft.journalName;const stored=foundry.utils.deepClone(this.draft);stored.travel=storedTravel(stored.travel);await j.update({...(j.name===name?{}:{name}),[`flags.${MOD}.${KEY}`]:stored});if(this.stuntWrite===pendingStunts)this.stuntWrite=undefined;this.dirty=false;this.busy=false;await this.render();ui.notifications.info('Sector saved.');return;}
     if(which==='journal'){this.journal?.sheet?.render(true);return;}
@@ -476,8 +498,8 @@ let app;
 const organization=new JournalOrganization();
 const zone=new ZoneRuntime({
   onChange:()=>{if(app?.rendered)app.refreshZoneSummary();},
-  openSector:id=>game.myzSectorManager.open(id),
-  createSector:async code=>{const manager=await game.myzSectorManager.open();if(manager)await manager.newSector(code);}
+  openSector:async id=>{const manager=await game.myzSectorManager.open(id);if(manager?.sectorId===id){manager.capture();manager.tab='Overview';await manager.render();}},
+  createSector:async(code,valid)=>{const manager=await game.myzSectorManager.open();if(manager)await manager.promptNewSector(code,valid);}
 });
 Hooks.once('init',()=>{
   zone.register();
