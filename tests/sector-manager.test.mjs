@@ -1,3 +1,4 @@
+import {sectorName,ensureJournalFolders,JournalOrganization} from '../scripts/journal-organization.mjs';
 import {generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS} from '../scripts/sector-randomizer.mjs';
 import {tabHasContent,CONSUMABLES} from '../scripts/sector-content.mjs';
 import {test} from 'node:test';
@@ -11,7 +12,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -24,7 +25,7 @@ test('coordinates sort naturally with names as fallback and sidebar text is esca
   assert.deepEqual(Array.from(app.journals,x=>x.id),['one','two','ten','none']);
   context.game.journal.get=()=>undefined;
   const html=app.build();
-  assert.match(html,/<span class="sm-sector-meta"><strong>A2<\/strong><small> · Scouted<\/small><\/span><span>&lt;Long sector&gt;<\/span>/);
+  assert.match(html,/data-sector-label>A2 - Unknown Terrain<\/strong>/);assert.doesNotMatch(html,/No coordinates/);
   assert.match(html,/height:auto;min-height:0;flex:0 0 auto/);
 });
 
@@ -76,7 +77,7 @@ test('native reference clicks invoke Foundry document-link hooks; missing UUIDs 
 
 test('saving and reopening preserves fractional supplies, collected state and existing records',async()=>{
   const {context,app}=fixture();let stored={version:1,code:'A1',loot:[{title:'Artifact',uuid:'Item.old'}]};
-  const j={id:'old',name:'Old sector',getFlag:()=>stored,update:async()=>{},setFlag:async(mod,key,data)=>{stored=structuredClone(data);}};
+  const j={id:'old',name:'Old sector',getFlag:()=>stored,update:async changes=>{if(changes['flags.myz-sector-manager.sector'])stored=structuredClone(changes['flags.myz-sector-manager.sector']);},setFlag:async(mod,key,data)=>{stored=structuredClone(data);}};
   context.game.journal.get=()=>j;context.ui.notifications.info=()=>{};
   app.sectorId='old';app.draft=context.normalizeSector(stored);app.capture=()=>{};
   app.draft.supplies.cleanWater={quantity:3.5,collected:true};app.draft.supplies.components={quantity:2.75,collected:false};
@@ -254,4 +255,11 @@ test('Locations accept Scene, Journal Entry and Page drops and preserve native p
   for(const [uuid,type] of [['Scene.a','Scene'],['JournalEntry.j','JournalEntry'],['JournalEntry.j.JournalEntryPage.p','JournalEntryPage']]){
     let opened=0;documents.set(uuid,{uuid,documentName:type,_onClickDocumentLink:async()=>opened++});await app.dropReference({payload:{uuid},preventDefault(){},stopPropagation(){}},zone);assert.equal(input.value,uuid);await app.openReference(zone);assert.equal(opened,1);
   }
+});
+
+test('new sectors use the shared name and Sectors folder, preserving their coordinate field and stable ID',async()=>{
+  const {context,app}=fixture();let created;
+  context.ensureJournalFolders=async()=>({sectors:{id:'sector-folder'}});
+  context.JournalEntry={create:async data=>{created=data;return {id:'stable-id',name:data.name};}};
+  await app.newSector('a-03');assert.equal(created.folder,'sector-folder');assert.equal(created.name,'A3 - Unknown Terrain');assert.equal(created.flags['myz-sector-manager'].sector.code,'a-03');assert.equal(app.sectorId,'stable-id');
 });

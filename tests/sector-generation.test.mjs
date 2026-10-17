@@ -98,7 +98,7 @@ test('repeat generation resets quantities without duplicating loot or deleting m
 test('only Components can populate Loot and its value persists through a sector save/reload',async()=>{
   const f=fixture({environment:'Thick Woods'}, {'1d10000':[10000,10000,10000,10000,1,10000],'1d3':[2]},[3,4]);f.existing.loot=[];
   const output=await generateSector(f.existing,f.options);assert.deepEqual(output.loot,[]);assert.equal(output.supplies.components.quantity,2);assert(tabHasContent(output,'Loot'));
-  let stored=structuredClone(f.existing);const journal={getFlag:()=>stored,setFlag:async(mod,key,value)=>{stored=structuredClone(value);}};await saveGeneratedSector(journal,f.existing,output,f.env);assert.equal(journal.getFlag().supplies.components.quantity,2);
+  let stored=structuredClone(f.existing);const journal={getFlag:()=>stored,update:async changes=>{stored=structuredClone(changes['flags.myz-sector-manager.sector']);},setFlag:async(mod,key,value)=>{stored=structuredClone(value);}};await saveGeneratedSector(journal,f.existing,output,f.env);assert.equal(journal.getFlag().supplies.components.quantity,2);
   assert.equal(tabHasContent({...output,supplies:Object.fromEntries(Object.keys(output.supplies).map(key=>[key,{quantity:0,collected:false}]))},'Loot'),false);
 });
 test('unusable results, contradictory environment data, invalid pools and options abort without modifying source data',async()=>{
@@ -115,7 +115,7 @@ test('document and nested table results preserve references and provenance; miss
   inner.roll=async()=>({results:[{documentUuid:table.uuid}]});await assert.rejects(rollTable(table,f.env),/cycle/);table.roll=async()=>({results:[{documentUuid:'Item.missing'}]});await assert.rejects(rollTable(table,f.env),/missing/);
 });
 test('single flag write persists generation, preserves unrelated fields, and rejects stale sectors or players',async()=>{
-  const f=fixture(),output=await generateSector(f.existing,f.options);let stored=structuredClone(f.existing),writes=0;const journal={getFlag:()=>stored,setFlag:async(mod,key,value)=>{writes++;stored=structuredClone(value);}};
+  const f=fixture(),output=await generateSector(f.existing,f.options);let stored=structuredClone(f.existing),writes=0;const journal={getFlag:()=>stored,update:async changes=>{writes++;stored=structuredClone(changes['flags.myz-sector-manager.sector']);},setFlag:async(mod,key,value)=>{writes++;stored=structuredClone(value);}};
   await saveGeneratedSector(journal,f.existing,output,f.env);assert.equal(writes,1);assert.deepEqual(stored,output);assert.deepEqual(stored.randomization.baseDice,[1,6]);await assert.rejects(saveGeneratedSector(journal,f.existing,output,f.env),/changed/);assert.equal(writes,1);f.env.game.user.isGM=false;await assert.rejects(saveGeneratedSector(journal,stored,output,f.env),/Only a GM/);
 });
 test('empty tab detection ignores defaults and placeholders and recognizes meaningful content',()=>{
@@ -128,7 +128,7 @@ test('inline UUIDs and legacy table document references keep Item links',async()
   table.roll=async()=>({results:[{description:'@UUID[Item.rifle]{Old Rifle}'}]});let result=await rollTable(table,f.env);assert.equal(result.text,'Old Rifle');assert.equal(result.uuid,item.uuid);table.roll=async()=>({results:[{text:'Old table text',documentCollection:'Item',documentId:'rifle'}]});result=await rollTable(table,f.env);assert.equal(result.uuid,item.uuid);
 });
 test('rename and generated data commit in a single update without temporary journalName',async()=>{
-  const f=fixture(),next=await generateSector(f.existing,f.options);next.journalName='A new name';let stored=f.existing,updates=0;const journal={name:'Old name',getFlag:()=>stored,setFlag:()=>assert.fail('must use one update'),update:async changes=>{updates++;assert.equal(changes.name,'A new name');stored=changes['flags.myz-sector-manager.sector'];}};
+  const f=fixture(),next=await generateSector(f.existing,f.options);next.journalName='A new name';let stored=f.existing,updates=0;const journal={name:'Old name',getFlag:()=>stored,setFlag:()=>assert.fail('must use one update'),update:async changes=>{updates++;assert.equal(changes.name,'A7 - Overgrown Ruins');stored=changes['flags.myz-sector-manager.sector'];}};
   await saveGeneratedSector(journal,f.existing,next,f.env);assert.equal(updates,1);assert.equal(stored.journalName,undefined);
 });
 
@@ -189,7 +189,22 @@ test('both ruin categories persist Journal/Page references and unresolved ruins 
   for(const [environment,key,uuid,type] of [['Overgrown Ruins','ruinsA','JournalEntry.hospital','JournalEntry'],['Derelict Industries','ruinsB','Compendium.myz.ruins.JournalEntry.a.JournalEntryPage.p','JournalEntryPage']]){
     const f=fixture({environment});f.tables.set(uuid,{uuid,name:'Ruin Journal',documentName:type});f.tables.get(TABLE_UUIDS[key]).roll=async()=>({results:[{documentUuid:uuid,description:'Ruin title'}]});
     const next=await generateSector(f.existing,f.options);const entry=next.locations.find(entry=>entry.generated);assert.equal(entry.uuid,uuid);assert.equal(entry.title,'Ruin title');
-    let stored=f.existing;await saveGeneratedSector({getFlag:()=>stored,setFlag:async(mod,key,value)=>{stored=structuredClone(value);}},f.existing,next,f.env);assert.equal(stored.locations.find(entry=>entry.generated).uuid,uuid);
+    let stored=f.existing;await saveGeneratedSector({getFlag:()=>stored,update:async changes=>{stored=structuredClone(changes['flags.myz-sector-manager.sector']);},setFlag:async(mod,key,value)=>{stored=structuredClone(value);}},f.existing,next,f.env);assert.equal(stored.locations.find(entry=>entry.generated).uuid,uuid);
   }
   const f=fixture();f.tables.get(TABLE_UUIDS.ruinsA).roll=async()=>({results:[{documentUuid:'JournalEntry.deleted',description:'Hospital'}]});const next=await generateSector(f.existing,f.options);assert.equal(next.locations[1].title,'Hospital');assert.match(next.locations[1].referenceWarning,/Journal could not be resolved/);assert.equal(next.terrain,'Overgrown Ruins');
+});
+
+test('Core and house modes share severity and artifact counts; neither bypasses threat eligibility or absent ones',async()=>{
+  for(const environment of ['Overgrown Ruins, Ruin:No, Threat:Yes, Artifact:Yes','Overgrown Ruins, Ruin:No, Threat:No, Artifact:Yes'])for(const faces of [[1,6],[2,6]]){
+    const results=[];
+    for(const mode of ['core','individual-d3']){
+      const f=fixture({environment},{'1d3':[3]},faces);f.options.options={threatMode:mode};const result=await generateSector(f.existing,f.options);results.push(result);
+      const eligible=environment.includes('Threat:Yes')&&faces.includes(1);assert.equal(result.randomization.threatCount,eligible?(mode==='core'?1:3):0);assert.equal(result.randomization.threatSeverity,eligible?1:0);assert.equal(f.calls.filter(key=>key==='threatType').length,eligible?(mode==='core'?1:3):0);
+    }
+    assert.equal(results[0].randomization.artifactCount,results[1].randomization.artifactCount);assert.deepEqual(results[0].loot.filter(entry=>entry.title==='Ancient Rifle'),results[1].loot.filter(entry=>entry.title==='Ancient Rifle'));
+  }
+});
+
+test('a Core identity roll cannot silently create multiple final threats',async()=>{
+  const f=fixture();f.tables.get(TABLE_UUIDS.humanoid).roll=async()=>({results:[{description:'One'},{description:'Two'}]});const before=structuredClone(f.existing);await assert.rejects(generateSector(f.existing,f.options),/exactly one threat result/);assert.deepEqual(f.existing,before);
 });
