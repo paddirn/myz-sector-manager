@@ -1,7 +1,7 @@
 import {ZoneStore,MODULE} from './store.mjs';
 import {ZoneOverlay} from './overlay.mjs';
 import {createZoneConfigClass,escapeHTML} from './config.mjs';
-import {positionToCoordinate,coordinateToBounds,sceneCellSize,tokenCenter,formatDistance} from './grid.mjs';
+import {positionToCoordinate,coordinateToBounds,sceneCellSize,tokenCenter,formatDistance,sectorDistance,canonicalCoordinate} from './grid.mjs';
 
 import {ZoneCalibration} from './calibration.mjs';
 import {portraitCandidates} from './presentation.mjs';
@@ -45,22 +45,27 @@ export class ZoneRuntime {
     const Dialog=createZoneConfigClass(this.env.foundry.applications.api.ApplicationV2);
     this.dialog=new Dialog(this);await this.dialog.render(true);
   }
-  summary(){
+  summary(selected=null){
     if(!this.store.isGM)return '';
     const {config,scene}=this.store;
     let warning='';
     if(this.store.documentId&&!this.store.document)warning='Zone configuration Journal is missing or unavailable.';
     else if(config.sceneId&&!scene)warning='Designated Zone Scene is missing or unavailable. Last-known positions are retained.';
     else if(scene&&config.calibration&&(scene.width!==config.calibration.sceneWidth||scene.height!==config.calibration.sceneHeight||sceneCellSize(scene).width!==config.calibration.cellWidth||sceneCellSize(scene).height!==config.calibration.cellHeight))warning='Scene dimensions or tactical grid size changed. Saved Zone pixel dimensions are unchanged; use Reconfigure Grid if needed.';
-    const tracks=this.store.trackingRows().filter(track=>track.kind==='expedition').map(track=>{
+    const validCoordinate=value=>scene&&config.grid&&coordinateToBounds(value,config.grid)?canonicalCoordinate(value):null;
+    const selectedCode=validCoordinate(selected?.code);
+    const selectedCell=from=>`<div class="zm-selected">${selectedCode?`<button type="button" class="zm-coordinate" data-zone-coordinate="${escapeHTML(selectedCode)}" title="Center on selected sector ${escapeHTML(selectedCode)}">${escapeHTML(selectedCode)}</button><span>${escapeHTML(formatDistance(sectorDistance(validCoordinate(from),selectedCode,config.kmPerSector)))}</span>`:`<span>${selected?'Selected sector coordinates unavailable':'No sector selected'}</span>`}</div>`;
+    const groups=this.store.trackingRows().filter(track=>track.kind==='expedition');
+    const partyDistance=groups.length?groups.map(track=>`<span>${groups.length>1?`${escapeHTML(track.name)}: `:''}${escapeHTML(formatDistance(validCoordinate(config.arkCoordinate)&&validCoordinate(track.coordinate)?track.distance:null))}${!track.live?' (last known)':''}</span>`).join(''):'No party configured';
+    const tracks=groups.map(track=>{
       const issue={outside:'outside Zone', 'missing-token':'token missing','missing-scene':'Scene missing',unavailable:'position unavailable'}[track.status];
       const label=`View Zone Scene and center on ${track.name}`;
-      return `<div class="zm-expedition"><button type="button" class="zm-portrait" data-zone-center="${escapeHTML(track.id)}" title="${escapeHTML(label)}" aria-label="${escapeHTML(label)}"><i class="fa-solid fa-user-group" aria-hidden="true"></i></button><div class="zm-group-location"><strong>${escapeHTML(track.name)}</strong><div>${escapeHTML(track.coordinate||'Unknown')} · ${escapeHTML(formatDistance(track.distance))} <em>(${track.live?'live':'last known'}${issue?` · ${escapeHTML(issue)}`:''})</em></div></div></div>`;
+      return `<div class="zm-expedition"><button type="button" class="zm-portrait" data-zone-center="${escapeHTML(track.id)}" title="${escapeHTML(label)}" aria-label="${escapeHTML(label)}"><i class="fa-solid fa-user-group" aria-hidden="true"></i></button><div class="zm-group-location"><strong>${escapeHTML(track.name)}</strong><div>${escapeHTML(track.coordinate||'Unknown')} <em>(${track.live?'live':'last known'}${issue?` · ${escapeHTML(issue)}`:''})</em></div></div><div class="zm-original-distance"></div>${selectedCell(track.status==='located'?track.coordinate:null)}</div>`;
     }).join('');
     if(config.arkCoordinate&&config.grid&&!coordinateToBounds(config.arkCoordinate,config.grid))warning+=(warning?' ':'')+'Ark is outside the configured grid; its map highlight is unavailable.';
-    return `<style>.sm-zone-summary{flex-shrink:0;border-bottom:1px solid #888;padding:6px 12px;font-size:12px}.sm-zone-summary .zm-actions,.sm-zone-summary .zm-positions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}.sm-zone-summary button{width:auto;height:auto;white-space:normal}.sm-zone-summary .zm-positions{margin-top:4px}.sm-zone-summary p{margin:4px 0}.sm-zone-summary em{opacity:.8}.sm-zone-summary .zm-expedition{display:flex;gap:8px;align-items:center;max-width:100%}.sm-zone-summary .zm-group-location{min-width:0;overflow-wrap:anywhere}.sm-zone-summary .zm-portrait{width:36px;height:36px;flex:0 0 36px;padding:0;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center}.sm-zone-summary .zm-portrait img{width:100%;height:100%;object-fit:contain}.sm-zone-summary .zm-portrait:focus-visible{outline:2px solid #d49a3d;outline-offset:2px}</style>
+    return `<style>.sm-zone-summary{flex-shrink:0;border-bottom:1px solid #888;padding:6px 12px;font-size:12px}.sm-zone-summary .zm-actions,.sm-zone-summary .zm-positions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}.sm-zone-summary button{width:auto;height:auto;white-space:normal}.sm-zone-summary .zm-positions{margin-top:4px}.sm-zone-summary p{margin:4px 0}.sm-zone-summary em{opacity:.8}.sm-zone-summary .zm-expedition{display:grid;grid-template-columns:36px minmax(100px,1fr) minmax(0,1fr) minmax(150px,1.5fr);gap:8px;align-items:center;max-width:100%}.sm-zone-summary .zm-positions{display:block}.sm-zone-summary .zm-original-distance{display:flex;flex-direction:column}.sm-zone-summary .zm-selected{display:flex;align-items:center;gap:8px;min-width:0;overflow-wrap:anywhere}.sm-zone-summary .zm-coordinate{width:36px;height:36px;flex:0 0 36px;font-size:10px;line-height:1.1;overflow-wrap:anywhere;padding:2px;border-radius:6px;font-weight:bold}.sm-zone-summary .zm-expedition+.zm-expedition{margin-top:6px}@container (max-width:600px){.sm-zone-summary .zm-expedition{grid-template-columns:36px minmax(0,1fr)}.sm-zone-summary .zm-selected{grid-column:2}.sm-zone-summary .zm-original-distance{grid-column:2}}.sm-zone-summary .zm-group-location{min-width:0;overflow-wrap:anywhere}.sm-zone-summary .zm-portrait{width:36px;height:36px;flex:0 0 36px;padding:0;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center}.sm-zone-summary .zm-portrait img{width:100%;height:100%;object-fit:contain}.sm-zone-summary .zm-portrait:focus-visible{outline:2px solid #d49a3d;outline-offset:2px}</style>
       <details ${this.toolsOpen?'open':''}><summary>Zone Map / Tracking: <strong>${escapeHTML(scene?.name||config.sceneId||'Not configured')}</strong></summary><div class="zm-actions"><button type="button" data-zone-config>Configure / Tracking</button><button type="button" data-zone-view ${scene?'':'disabled'}>View Zone</button><button type="button" data-zone-select ${this.store.live&&config.grid?'':'disabled'}>Select on map</button><button type="button" data-zone-overlay aria-pressed="${Boolean(config.overlay.enabled)}" ${scene&&config.grid?'':'disabled'}>${config.overlay.enabled?'Hide':'Show'} overlay</button></div></details>
-      ${warning?`<p role="alert">${escapeHTML(warning)}</p>`:''}${config.sceneId||config.arkCoordinate?`<div class="zm-ark zm-expedition">${config.grid&&coordinateToBounds(config.arkCoordinate,config.grid)?'<button type="button" class="zm-portrait" data-zone-ark title="Center on the Ark sector" aria-label="Center on the Ark sector"><i class="fa-solid fa-house" aria-hidden="true"></i></button>':'⌂'} Ark: <strong>${escapeHTML(config.arkCoordinate||'Not designated')}</strong></div>`:''}${tracks?`<div class="zm-positions">${tracks}</div>`:''}`;
+      ${warning?`<p role="alert">${escapeHTML(warning)}</p>`:''}${config.sceneId||config.arkCoordinate?`<div class="zm-ark zm-expedition">${config.grid&&coordinateToBounds(config.arkCoordinate,config.grid)?'<button type="button" class="zm-portrait" data-zone-ark title="Center on the Ark sector" aria-label="Center on the Ark sector"><i class="fa-solid fa-house" aria-hidden="true"></i></button>':'⌂'}<div>Ark: <strong>${escapeHTML(config.arkCoordinate||'Not designated')}</strong></div><div class="zm-original-distance">${partyDistance}</div>${selectedCell(config.arkCoordinate)}</div>`:''}${tracks?`<div class="zm-positions">${tracks}</div>`:''}`;
   }
   bindSummary(container){
     if(!container||!this.store.isGM)return;
@@ -68,6 +73,7 @@ export class ZoneRuntime {
     const run=handler=>async()=>{try{await handler();}catch(error){this.env.ui.notifications.error(`Zone Map: ${error.message}`);}};
     container.querySelector('[data-zone-config]')?.addEventListener('click',run(()=>this.configure()));
     container.querySelector('[data-zone-ark]')?.addEventListener('click',run(()=>this.centerSector(this.store.config.arkCoordinate)));
+    for(const button of container.querySelectorAll('[data-zone-coordinate]'))button.addEventListener('click',run(()=>this.centerSector(button.dataset.zoneCoordinate)));
     container.querySelector('[data-zone-view]')?.addEventListener('click',run(()=>this.store.scene?.view()));
     container.querySelector('[data-zone-overlay]')?.addEventListener('click',run(()=>this.toggleOverlay()));
     for(const button of container.querySelectorAll('[data-zone-center]')){button.addEventListener('click',run(()=>this.centerGroup(button.dataset.zoneCenter)));void this.attachPortrait(button,button.dataset.zoneCenter);}

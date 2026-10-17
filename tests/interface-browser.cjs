@@ -221,7 +221,8 @@ const path=require('node:path');
     assert.match(await page.locator('[data-zone-overlay]').innerText(),/Show/);
     await page.evaluate(()=>game.keybindings.actions.get('myz-sector-manager.toggleZoneOverlay').onDown());await page.waitForFunction(()=>zoneState().overlay.enabled);
     assert.equal(await page.evaluate(()=>zoneState().arkCoordinate),'A1');
-    assert.match(await page.locator('.zm-positions').innerText(),/1 sectors \(1.6 km\)/);
+    assert.match(await page.locator('.zm-ark').innerText(),/1 sectors \(1.6 km\)/);
+    assert.doesNotMatch(await page.locator('.zm-group-location').innerText(),/sectors/);
     await page.locator('[data-zone-center] img').waitFor();
     const portrait=page.locator('[data-zone-center]').first();await portrait.click();
     assert.deepEqual(await page.evaluate(()=>lastPan),{x:650,y:60,duration:350});
@@ -254,6 +255,37 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>records.get('sector1').getFlag('myz-sector-manager','sector').rot),3);
     assert.equal(await page.evaluate(()=>records.get('sector1').getFlag('myz-sector-manager','sector').terrain),'Custom terrain outside the tables');
     console.log('Ark house and sidebar double-click center cell midpoints; single-click selection, stunt autosave/reset/isolation, custom terrain and Rot exposure pass');
+
+    // Generation uses fixture RollTables; these examples are not rulebook table data.
+    await page.evaluate(async()=>{
+      const {TABLE_UUIDS}=await import('/scripts/sector-randomizer.mjs');
+      const texts={environment:'Overgrown Ruins',ruinsA:'Hospital',ruinsB:'Factory',rot:'Weak Rot',threatLevel:'2',threatType:'Phenomena',humanoid:'Humanoid fixture',monster:'Monster fixture',phenomenon:'Fog fixture',artifact:'Artifact fixture',mood:'A distant howl',scrap:'Scrap fixture'};
+      for(const [key,uuid] of Object.entries(TABLE_UUIDS))docs.set(uuid,{uuid,name:key,documentName:'RollTable',roll:async()=>({results:[{description:texts[key]}]})});
+      globalThis.Roll=class{constructor(formula){this.formula=formula;}async evaluate(){return {total:1,dice:[{results:this.formula==='2d6'?[{result:1,active:true},{result:6,active:true}]:[{result:1,active:true}]}]};}};
+      await game.settings.set('myz-sector-manager','threatGenerationMode','core');
+      globalThis.beforeRandomization=structuredClone(records.get('sector1').flags);
+      foundry.applications.api.DialogV2.wait=async()=>null;
+    });
+    await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing);
+    assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector1').flags)===JSON.stringify(beforeRandomization)),true);
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>options.buttons.find(button=>button.action==='randomize').callback(null,null,{element:{querySelector:()=>({value:'core'})}});foundry.applications.api.DialogV2.confirm=async()=>false;});
+    await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing);
+    assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector1').flags)===JSON.stringify(beforeRandomization)),true);
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async options=>{globalThis.generationPreview=options.content;return true;};});
+    await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing&&manager.draft.randomization?.method==='core');
+    assert.match(await page.evaluate(()=>generationPreview),/Threat Level: 2/);assert.match(await page.evaluate(()=>generationPreview),/Threat severity \(1s\): 1/);assert.match(await page.evaluate(()=>generationPreview),/Artifacts \(eligible 6s\): 1/);
+    assert.equal(await page.locator('[name="terrain"]').inputValue(),'Overgrown Ruins');assert.equal(await page.locator('[name="mood"]').inputValue(),'A distant howl');
+    assert.equal(await page.evaluate(()=>records.get('sector1').flags.notes===beforeRandomization.notes),true);
+    await page.locator('[data-tab="Find the Path"]').click();assert(await page.locator('[data-tab="Find the Path"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
+    await page.locator('[name="pathStunts.bullets"]').check();await page.waitForFunction(()=>!document.querySelector('[data-tab="Find the Path"]').classList.contains('sm-tab-empty'));
+    await page.locator('[data-tab="Effects"]').click();assert.equal(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);
+    await page.evaluate(async()=>{manager.draft.effects=[];await manager.render();});assert(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
+    await page.locator('[data-action="add"]').click();assert(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
+    await page.locator('[name="effects.0.title"]').fill('Meaningful effect');assert.equal(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);
+    await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    await page.locator('[data-zone-coordinate]').first().click();await page.waitForFunction(()=>lastPan?.x===250&&lastPan?.y===600);
+    assert.equal(await page.locator('.zm-selected button').first().innerText(),'A2');
+    console.log('Generation cancellation/preview/persistence, preserved notes, live tab indicators, and selected-sector coordinate navigation pass');
 
     // Three clicks preview in Scene coordinates under zoom without saving.
     await page.evaluate(()=>{canvas.stage.zoom=2;canvas.stage.pan={x:100,y:100};});

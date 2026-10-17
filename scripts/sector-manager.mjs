@@ -1,3 +1,5 @@
+import {saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS} from './sector-randomizer.mjs';
+import {tabHasContent} from './sector-content.mjs';
 import {ZoneRuntime} from './zone/runtime.mjs';
 const MOD = 'myz-sector-manager';
 const KEY = 'sector';
@@ -40,7 +42,7 @@ const TERRAIN_OPTIONS = [
   'Subway Station','Supermarket','Swimming Hall','Tank','Theater','Thick Woods','Train Station',
   'Unscathed Ruins','Windmill'
 ];
-const pathStunts = data => `<section class="sm-path"><p>Track benefits obtained during the current visit or exploration. Each stunt is available once per Find the Path roll, not once per sector forever. Checkboxes save automatically. Nothing resets automatically or awards resources, changes Rot, or alters travel time.</p>${['standard','talent'].map(group=>`<h3>${group==='standard'?'Standard Benefits and Stunts':'Talent Stunts'}</h3>${PATH_STUNTS.filter(stunt=>stunt.group===group).map(stunt=>`<label class="sm-stunt" title="${attr(stunt.description)}"><input type="checkbox" name="pathStunts.${stunt.id}" ${data.pathStunts?.[stunt.id]?'checked':''}><span>${escapeHTML(stunt.label)}${group==='talent'?` (${escapeHTML(stunt.source)})`:''}<small>${escapeHTML(stunt.description!==stunt.label?stunt.description:'')}</small></span></label>`).join('')}`).join('')}<button type="button" data-action="reset-stunts">Reset Stunts</button></section>`;
+const pathStunts = data => `<section class="sm-path"><p>Track benefits obtained during the current visit or exploration. Each stunt is available once per Find the Path roll (p. 56). The repeat-search guidance also limits each stunt to once per sector (p. 160). The GM controls resets; these checkboxes do not enforce either restriction. Checkboxes save automatically. Nothing resets automatically or awards resources, changes Rot, or alters travel time.</p>${['standard','talent'].map(group=>`<h3>${group==='standard'?'Standard Benefits and Stunts':'Talent Stunts'}</h3>${PATH_STUNTS.filter(stunt=>stunt.group===group).map(stunt=>`<label class="sm-stunt" title="${attr(stunt.description)}"><input type="checkbox" name="pathStunts.${stunt.id}" ${data.pathStunts?.[stunt.id]?'checked':''}><span>${escapeHTML(stunt.label)}${group==='talent'?` (${escapeHTML(stunt.source)})`:''}<small>${escapeHTML(stunt.description!==stunt.label?stunt.description:'')}</small></span></label>`).join('')}`).join('')}<button type="button" data-action="reset-stunts">Reset Stunts</button></section>`;
 const environmentFields = data => `<label class="sm-field"><span>Terrain</span><input name="terrain" type="text" list="sm-terrain-options" value="${attr(data.terrain)}"><datalist id="sm-terrain-options">${TERRAIN_OPTIONS.map(value=>`<option value="${attr(value)}"></option>`).join('')}</datalist></label><label class="sm-field"><span>Rot Level</span><select name="rot">${ROT_LEVELS.some(entry=>String(entry.level)===String(data.rot))?'':`<option value="${attr(data.rot)}" selected>Existing value: ${escapeHTML(data.rot)}</option>`}${ROT_LEVELS.map(entry=>`<option value="${entry.level}" ${String(entry.level)===String(data.rot)?'selected':''}>${entry.level} — ${entry.label}: ${entry.exposure}</option>`).join('')}</select><small data-rot-exposure>${escapeHTML(ROT_LEVELS.find(entry=>String(entry.level)===String(data.rot))?.exposure||'Existing value retained; select a level to change it.')}</small></label>`;
 const normalize = data => {const result=foundry.utils.deepClone(data); result.pathStunts ??= {}; for(const stunt of PATH_STUNTS) result.pathStunts[stunt.id] ??= false; result.supplies ??= {}; for(const key of Object.keys(SUPPLIES)) result.supplies[key] ??= {quantity:0,collected:false}; return result;};
 const DEFAULT = () => ({version:1, pathStunts:{}, code:'', terrain:'', rot:0, status:'Unexplored', description:'', notes:'', locations:[], encounters:[], loot:[], effects:[], secrets:[], history:[], supplies:supplyDefaults()});
@@ -81,20 +83,20 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const list=this.journals;
     const matches=x=>`${x.name} ${x.getFlag(MOD,KEY)?.code||''}`.toLowerCase().includes(this.filter.toLowerCase());
     const menu=`<aside class="sm-sidebar"><input data-filter aria-label="Search sectors by coordinates or name" placeholder="Search sectors" value="${attr(this.filter)}"><div class="sm-list">${list.map(x=>`<button type="button" data-open="${attr(x.id)}" data-search="${attr(`${x.name} ${x.getFlag(MOD,KEY)?.code||''}`.toLowerCase())}" ${matches(x)?'':'hidden'} class="${x.id===this.sectorId?'selected':''}"><span class="sm-sector-meta"><strong>${escapeHTML(x.getFlag(MOD,KEY)?.code||'No coordinates')}</strong><small> · ${escapeHTML(x.getFlag(MOD,KEY)?.status||'')}</small></span><span>${escapeHTML(x.name)}</span></button>`).join('')}<p data-sector-empty ${list.some(matches)?'hidden':''}>${list.length?'No sectors match your search.':'No sectors yet.'}</p></div></aside>`;
-    const zoneSummary=`<div class="sm-zone-summary">${zone.summary()}</div>`;
+    const zoneSummary=`<div class="sm-zone-summary">${zone.summary(this.journal?this.data:null)}</div>`;
     let main=`<section class="sm-main"><header class="sm-header"><h2>Zone Sectors</h2><div class="sm-header-buttons"><button type="button" disabled>Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<div class="sm-content"><div class="sm-empty"><p>Create a sector or select one from the list. Each record is a GM-only Journal Entry.</p></div></div></section>`;
     if(j){
       let body='';
-      if(this.tab==='Overview') body=`<div class="sm-grid">${field('Sector name','journalName',d.journalName??j.name)}${field('Sector ID / Coordinates','code',d.code)}${environmentFields(d)}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost'])}</div>${area('Description','description',d.description)}${area('GM Notes','notes',d.notes)}`;
+      if(this.tab==='Overview') body=`<div class="sm-grid">${field('Sector name','journalName',d.journalName??j.name)}${field('Sector ID / Coordinates','code',d.code)}${environmentFields(d)}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost'])}</div>${area('Mood','mood',d.mood||'')}${area('Description','description',d.description)}${area('GM Notes','notes',d.notes)}`;
       else if(this.tab==='Find the Path') body=pathStunts(d);
       else {
         const key=COLLECTIONS[this.tab], arr=d[key]||[];
         const state=this.entryState(key);
         body=(this.tab==='Loot'?supplies(d):'')+`<div class="sm-section-header"><p>${this.tab==='Effects'?'Track weather, Zone phenomena, hazards, and special environmental effects.':`Track sector ${this.tab.toLowerCase()} as individual editable records.`}</p><div class="sm-entry-controls">${arr.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}">+ Add Entry</button></div></div>`+
-          arr.map((item,i)=>{const id=state.entries[i].id, collapsed=state.collapsed.has(id);return `<article class="sm-entry ${collapsed?'is-collapsed':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body"><span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span><strong data-entry-title>${escapeHTML(item.title||`Entry ${i+1}`)}</strong></button><button type="button" data-remove="${key}:${id}" title="Remove entry" aria-label="Remove ${attr(item.title||`Entry ${i+1}`)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}><div class="sm-grid">${field('Title',`${key}.${i}.title`,item.title||'')}${select('Status',`${key}.${i}.status`,item.status||'Active',['Active','Hidden','Discovered','Resolved','Collected','Depleted','Inactive'])}${this.tab==='Effects'?select('Category',`${key}.${i}.category`,item.category||'Weather',['Weather','Phenomenon','Special Effect','Hazard'])+reference(key,i,item.uuid||''):reference(key,i,item.uuid||'')}</div>${area('Details / Rules / Notes',`${key}.${i}.details`,item.details||'')}${this.tab==='Effects'?field('Duration / Trigger',`${key}.${i}.duration`,item.duration||''):''}</div></article>`;}).join('')+
+          arr.map((item,i)=>{const id=state.entries[i].id, collapsed=state.collapsed.has(id);return `<article class="sm-entry ${collapsed?'is-collapsed':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body"><span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span><strong data-entry-title>${escapeHTML(item.title||`Entry ${i+1}`)}</strong></button><button type="button" data-remove="${key}:${id}" title="Remove entry" aria-label="Remove ${attr(item.title||`Entry ${i+1}`)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}><div class="sm-grid">${field('Title',`${key}.${i}.title`,item.title||'')}${this.tab==='Loot'&&item.quantity!==undefined?field('Quantity',`${key}.${i}.quantity`,item.quantity,'number'):''}${select('Status',`${key}.${i}.status`,item.status||'Active',['Active','Hidden','Discovered','Resolved','Collected','Depleted','Inactive'])}${this.tab==='Effects'?select('Category',`${key}.${i}.category`,item.category||'Weather',['Weather','Phenomenon','Special Effect','Hazard'])+reference(key,i,item.uuid||''):reference(key,i,item.uuid||'')}</div>${area('Details / Rules / Notes',`${key}.${i}.details`,item.details||'')}${this.tab==='Effects'?field('Duration / Trigger',`${key}.${i}.duration`,item.duration||''):''}</div></article>`;}).join('')+
           (!arr.length?`<div class="sm-empty">No ${escapeHTML(this.tab.toLowerCase())} yet. Add an entry to get started.</div>`:'');
       }
-      main=`<section class="sm-main"><header class="sm-header"><div><h2>${escapeHTML(j.name)}</h2><small>GM only · Journal-backed · ${escapeHTML(d.code||'No sector ID')}</small></div><div class="sm-header-buttons"><button type="button" data-action="journal">Open Journal</button><button type="button" data-action="delete">Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<nav class="sm-tabs">${TABS.map(t=>`<button type="button" data-tab="${t}" class="${t===this.tab?'active':''}">${t}</button>`).join('')}</nav><div class="sm-content">${body}</div><footer class="sm-footer"><span>${this.dirty?'● Unsaved changes':'Changes saved'}</span><button type="button" data-action="save" ${this.busy?'disabled':''}>Save Sector</button></footer></section>`;
+      main=`<section class="sm-main"><header class="sm-header"><div><h2>${escapeHTML(j.name)}</h2><small>GM only · Journal-backed · ${escapeHTML(d.code||'No sector ID')}</small></div><div class="sm-header-buttons"><button type="button" data-action="journal">Open Journal</button><button type="button" data-action="delete">Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<nav class="sm-tabs">${TABS.map(t=>`<button type="button" data-tab="${t}" class="${t===this.tab?'active':''} ${tabHasContent(d,t)?'':'sm-tab-empty'}">${t}</button>`).join('')}<button type="button" data-action="randomize">Randomize</button></nav><div class="sm-content">${body}</div><footer class="sm-footer"><span>${this.dirty?'● Unsaved changes':'Changes saved'}</span><button type="button" data-action="save" ${this.busy?'disabled':''}>Save Sector</button></footer></section>`;
     }
     return `<style>
       .myz-sector-manager .sm-window-content{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;padding:0;overflow:hidden}
@@ -118,6 +120,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-header-buttons{display:flex;flex-wrap:wrap;gap:6px}
       .myz-sector-manager .sm-tabs{display:flex;flex-shrink:0;overflow-x:auto;gap:3px;padding:8px 12px;border-bottom:1px solid #777}
       .myz-sector-manager .sm-tabs button{flex:none;padding:7px;height:auto}
+      .myz-sector-manager .sm-tabs .sm-tab-empty:not(.active){opacity:.65}
+      .myz-sector-manager .sm-tabs .sm-tab-empty.active{border-style:dashed}
       .myz-sector-manager .sm-content{flex:1;min-height:0;min-width:0;overflow-y:auto;overflow-x:hidden;padding:15px;scrollbar-gutter:stable}
       .myz-sector-manager .sm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
       .myz-sector-manager .sm-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;min-width:0}
@@ -199,14 +203,18 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     el.querySelector('[data-filter]')?.addEventListener('input',e=>{this.filter=e.target.value;el.querySelectorAll('[data-open]').forEach(b=>{b.hidden=!b.dataset.search.includes(this.filter.toLowerCase());});const empty=el.querySelector('[data-sector-empty]');if(empty)empty.hidden=Array.from(el.querySelectorAll('[data-open]')).some(b=>!b.hidden);});
     el.querySelectorAll('.sm-content input,.sm-content select,.sm-content textarea').forEach(e=>e.addEventListener('input',()=>{
       if(!e.name?.startsWith('pathStunts.'))this.markDirty();
+      this.capture();this.refreshTabIndicators();if(e.name==='code')this.refreshZoneSummary();
       if(e.name?.endsWith('.title')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title)title.textContent=e.value||'Untitled Entry';}
     }));
   }
-  capture(){if(!this.journal)return;const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){const parts=f.name.split('.');let target=this.draft;for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;target[parts.at(-1)]=v;}for(const key of Object.values(COLLECTIONS))this.entryState(key);}
+  refreshTabIndicators(){
+    for(const button of this.element.querySelectorAll('[data-tab]'))button.classList.toggle('sm-tab-empty',!tabHasContent(this.data,button.dataset.tab));
+  }
+  capture(){if(!this.journal)return;const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){const parts=f.name.split('.');let target=this.draft;for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(/^loot\.\d+\.quantity$/.test(f.name)){const quantity=Number(v);v=Number.isFinite(quantity)?Math.max(0,quantity):0;}if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;target[parts.at(-1)]=v;}for(const key of Object.values(COLLECTIONS))this.entryState(key);}
   refreshZoneSummary(){
     const container=this.element?.querySelector('.sm-zone-summary');
     if(!container)return;
-    container.innerHTML=zone.summary();zone.bindSummary(container);
+    container.innerHTML=zone.summary(this.journal?this.data:null);zone.bindSummary(container);
   }
   async newSector(code=''){
     const existing=code?zone.store.sectorRecords(code):[];
@@ -333,6 +341,25 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       await doc._onClickDocumentLink(event);
     }catch(err){ui.notifications.error(`Unable to open reference: ${err.message}`);}
   }
+  async randomizeSector(){
+    if(!game.user.isGM||!this.journal||this.randomizing)return;
+    this.randomizing=true;
+    try{
+      await this.stuntWrite;this.capture();
+      const journal=this.journal,expected=foundry.utils.deepClone(journal.getFlag(MOD,KEY)),base=foundry.utils.deepClone(this.draft),signature=JSON.stringify(base);
+      const method=await foundry.applications.api.DialogV2.wait({window:{title:'Randomize Sector'},content:`<p>Randomization replaces terrain, Rot, mood, and previous generated entries. Manual entries, notes, coordinates, and other fields are retained. Review the generated results before saving.</p><label>Randomization Method<select name="randomizationMethod">${RANDOMIZATION_METHODS.map(method=>`<option value="${method.id}">${escapeHTML(method.label)}</option>`).join('')}</select></label>`,buttons:[{action:'cancel',label:'Cancel',default:true,callback:()=>null},{action:'randomize',label:'Randomize',callback:(event,button,dialog)=>dialog.element.querySelector('[name="randomizationMethod"]').value}],close:()=>null,rejectClose:false});
+      if(!method)return;
+      const selectedMethod=RANDOMIZATION_METHODS.find(entry=>entry.id===method);
+      if(!selectedMethod)throw new Error('Unknown randomization method.');
+      const next=await selectedMethod.generate(base,{options:{threatMode:game.settings.get(MOD,'threatGenerationMode')||DEFAULT_GENERATION_OPTIONS.threatMode,dangerousLevel:game.settings.get(MOD,'dangerousThreatLevel')??DEFAULT_GENERATION_OPTIONS.dangerousLevel}});
+      const summary=['locations','encounters','effects','loot'].map(key=>`<h4>${escapeHTML(key)}</h4><ul>${next[key].filter(entry=>entry.generated?.method==='core').map(entry=>`<li>${escapeHTML(entry.title)}${entry.quantity!==undefined?` × ${entry.quantity}`:''}</li>`).join('')||'<li>None generated</li>'}</ul>`).join('');
+      if(!await foundry.applications.api.DialogV2.confirm({window:{title:'Save Randomized Sector?'},content:`<p>Terrain: ${escapeHTML(next.terrain)} · Rot: ${next.rot}</p><p>Mood: ${escapeHTML(next.mood)}</p><p>Threat Level: ${next.randomization.numericThreatLevel} (${escapeHTML(next.randomization.threatLevel)}) · ${escapeHTML(next.randomization.levelSelection)}</p><p>Environment eligibility — Ruin: ${escapeHTML(next.randomization.environment.ruins||'No')}; Threat: ${next.randomization.environment.threats?'Yes':'No'}; Artifact: ${next.randomization.environment.artifacts?'Yes':'No'}.</p><p>Base Dice: ${escapeHTML(next.randomization.baseDice.join(', ')||'None (level 0)')}. Threat severity (1s): ${next.randomization.threatSeverity}. Artifacts (eligible 6s): ${next.randomization.artifactCount}. Threat identities: ${next.randomization.threatCount} (${next.randomization.threatMode==='core'?'Core: one threat, severity from 1s':'House rule: 1d3 individual threats'}).</p>${summary}<p>Replace this sector's generated information? Manual entries and notes are retained.</p>`}))return;
+      if(this.sectorId!==journal.id||this.rendered===false||JSON.stringify(this.draft)!==signature)throw new Error('Sector selection or edits changed during generation. Nothing was saved; try again.');
+      await saveGeneratedSector(journal,expected,next);
+      this.draft=normalize(journal.getFlag(MOD,KEY));this.dirty=false;await this.render();ui.notifications.info('Sector randomized and saved.');
+    }catch(error){ui.notifications.error(`Sector randomization: ${error.message}`);}
+    finally{this.randomizing=false;}
+  }
   async _onClose(options){clearTimeout(this.sidebarClick);await this.stuntWrite;return super._onClose(options);}
   persistStunts(){
     const journal=this.journal,states=foundry.utils.deepClone(this.draft.pathStunts);
@@ -351,6 +378,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   async confirmLose(){if(!this.dirty)return true;return await foundry.applications.api.DialogV2.confirm({window:{title:'Unsaved Changes'},content:'Discard unsaved changes?'});}
   async navigate(id){if(id===this.sectorId)return;if(!await this.confirmLose())return;await this.stuntWrite;this.sectorId=id;this.draft=normalize(this.journal.getFlag(MOD,KEY));this.tab='Overview';this.dirty=false;await this.render();}
   async action(which,key){try{
+    if(which==='randomize'){await this.randomizeSector();return;}
     if(which==='reset-stunts'){
       const sectorId=this.sectorId;
       if(!await foundry.applications.api.DialogV2.confirm({window:{title:'Reset Stunts'},content:'Clear all Find the Path checkboxes for this sector?'}))return;
@@ -370,7 +398,11 @@ const zone=new ZoneRuntime({
   openSector:id=>game.myzSectorManager.open(id),
   createSector:async code=>{const manager=await game.myzSectorManager.open();if(manager)await manager.newSector(code);}
 });
-Hooks.once('init',()=>zone.register());
+Hooks.once('init',()=>{
+  zone.register();
+  game.settings.register(MOD,'threatGenerationMode',{name:'Sector generation: threat identities',hint:'Core uses one threat identity with severity equal to the number of Base Dice showing 1. The 1d3 option is a house rule and does not change the severity roll.',scope:'world',config:true,type:String,choices:{core:'Core Rulebook: one threat with severity','individual-d3':'House rule: 1d3 individual threats'},default:'core',restricted:true});
+  game.settings.register(MOD,'dangerousThreatLevel',{name:'Sector generation: Unusually Dangerous level',hint:'Numeric Threat Level when the table returns the open-ended 9+ category. Default 9. Explicit numeric table results take precedence.',scope:'world',config:true,type:Number,default:9,restricted:true});
+});
 Hooks.once('ready',()=>{
   game.myzSectorManager={
     zone:zone.api(),
