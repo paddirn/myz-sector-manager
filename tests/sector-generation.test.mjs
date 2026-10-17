@@ -36,12 +36,14 @@ test('all p.156 environments use independent eligibility columns; Settlement req
     assert.equal(f.calls.filter(key=>key==='ruinsA').length,expected.ruins==='normal'?1:0);assert.equal(f.calls.filter(key=>key==='ruinsB').length,expected.ruins==='industrial'?1:0);
   }
 });
-test('explicit environment columns are validated and rich table cells retain separate column boundaries',async()=>{
+test('explicit environment columns take precedence and rich table cells retain boundaries',async()=>{
   assert.deepEqual(mapEnvironment({text:'11–12 Thick Woods No Yes No',mapping:{}}),{name:'Thick Woods',ruins:null,threats:true,artifacts:false});
   const f=fixture({environment:'<table><tr><td>Overgrown Ruins</td><td>Yes</td><td>Yes</td><td>Yes</td></tr></table>'});
   assert.equal((await generateSector(f.existing,f.options)).terrain,'Overgrown Ruins');
-  for(const text of ['Thick Woods No Yes Yes','Unknown ground','Overgrown Ruins No Yes Yes'])assert.throws(()=>mapEnvironment({text,mapping:{}}));
-  assert.throws(()=>mapEnvironment({text:'Thick Woods',mapping:{environment:{ruins:null,threats:true,artifacts:true}}}),/contradicts/);
+  assert.throws(()=>mapEnvironment({text:'Unknown ground',mapping:{}}));
+  assert.equal(mapEnvironment({text:'Thick Woods No Yes Yes',mapping:{}}).artifacts,true);
+  assert.equal(mapEnvironment({text:'Overgrown Ruins No Yes Yes',mapping:{}}).ruins,null);
+  assert.equal(mapEnvironment({text:'Thick Woods',mapping:{environment:{ruins:null,threats:true,artifacts:true}}}).artifacts,true);
 });
 test('one Base Dice pool supplies both counts; every eligible six creates an independent artifact',async()=>{
   const f=fixture({threatLevel:'6'}, {},[1,1,6,6,6,3]);let artifacts=0;f.tables.get(TABLE_UUIDS.artifact).roll=async()=>({results:[{description:`Artifact ${++artifacts}`}]});
@@ -110,4 +112,47 @@ test('inline UUIDs and legacy table document references keep Item links',async()
 test('rename and generated data commit in a single update without temporary journalName',async()=>{
   const f=fixture(),next=await generateSector(f.existing,f.options);next.journalName='A new name';let stored=f.existing,updates=0;const journal={name:'Old name',getFlag:()=>stored,setFlag:()=>assert.fail('must use one update'),update:async changes=>{updates++;assert.equal(changes.name,'A new name');stored=changes['flags.myz-sector-manager.sector'];}};
   await saveGeneratedSector(journal,f.existing,next,f.env);assert.equal(updates,1);assert.equal(stored.journalName,undefined);
+});
+
+test('exact Foundry Environment strings parse names and independent labeled eligibility',async()=>{
+  for(const [text,name,expected] of [
+    ['Thick Woods, Ruin:No, Threat:Yes, Artifact:No','Thick Woods',{ruins:null,threats:true,artifacts:false}],
+    ['Unscathed Ruins, Ruin:Yes, Threat:Yes, Artifact:Yes','Unscathed Ruins',{ruins:'normal',threats:true,artifacts:true}]
+  ]){
+    assert.deepEqual(mapEnvironment({text,mapping:{}}),{name,...expected});
+    const f=fixture({environment:text});const output=await generateSector(f.existing,f.options);
+    assert.equal(output.terrain,name);assert.equal(output.randomization.artifactCount,expected.artifacts?1:0);assert.equal(output.locations.length,expected.ruins?2:1);
+  }
+});
+test('all eight flag combinations govern generation without name-based overrides',async()=>{
+  for(const ruin of [false,true])for(const threats of [false,true])for(const artifacts of [false,true]){
+    const text=`Unscathed Ruins, Ruin:${ruin?'Yes':'No'}, Threat:${threats?'Yes':'No'}, Artifact:${artifacts?'Yes':'No'}`;
+    const f=fixture({environment:text});const output=await generateSector(f.existing,f.options);
+    assert.equal(output.terrain,'Unscathed Ruins');assert.equal(output.locations.length,ruin?2:1);assert.equal(output.encounters.length,threats?1:0);assert.equal(output.randomization.artifactCount,artifacts?1:0);
+  }
+  const woods=fixture({environment:'Thick Woods, Ruin:Yes, Threat:No, Artifact:Yes'});const output=await generateSector(woods.existing,woods.options);assert.equal(output.locations[1].title,'Hospital');assert.equal(output.encounters.length,0);assert.equal(output.randomization.artifactCount,1);
+  const industry=mapEnvironment({text:'Derelict Industries, Ruin:Yes, Threat:No, Artifact:No',mapping:{}});assert.equal(industry.ruins,'industrial');
+});
+test('combined environment results tolerate whitespace, case, reordered labels and custom environment names',()=>{
+  assert.deepEqual(mapEnvironment({text:'  Unscathed Ruins ,  aRTifact : yES ,RUIN: nO, Threat : YeS  ',mapping:{}}),{name:'Unscathed Ruins',ruins:null,threats:true,artifacts:true});
+  assert.deepEqual(mapEnvironment({text:'Homebrew Grove,Ruin:NO,Threat:no,Artifact:NO',mapping:{}}),{name:'Homebrew Grove',ruins:null,threats:false,artifacts:false});
+  assert.equal(mapEnvironment({text:'thick woods',mapping:{}}).name,'Thick Woods');
+});
+test('malformed combined environment strings fail before dice, with source data unchanged',async()=>{
+  for(const text of [
+    ', Ruin:Yes, Threat:Yes, Artifact:Yes','Unscathed Ruins, Ruin:Yes, Threat:Yes',
+    'Unscathed Ruins, Ruin:Maybe, Threat:Yes, Artifact:Yes','Unscathed Ruins, Ruin:, Threat:Yes, Artifact:Yes',
+    'Unscathed Ruins, Ruin:Yes, Threat:Yes, Artifact:Yes,','Unscathed Ruins, Ruin:Yes, Ruin:No, Threat:Yes, Artifact:Yes',
+    'Unscathed Ruins, Ruin:Yes, Threat:Yes, Artifcat:Yes','Unscathed Ruins, Yes, Yes, Yes',
+    'Unscathed Ruins, Ruin:Yes, Threat:1, Artifact:No','Ruin:Yes, Threat:Yes, Artifact:Yes'
+  ]){
+    const f=fixture({environment:text}),before=structuredClone(f.existing);await assert.rejects(generateSector(f.existing,f.options),/Malformed Environment/);assert.deepEqual(f.existing,before);assert.equal(f.pools.length,0);assert.deepEqual(f.calls,['environment']);
+  }
+});
+test('classification tables support compound text and preserve raw details; malformed labels fail clearly',()=>{
+  assert.equal(mapRot({text:'Weak Rot, Rot Level:1, Exposure:1 Rot Point per day',mapping:{}}),1);
+  assert.deepEqual(mapThreatLevel({text:'Central Zone, Threat Level:7',mapping:{}}),{category:'central',level:7});
+  assert.equal(mapThreatType({text:'Monster, Threat Type:Monster, Description:Hostile beast',mapping:{}}),'monster');
+  assert.equal(mapThreatType({text:'Threat Type:Phenomenon, Description:Hazard',mapping:{}}),'phenomenon');
+  for(const [parser,text] of [[mapRot,'Weak Rot, Rot Level:1, Rot Level:2'],[mapThreatLevel,'Central Zone, Level:7, Threat Level:2'],[mapThreatType,'Monster, Threat Type:Unknown']])assert.throws(()=>parser({text,mapping:{}}));
 });

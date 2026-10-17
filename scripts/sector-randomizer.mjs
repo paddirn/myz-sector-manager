@@ -54,9 +54,19 @@ export async function rollTable(table,env=globalThis,stack=[]){
   }
   return {text:mapped.map(result=>result.text).join('; '),uuid:mapped.length===1?mapped[0].uuid:'',documentType:mapped.length===1?mapped[0].documentType:null,sources:mapped.flatMap(result=>result.sources),mapping:mapped.length===1?mapped[0].mapping:{}};
 }
+function classifiedText(result,label,keys){
+  if(!result.text.includes(',')){
+    const text=result.text.trim();for(const key of keys){const prefix=new RegExp(`^${key}\\s*:\\s*(.+)$`,'i');const match=text.match(prefix);if(match)return match[1].trim();}
+    return text;
+  }
+  const {name,fields}=compoundText(result.text,label);
+  const values=keys.filter(key=>fields[key]!==undefined).map(key=>fields[key]);
+  if(values.length>1&&new Set(values.map(value=>value.toLowerCase())).size>1)throw new Error(`Conflicting ${label} fields in result: ${result.text}`);
+  return values[0]||name||(()=>{throw new Error(`Malformed ${label} result: missing classification.`);})();
+}
 export function mapRot(result){
   if([0,1,2,3].includes(result.mapping.rot))return result.mapping.rot;
-  const text=result.text.toLowerCase();
+  const text=classifiedText(result,'Rot Level',['rot level','rot','level']).toLowerCase();
   const labels=[/rot oasis|no rot/,/weak rot/,/rot[- ]heavy/,/rot hotspot/];
   const matches=labels.flatMap((pattern,index)=>pattern.test(text)?[index]:[]);
   if(matches.length===1)return matches[0];
@@ -69,7 +79,7 @@ function numericLevel(value){if(!Number.isInteger(value)||value<0||value>1000)th
 export function mapThreatLevel(result){
   const explicit=result.mapping.threatLevel;
   if(typeof explicit==='number'){const level=numericLevel(explicit);return {category:threatCategory(level),level};}
-  const text=String(explicit??result.text).trim().replace(/[–—]/g,'-');
+  const text=String(explicit??classifiedText(result,'Threat Level',['threat level','level'])).trim().replace(/[–—]/g,'-');
   const rangeCategory={'1-4':'fringe','5-8':'central','9+':'dangerous'}[text.replace(/\s/g,'')];
   if(rangeCategory)return {category:rangeCategory,level:null};
   const number=text.match(/^(?:threat level\s*[:=]?\s*)?(\d+)$/i);
@@ -87,33 +97,57 @@ export async function selectThreatLevel(result,dice,options=DEFAULT_GENERATION_O
   if(mapped.category==='dangerous')return {...mapped,level:numericLevel(options.dangerousLevel),selection:'GM-configured 9+ level'};
   return {...mapped,level:await dice('1d4')+(mapped.category==='central'?4:0),selection:'uniform selection within category (module policy, not a rulebook roll)'};
 }
+function compoundText(text,label,nameFirst=false){
+  const parts=String(text).split(',').map(part=>part.trim());
+  if(parts.some(part=>!part))throw new Error(`Malformed ${label} result: empty comma-separated value.`);
+  let name='';const fields={};
+  for(const [index,part] of parts.entries()){
+    if(index===0&&nameFirst){name=part;continue;}
+    const match=part.match(/^([^:]+):\s*(.+)$/);
+    if(!match){if(index===0&&!part.includes(':')){name=part;continue;}throw new Error(`Malformed ${label} result: expected a labeled value, got "${part}".`);}
+    const key=match[1].trim().toLowerCase().replace(/\s+/g,' '),value=match[2].trim();
+    if(Object.hasOwn(fields,key))throw new Error(`Malformed ${label} result: duplicate ${key} field.`);
+    fields[key]=value;
+  }
+  return {name,fields};
+}
+function yesNo(value,label){
+  if(!/^(yes|no)$/i.test(value??''))throw new Error(`Malformed Environment result: ${label} must be Yes or No.`);
+  return /^yes$/i.test(value);
+}
+const knownEnvironment=name=>Object.entries(ENVIRONMENTS).find(([key])=>key.toLowerCase()===name.toLowerCase());
+const ruinKind=(enabled,known)=>enabled?(known?.ruins||'normal'):null;
 export function mapEnvironment(result){
-  const mapping=result.mapping.environment;
+  const text=result.text.replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
+  const mapping=result.mapping?.environment;
+  if(text.includes(',')){
+    const {name,fields}=compoundText(text,'Environment',true);
+    if(!name)throw new Error('Malformed Environment result: environment name must precede Ruin, Threat, and Artifact fields.');
+    if(Object.keys(fields).some(key=>!['ruin','threat','artifact'].includes(key)))throw new Error('Malformed Environment result: expected only Ruin, Threat, and Artifact fields.');
+    const ruin=yesNo(fields.ruin,'Ruin'),threats=yesNo(fields.threat,'Threat'),artifacts=yesNo(fields.artifact,'Artifact');
+    const known=knownEnvironment(name)?.[1];
+    const parsed={name,ruins:ruinKind(ruin,known),threats,artifacts};
+    if(mapping&&(mapping.ruins!==parsed.ruins||mapping.threats!==threats||mapping.artifacts!==artifacts))throw new Error('Conflicting explicit Environment text and structured eligibility fields.');
+    return parsed;
+  }
   if(mapping){
     if(![null,'normal','industrial'].includes(mapping.ruins)||typeof mapping.threats!=='boolean'||typeof mapping.artifacts!=='boolean')throw new Error('Environment mapping needs separate ruins (null/normal/industrial), threats, and artifacts eligibility values.');
-    const known=ENVIRONMENTS[result.text.trim()];
-    if(known&&(mapping.ruins!==known.ruins||mapping.threats!==known.threats||mapping.artifacts!==known.artifacts))throw new Error(`Environment mapping for ${result.text} contradicts Core Rulebook p. 156.`);
-    return {name:result.text,...mapping,manual:known?.manual||mapping.manual===true};
+    return {name:text,...mapping,manual:mapping.manual===true};
   }
-  const text=result.text.replace(/[–—]/g,'-').replace(/\s+/g,' ').trim();
   for(const [name,eligibility] of Object.entries(ENVIRONMENTS)){
     const pattern=new RegExp(`^(?:\\d{1,2}(?:-\\d{1,2})?\\s+)?${name}(?:\\s+(Yes|No|-)(?:\\s*[,|]\\s*|\\s+)(Yes|No|-)(?:\\s*[,|]\\s*|\\s+)(Yes|No|-))?$`,'i');
     const match=text.match(pattern);if(!match)continue;
-    if(match[1]){
-      const actual=match.slice(1).map(value=>value.toLowerCase()==='yes');
-      const expected=[Boolean(eligibility.ruins),eligibility.threats,eligibility.artifacts];
-      if(actual.some((value,index)=>value!==expected[index]))throw new Error(`Environment columns for ${name} contradict Core Rulebook p. 156.`);
-    }
+    if(match[1])return {name,ruins:ruinKind(/^yes$/i.test(match[1]),eligibility),threats:/^yes$/i.test(match[2]),artifacts:/^yes$/i.test(match[3])};
     return {name,...eligibility};
   }
-  throw new Error(`Unrecognized Environment result: ${result.text}. Use a rulebook environment or an explicit separate-column environment mapping.`);
+  throw new Error(`Unrecognized Environment result: ${result.text}. Expected an environment name followed by Ruin:Yes/No, Threat:Yes/No, Artifact:Yes/No, a known name alone, or structured eligibility.`);
 }
 export function mapThreatType(result){
   if(result.mapping.threatType!==undefined){
     if(['humanoid','monster','phenomenon'].includes(result.mapping.threatType))return result.mapping.threatType;
     throw new Error(`Invalid Threat Type mapping: ${result.mapping.threatType}`);
   }
-  const text=result.text.replace(/[–—]/g,'-').trim();
+  const text=classifiedText(result,'Threat Type',['threat type','type']).replace(/[–—]/g,'-').trim();
   const matches=[['humanoid',/^(?:1-2\s*[:.-]?\s*)?humanoids?(?: threats?)?$/i],['monster',/^(?:3-5\s*[:.-]?\s*)?monsters?(?: threats?)?$/i],['phenomenon',/^(?:6\s*[:.-]?\s*)?phenomen(?:on|a)(?: threats?)?$/i]].filter(([,pattern])=>pattern.test(text));
   if(matches.length!==1)throw new Error(`Unrecognized Threat Type result: ${result.text}. Expected Humanoid, Monster, or Phenomena.`);
   return matches[0][0];
