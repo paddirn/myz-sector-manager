@@ -1,3 +1,4 @@
+import {sectorName} from './journal-organization.mjs';
 import {CONSUMABLES} from './sector-content.mjs';
 // Table-driven generation: no Journal writes, chat messages, or drawn-result mutation.
 export const RANDOMIZATION_METHODS = [{id:'core',label:'Core Rulebook Tables',generate:generateSector}];
@@ -240,7 +241,9 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   if(severity){
     const rolls=options.threatMode==='individual-d3'?await dice('1d3'):1;
     for(let i=0;i<rolls;i++){
-      for(const {category,result} of await rollThreat(tables,env)){
+      const identities=await rollThreat(tables,env);
+      if(identities.length!==1)throw new Error('Each Threat Type/subtype roll must yield exactly one threat result; multiple final results are ambiguous. No sector changes were saved.');
+      for(const {category,result} of identities){
         threatCount++;
         const entry=add(category==='phenomenon'?'effects':'encounters',result);entry.title=result.documentTitle||result.text;entry.generated.threatCategory=category;entry.generated.threatSeverity=severity;entry.generated.threatMode=options.threatMode;
         entry.details+=`\nThreat roll severity: ${severity} Base ${severity===1?'Die':'Dice'} showing 1.${options.threatMode==='individual-d3'?' Individual threats: 1d3 house rule.':''}`;
@@ -268,7 +271,7 @@ export async function saveGeneratedSector(journal,expected,next,env=globalThis){
   if(JSON.stringify(journal.getFlag('myz-sector-manager','sector'))!==JSON.stringify(expected))throw new Error('This sector changed while generation was running. Nothing was saved; review it and try again.');
   // One Document flag update commits the complete generation; no preceding field writes.
   const stored=structuredClone(next);delete stored.journalName;
-  const name=next.journalName?.trim();
+  const name=sectorName(next);
   if(name&&name!==journal.name)await journal.update({name,'flags.myz-sector-manager.sector':stored});
   else await journal.setFlag('myz-sector-manager','sector',stored);
 }

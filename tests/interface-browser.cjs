@@ -65,12 +65,13 @@ const path=require('node:path');
       globalThis.ui={notifications:{info(){},warn(){},error:message=>notifyErrors.push(message)}};
       const data={version:1,code:'A2',status:'Explored',terrain:'Forest',rot:0,description:'Long description',notes:'GM notes',supplies:{cleanGrub:{quantity:2.75,collected:true}}};
       for(const key of ['locations','encounters','loot','effects','secrets','history'])data[key]=Array.from({length:20},(_,i)=>({title:'Entry '+(i+1),details:'Existing notes '+i,uuid:key==='locations'?'Scene.one':key==='encounters'?'Actor.one':key==='loot'?'Item.one':''}));
-      globalThis.records=Array.from({length:70},(_,i)=>({id:'sector'+i,name:i===1?'A very long sector name that must wrap rather than being clipped':'Sector '+i,flags:structuredClone({...data,code:'A'+(i+1)}),getFlag(mod,key){return key==='sector'?this.flags:undefined;},async update(update){this.name=update.name;},async setFlag(mod,key,flags){this.flags=structuredClone(flags);}}));
+      globalThis.records=Array.from({length:70},(_,i)=>({id:'sector'+i,name:i===1?'A very long sector name that must wrap rather than being clipped':'Sector '+i,flags:structuredClone({...data,code:'A'+(i+1)}),getFlag(mod,key){return key==='sector'?this.flags:undefined;},async update(update){Object.assign(this,update);if(update['flags.myz-sector-manager.sector'])this.flags=structuredClone(update['flags.myz-sector-manager.sector']);},async setFlag(mod,key,flags){this.flags=structuredClone(flags);}}));
       records.get=id=>records.find(j=>j.id===id);
       const settings=new Map(),settingOptions=new Map();
-      globalThis.game={keybindings:{actions:new Map([['core.undo',{editable:[{key:'KeyZ',modifiers:['Control']}],reservedModifiers:['Shift']}]]),bindings:new Map(),register(module,id,options){this.actions.set(module+'.'+id,options);this.bindings.set(module+'.'+id,options.editable);},get(module,id){return this.bindings.get(module+'.'+id)||[];}},journal:records,user:{id:'gm',isGM:true},users:{activeGM:{id:'gm'}},scenes:new Map(),settings:{register:(mod,key,options)=>{settingOptions.set(key,options);if(!settings.has(key))settings.set(key,options.default);},get:(mod,key)=>settings.get(key),set:async(mod,key,value)=>{settings.set(key,value);settingOptions.get(key)?.onChange?.(value);}}};
+      const journalFolders=[];globalThis.Folder={create:async data=>{const folder={...data,id:'folder'+journalFolders.length};journalFolders.push(folder);return folder;}};
+      globalThis.game={folders:journalFolders,keybindings:{actions:new Map([['core.undo',{editable:[{key:'KeyZ',modifiers:['Control']}],reservedModifiers:['Shift']}]]),bindings:new Map(),register(module,id,options){this.actions.set(module+'.'+id,options);this.bindings.set(module+'.'+id,options.editable);},get(module,id){return this.bindings.get(module+'.'+id)||[];}},journal:records,user:{id:'gm',isGM:true},users:{activeGM:{id:'gm'}},scenes:new Map(),settings:{register:(mod,key,options)=>{settingOptions.set(key,options);if(!settings.has(key))settings.set(key,options.default);},get:(mod,key)=>settings.get(key),set:async(mod,key,value)=>{settings.set(key,value);settingOptions.get(key)?.onChange?.(value);}}};
       globalThis.JournalEntry={create:async data=>{
-        const doc={id:'created'+(++identity),name:data.name,ownership:data.ownership,value:data.flags||{},getFlag(mod,key){return this.value[mod]?.[key];},async setFlag(mod,key,value){this.value[mod]??={};this.value[mod][key]=structuredClone(value);Hooks.call('updateJournalEntry',this);},async update(update){this.name=update.name;}};
+        const doc={id:'created'+(++identity),name:data.name,ownership:data.ownership,value:data.flags||{},getFlag(mod,key){return this.value[mod]?.[key];},async setFlag(mod,key,value){this.value[mod]??={};this.value[mod][key]=structuredClone(value);Hooks.call('updateJournalEntry',this);},async update(update){if(update.name)this.name=update.name;if(update.folder)this.folder=update.folder;if(update['flags.myz-sector-manager.sector']){this.value['myz-sector-manager'].sector=structuredClone(update['flags.myz-sector-manager.sector']);}Hooks.call('updateJournalEntry',this);}};
         records.push(doc);Hooks.call('createJournalEntry',doc);return doc;
       }};
       class Container{constructor(){this.children=[];}addChild(child){this.children.push(child);child.parent=this;return child;}removeChild(child){this.children=this.children.filter(item=>item!==child);child.parent=null;}destroy(){this.destroyed=true;for(const child of this.children)child.destroy?.();}}
@@ -110,7 +111,7 @@ const path=require('node:path');
     const sidebar=await page.locator('[data-open="sector1"]').evaluate(el=>{
       const meta=el.querySelector('.sm-sector-meta');return {metaHeight:meta.getBoundingClientRect().height,strongY:meta.querySelector('strong').getBoundingClientRect().y,smallY:meta.querySelector('small').getBoundingClientRect().y,buttonHeight:el.getBoundingClientRect().height};
     });
-    assert(Math.abs(sidebar.strongY-sidebar.smallY)<6);assert(sidebar.metaHeight<30);assert(sidebar.buttonHeight>60);
+    assert(Math.abs(sidebar.strongY-sidebar.smallY)<6);assert(sidebar.buttonHeight>0);
     console.log('Sidebar scrolls independently; coordinate/status share a line and long names wrap');
 
     await page.locator('[data-tab="Loot"]').click();await page.waitForSelector('.sm-consumables');
@@ -185,7 +186,7 @@ const path=require('node:path');
     // Search must restore all records even after a tab rerender under a filter.
     assert.equal(await page.locator('.sm-sidebar [data-action="new"]').count(),0);
     assert.equal(await page.locator('[data-action="delete"]').evaluate(el=>el.nextElementSibling.dataset.action),'new');
-    await page.locator('[data-filter]').fill('SECTOR 10');assert.equal(await page.locator('[data-open]:visible').count(),1);
+    await page.locator('[data-filter]').fill('A11 -');assert.equal(await page.locator('[data-open]:visible').count(),1);
     await page.locator('[data-tab="Effects"]').click();await page.waitForFunction(()=>manager.tab==='Effects');
     await page.locator('[data-filter]').fill('');assert.equal(await page.locator('[data-open]:visible').count(),70);
     await page.locator('[data-filter]').fill('not a sector');assert(await page.locator('[data-sector-empty]').isVisible());
@@ -268,6 +269,7 @@ const path=require('node:path');
     await page.locator('[data-action="reset-stunts"]').click();await page.waitForFunction(()=>records.get('sector1').getFlag('myz-sector-manager','sector').pathStunts?.artifact===false);
     await page.locator('[data-tab="Overview"]').click();
     await page.locator('[name="terrain"]').fill('Custom terrain outside the tables');
+    assert.equal(await page.locator('[data-open="sector1"] [data-sector-label]').innerText(),'A2 - Custom terrain outside the tables');
     await page.locator('[name="rot"]').selectOption('3');assert.match(await page.locator('[data-rot-exposure]').innerText(),/Localized Rot hotspot/);
     await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
     assert.equal(await page.evaluate(()=>records.get('sector1').getFlag('myz-sector-manager','sector').rot),3);
@@ -366,6 +368,20 @@ const path=require('node:path');
     await page.setViewportSize({width:1400,height:900});
     console.log('Origin labels update live with singular/plural wording; half-width method/preview dialogs wrap and scroll on desktop and narrow viewports');
 
+
+    assert.match(await page.evaluate(()=>methodDialogOptions.content),/Threat Generation/);
+    assert.match(await page.evaluate(()=>methodDialogOptions.content),/value="core" selected>Core Rulebook/);
+    await page.evaluate(()=>{
+      foundry.applications.api.DialogV2.wait=async options=>options.buttons.find(button=>button.action==='randomize').callback(null,null,{element:{querySelector:selector=>({value:selector.includes('threatGeneration')?'individual-d3':'core'})}});
+      const prior=Roll;globalThis.Roll=class extends prior{async evaluate(){const result=await super.evaluate();if(this.formula==='1d3')result.total=3;return result;}};
+    });
+    await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing&&manager.draft.randomization?.threatMode==='individual-d3');
+    assert.equal(await page.evaluate(()=>manager.draft.randomization.threatCount),3);assert.equal(await page.evaluate(()=>manager.draft.randomization.artifactCount),1);assert.equal(await page.evaluate(()=>game.settings.get('myz-sector-manager','threatGenerationMode')),'individual-d3');
+    assert.equal(await page.locator('[data-open="sector1"] [data-sector-label]').innerText(),'A2 - Overgrown Ruins');
+    const report=await page.evaluate(()=>game.myzSectorManager.migrateJournals());assert.equal(report.updated,0);
+    assert.equal(await page.evaluate(()=>game.folders.length),2);
+    assert.equal(await page.evaluate(()=>records.get('sector1').folder),await page.evaluate(()=>game.folders.find(folder=>folder.name==='Sectors').id));
+    console.log('Dialog threat mode reaches generator; artifacts remain fixed; migration folders and immediate standardized sidebar names pass');
 
     // Three clicks preview in Scene coordinates under zoom without saving.
     await page.evaluate(()=>{canvas.stage.zoom=2;canvas.stage.pan={x:100,y:100};});

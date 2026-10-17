@@ -1,3 +1,4 @@
+import {ensureJournalFolders} from '../journal-organization.mjs';
 import {canonicalCoordinate,validateGrid,locateToken,updateLocation,sectorDistance} from './grid.mjs';
 export const MODULE='myz-sector-manager';
 export const CONFIG_KEY='zoneConfiguration';
@@ -41,7 +42,8 @@ export class ZoneStore {
   enqueue(task){const result=this.queue.then(task);this.queue=result.catch(error=>{this.env.ui.notifications.error(`Zone Map: ${error.message}`);});return result;}
   async ensureDocument(){
     if(this.document)return this.document;
-    const doc=await this.env.JournalEntry.create({name:'MYZ Zone Map Configuration',ownership:{default:0},pages:[],flags:{[MODULE]:{[CONFIG_KEY]:emptyConfiguration()}}});
+    const folders=await ensureJournalFolders(this.env);
+    const doc=await this.env.JournalEntry.create({name:'Configuration',folder:folders.root.id,ownership:{default:0},pages:[],flags:{[MODULE]:{[CONFIG_KEY]:emptyConfiguration()}}});
     this.documentId=doc.id;
     await this.env.game.settings.set(MODULE,'zoneConfigurationId',doc.id);
     return doc;
