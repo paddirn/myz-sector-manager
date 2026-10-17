@@ -48,7 +48,7 @@ const path=require('node:path');
         async close(){await this._onClose({});this.element.remove();this.rendered=false;}
       }
       globalThis.docs=new Map();
-      for(const [uuid,name,type] of [['Scene.one','The Zone','Scene'],['Actor.one','Zone Ghoul','Actor'],['Item.one','Artifact','Item'],['JournalEntry.wind','Rot Wind','JournalEntry'],['Compendium.world.items.Item.one','Compendium Artifact','Item']]){
+      for(const [uuid,name,type] of [['Scene.one','The Zone','Scene'],['Actor.one','Zone Ghoul','Actor'],['Item.one','Artifact','Item'],['JournalEntry.wind','Rot Wind','JournalEntry'],['JournalEntry.ruin','Hospital','JournalEntry'],['Compendium.world.items.Item.one','Compendium Artifact','Item']]){
         docs.set(uuid,{uuid,name,documentName:type,_onClickDocumentLink:async()=>nativeClicks.push(uuid)});
       }
       const editor={
@@ -115,15 +115,24 @@ const path=require('node:path');
 
     await page.locator('[data-tab="Loot"]').click();await page.waitForSelector('.sm-consumables');
     const consumableRatio=()=>page.locator('.sm-consumables').evaluate(el=>el.getBoundingClientRect().width/el.closest('.sm-content').clientWidth);
-    const wide=await consumableRatio();assert(wide>.4&&wide<.55);
+    const wide=await consumableRatio();assert(wide>.85);
+    assert.equal(await page.locator('[data-consumables-toggle]').getAttribute('aria-expanded'),'false');await page.locator('[data-consumables-toggle]').click();
+    const tables=await page.locator('.sm-supplies').evaluateAll(items=>items.map(el=>({left:el.getBoundingClientRect().left,top:el.getBoundingClientRect().top})));assert(tables[1].left>tables[0].left);assert.equal(tables[0].top,tables[1].top);
     assert.equal(await page.locator('[name="supplies.cleanGrub.quantity"]').inputValue(),'2.75');
     assert(await page.locator('[name="supplies.cleanGrub.collected"]').isChecked());
     assert.equal(await page.locator('[name="supplies.cleanGrub.quantity"]').evaluate(el=>Math.round(el.getBoundingClientRect().width)),38);
+    const grub=page.locator('[data-supply="cleanGrub"]'),collected=page.locator('[name="supplies.cleanGrub.collected"]');
+    await collected.uncheck();assert(await grub.evaluate(el=>el.classList.contains('is-available')));
+    await collected.check();assert.equal(await page.locator('[data-consumables-toggle]').getAttribute('aria-expanded'),'false');
+    await page.locator('[data-consumables-toggle]').click();assert.equal(await page.locator('[data-consumables-toggle]').getAttribute('aria-expanded'),'true');
+    await collected.uncheck();await page.locator('[name="supplies.cleanGrub.quantity"]').fill('0');assert.equal(await page.locator('[data-consumables-toggle]').getAttribute('aria-expanded'),'false');assert.equal(await grub.evaluate(el=>el.classList.contains('is-available')),false);
+    await page.locator('[data-consumables-toggle]').click();await page.locator('[name="supplies.cleanGrub.quantity"]').fill('2.75');assert(await grub.evaluate(el=>el.classList.contains('is-available')));await collected.check();await page.locator('[data-consumables-toggle]').click();
     await page.evaluate(()=>{manager.element.style.width='600px';manager.element.style.height='360px';});
     await page.waitForFunction(()=>document.querySelector('.sm-consumables').getBoundingClientRect().width>document.querySelector('.sm-content').clientWidth*.85);
     assert(await consumableRatio()>.85);
     assert(await page.locator('.sm-content').evaluate(el=>el.scrollWidth<=el.clientWidth));
-    console.log('Consumables adapt from half to full width with 38px centered decimal inputs and preserved collected state');
+    const narrowTables=await page.locator('.sm-supplies').evaluateAll(items=>items.map(el=>({left:el.getBoundingClientRect().left,top:el.getBoundingClientRect().top})));assert.equal(narrowTables[0].left,narrowTables[1].left);assert(narrowTables[1].top>narrowTables[0].top);
+    console.log('Consumables columns stack; highlighting, automatic collapse, manual overrides and original values pass');
     await page.evaluate(()=>{manager.element.style.width='1100px';manager.element.style.height='480px';});
 
     await page.locator('[data-tab="Locations"]').click();await page.waitForSelector('.sm-entry');
@@ -270,6 +279,7 @@ const path=require('node:path');
       const {TABLE_UUIDS}=await import('/scripts/sector-randomizer.mjs');
       const texts={environment:'Overgrown Ruins, Ruin:Yes, Threat:Yes, Artifact:Yes',ruinsA:'Hospital',ruinsB:'Factory',rot:'Weak Rot',threatLevel:'2',threatType:'Phenomena',humanoid:'Humanoid fixture',encounter:'Wanderers',monster:'Monster fixture',phenomenon:'Fog fixture',artifact:'Artifact fixture',mood:'A distant howl',scrap:'Scrap fixture'};
       for(const [key,uuid] of Object.entries(TABLE_UUIDS))docs.set(uuid,{uuid,name:key,documentName:'RollTable',roll:async()=>({results:[{description:texts[key]}]})});
+      docs.get(TABLE_UUIDS.ruinsA).roll=async()=>({results:[{documentUuid:'JournalEntry.ruin',description:'Hospital'}]});
       docs.get(TABLE_UUIDS.threatType).roll=async()=>({results:[{documentUuid:TABLE_UUIDS.phenomenon}]});
       docs.get(TABLE_UUIDS.phenomenon).roll=async()=>({results:[{documentUuid:'JournalEntry.wind',description:'Phenomenon label'}]});
       globalThis.Roll=class{constructor(formula){this.formula=formula;}async evaluate(){return {total:1,dice:[{results:this.formula==='2d6'?[{result:1,active:true},{result:6,active:true}]:[{result:1,active:true}]}]};}};
@@ -290,6 +300,8 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>manager.draft.effects.find(entry=>entry.generated?.threatCategory==='phenomenon').title),'Rot Wind');
     assert.equal(await page.locator('[name="terrain"]').inputValue(),'Overgrown Ruins');assert.equal(await page.locator('[name="mood"]').inputValue(),'A distant howl');
     assert.equal(await page.evaluate(()=>records.get('sector1').flags.notes===beforeRandomization.notes),true);
+    assert.equal(await page.evaluate(()=>manager.draft.locations.find(entry=>entry.generated).uuid),'JournalEntry.ruin');
+    await page.locator('[data-tab="Locations"]').click();await page.locator('[data-reference]:has(input[value="JournalEntry.ruin"]) a').click();await page.waitForFunction(()=>nativeClicks.includes('JournalEntry.ruin'));
     assert.match(await page.evaluate(()=>generationPreview),/Components: 1/);
     await page.locator('[data-tab="Loot"]').click();
     assert.equal(await page.locator('[name="supplies.components.quantity"]').inputValue(),'1');
