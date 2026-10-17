@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {generateSector,TABLE_UUIDS,ENVIRONMENTS,resolveTables,rollTable,rollBasePool,mapRot,mapThreatLevel,mapThreatType,mapEnvironment,saveGeneratedSector} from '../scripts/sector-randomizer.mjs';
 import {tabHasContent} from '../scripts/sector-content.mjs';
 function fixture(overrides={},dice={},faces=[1,6]){
-  const texts={environment:'<b>Overgrown Ruins</b>',ruinsA:'Hospital',ruinsB:'Factory',rot:'2 — Rot-Heavy Area',threatLevel:'2',threatType:'Humanoid',humanoid:'Zone Ghouls',monster:'Devourer',phenomenon:'Acid Rain',artifact:'Ancient Rifle',mood:'A distant howl',scrap:'Copper wire',...overrides};
+  const texts={environment:'<b>Overgrown Ruins</b>',ruinsA:'Hospital',ruinsB:'Factory',rot:'2 — Rot-Heavy Area',threatLevel:'2',threatType:'Humanoid',humanoid:'Zone Ghouls',encounter:'Wanderers',monster:'Devourer',phenomenon:'Acid Rain',artifact:'Ancient Rifle',mood:'A distant howl',scrap:'Copper wire',...overrides};
   const calls=[],pools=[];
   const tables=new Map(Object.entries(TABLE_UUIDS).map(([key,uuid])=>[uuid,{uuid,name:key,documentName:'RollTable',async roll(options){assert.deepEqual(options,{recursive:false});calls.push(key);return {results:[{id:key,description:texts[key]}]};}}]));
   const env={game:{user:{isGM:true}},fromUuid:async uuid=>tables.get(uuid)};

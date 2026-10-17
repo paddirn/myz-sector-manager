@@ -3,7 +3,7 @@ export const RANDOMIZATION_METHODS = [{id:'core',label:'Core Rulebook Tables',ge
 export const TABLE_UUIDS = Object.freeze({
   environment:'RollTable.UEm95WiZocwvFGSU',ruinsA:'RollTable.QxY3EmhqXMdKa3sC',ruinsB:'RollTable.n1CEYKphbiBZLDUb',
   rot:'RollTable.rp2JNLkCDatudc88',threatLevel:'RollTable.3FWOT8OJaXc7bfrC',threatType:'RollTable.Kk8jRbrOk3NejHUB',
-  humanoid:'RollTable.5ZVTmWwi5wyi52rd',monster:'RollTable.tsNy12fCcREgIDLk',phenomenon:'RollTable.jIRwumcfuFBGU8Zp',
+  humanoid:'RollTable.5ZVTmWwi5wyi52rd',encounter:'RollTable.Sh3Srm3KHyGgR7uh',monster:'RollTable.tsNy12fCcREgIDLk',phenomenon:'RollTable.jIRwumcfuFBGU8Zp',
   artifact:'RollTable.aarjzrm2IwJYczhi',mood:'RollTable.8aGJhfpHDBv52W1K',scrap:'RollTable.sWLvZ6qZikXt2k6l'
 });
 // Rulebook p. 156 eligibility, independent of the environment's display text.
@@ -31,7 +31,7 @@ export async function resolveTables(env=globalThis){
   }
   return tables;
 }
-export async function rollTable(table,env=globalThis,stack=[]){
+export async function rollTable(table,env=globalThis,stack=[],{resolveNested=true}={}){
   if(stack.length>=8||stack.includes(table.uuid))throw new Error(`Recursive RollTable cycle/depth at ${table.name} (${table.uuid}).`);
   const output=await table.roll({recursive:false});
   if(!output?.results?.length)throw new Error(`RollTable ${table.name} (${table.uuid}) returned no usable results.`);
@@ -43,16 +43,17 @@ export async function rollTable(table,env=globalThis,stack=[]){
     if(!uuid&&result.documentCollection&&result.documentId)uuid=result.documentCollection.includes('.')?`Compendium.${result.documentCollection}.${result.documentId}`:`${result.documentCollection}.${result.documentId}`;
     let document;
     if(uuid){try{document=await env.fromUuid(uuid);}catch(error){throw new Error(`Result reference ${uuid} from ${table.name} is unavailable: ${error.message}`);}if(!document)throw new Error(`Result reference ${uuid} from ${table.name} is missing.`);}
-    const source={tableUuid:table.uuid,tableName:table.name,resultId:result.id||result._id||'',documentUuid:document?.uuid||uuid};
-    if(document?.documentName==='RollTable'){
-      const nested=await rollTable(document,env,[...stack,table.uuid]);mapped.push({...nested,sources:[source,...nested.sources]});continue;
+    if(!document&&typeof result.getDocument==='function'&&(result.documentId||(result.type!==undefined&&!['text',0].includes(result.type)))){try{document=await result.getDocument();}catch(error){throw new Error(`Cannot resolve result document from ${table.name}: ${error.message}`);}if(!document)throw new Error(`Result document from ${table.name} is missing.`);}
+    const source={tableUuid:table.uuid,tableName:table.name,originTableUuid:result.parent?.documentName==='RollTable'?result.parent.uuid:table.uuid,resultId:result.id||result._id||'',documentUuid:document?.uuid||uuid};
+    if(document?.documentName==='RollTable'&&resolveNested){
+      const nested=await rollTable(document,env,[...stack,table.uuid]);mapped.push(...nested.entries.map(entry=>({...entry,sources:[source,...entry.sources]})));continue;
     }
     const label=String(description).replace(/@UUID\[([^\]]+)\](?:\{([^}]+)\})?/g,(match,uuid,label)=>label||document?.name||uuid);
     const text=plainText(label||document?.name,env);
     if(!text)throw new Error(`RollTable ${table.name} (${table.uuid}) returned an empty result.`);
-    mapped.push({text,uuid:document?.uuid||uuid,documentType:document?.documentName||null,sources:[source],mapping:result.flags?.['myz-sector-manager']?.randomization||{}});
+    mapped.push({text,documentTitle:document?.name||'',uuid:document?.uuid||uuid,documentType:document?.documentName||null,sources:[source],mapping:result.flags?.['myz-sector-manager']?.randomization||{}});
   }
-  return {text:mapped.map(result=>result.text).join('; '),uuid:mapped.length===1?mapped[0].uuid:'',documentType:mapped.length===1?mapped[0].documentType:null,sources:mapped.flatMap(result=>result.sources),mapping:mapped.length===1?mapped[0].mapping:{}};
+  return {entries:mapped,text:mapped.map(result=>result.text).join('; '),uuid:mapped.length===1?mapped[0].uuid:'',documentType:mapped.length===1?mapped[0].documentType:null,sources:mapped.flatMap(result=>result.sources),mapping:mapped.length===1?mapped[0].mapping:{},documentTitle:mapped.length===1?mapped[0].documentTitle:''};
 }
 function classifiedText(result,label,keys){
   if(!result.text.includes(',')){
@@ -144,15 +145,44 @@ export function mapEnvironment(result){
 }
 export function mapThreatType(result){
   if(result.mapping.threatType!==undefined){
-    if(['humanoid','monster','phenomenon'].includes(result.mapping.threatType))return result.mapping.threatType;
+    if(['humanoid','encounter','monster','phenomenon'].includes(result.mapping.threatType))return result.mapping.threatType;
     throw new Error(`Invalid Threat Type mapping: ${result.mapping.threatType}`);
   }
   const text=classifiedText(result,'Threat Type',['threat type','type']).replace(/[–—]/g,'-').trim();
-  const matches=[['humanoid',/^(?:1-2\s*[:.-]?\s*)?humanoids?(?: threats?)?$/i],['monster',/^(?:3-5\s*[:.-]?\s*)?monsters?(?: threats?)?$/i],['phenomenon',/^(?:6\s*[:.-]?\s*)?phenomen(?:on|a)(?: threats?)?$/i]].filter(([,pattern])=>pattern.test(text));
-  if(matches.length!==1)throw new Error(`Unrecognized Threat Type result: ${result.text}. Expected Humanoid, Monster, or Phenomena.`);
+  const matches=[['encounter',/^(?:2\s*[:.-]?\s*)?d66 encounters?$/i],['humanoid',/^(?:1(?:-2)?\s*[:.-]?\s*)?humanoids?(?: threats?)?$/i],['monster',/^(?:3-5\s*[:.-]?\s*)?monsters?(?: threats?)?$/i],['phenomenon',/^(?:6\s*[:.-]?\s*)?phenomen(?:on|a)(?: threats?)?$/i]].filter(([,pattern])=>pattern.test(text));
+  if(matches.length!==1)throw new Error(`Unrecognized Threat Type result: ${result.text}. Expected Humanoid, D66 Encounters, Monster, or Phenomena.`);
   return matches[0][0];
 }
-const generatedEntry=(result,kind,quantity)=>({title:result.text,status:'Active',details:result.text,uuid:result.documentType===({locations:'Scene',encounters:'Actor',effects:'Actor',loot:'Item'}[kind])?result.uuid:'',...(quantity===undefined?{}:{quantity}),...(kind==='effects'?{category:'Phenomenon',duration:''}:{}),generated:{method:'core',sources:result.sources}});
+const generatedEntry=(result,kind,quantity)=>({title:result.text,status:'Active',details:result.text,uuid:({locations:['Scene'],encounters:['Actor','JournalEntry'],effects:['Actor','JournalEntry'],loot:['Item']}[kind]||[]).includes(result.documentType)?result.uuid:'',...(quantity===undefined?{}:{quantity}),...(kind==='effects'?{category:'Phenomenon',duration:''}:{}),generated:{method:'core',sources:result.sources}});
+// Preserve category before resolving its nested table; final names never classify threats.
+export async function rollThreat(tables,env=globalThis){
+  const selection=await rollTable(tables.threatType,env,[],{resolveNested:false});
+  const threats=[];
+  const categoryFor=uuid=>['humanoid','encounter','monster','phenomenon'].find(key=>TABLE_UUIDS[key]===uuid);
+  for(const selected of selection.entries){
+    let category,result;
+    if(selected.documentType==='RollTable'){
+      category=categoryFor(selected.uuid);
+      if(!category)throw new Error(`Threat Type references an unconfigured category RollTable: ${selected.uuid}`);
+      result=await rollTable(tables[category],env,[tables.threatType.uuid]);
+    }else{
+      // Some APIs/modules recurse despite the requested option. Embedded result parents
+      // identify the originating category, so reuse those final results without rerolling.
+      const origins=selected.sources.map(source=>categoryFor(source.originTableUuid)).filter(Boolean);
+      const categories=[...new Set(origins)];
+      if(categories.length>1)throw new Error('Threat result has conflicting originating categories.');
+      if(categories.length){category=categories[0];result={entries:[selected]};}
+      else if(selected.documentType)throw new Error(`Final ${selected.documentType} result "${selected.documentTitle||selected.text}" has no originating Threat category. Preserve its parent RollTable or disable recursive resolution.`);
+      else{category=mapThreatType(selected);result=await rollTable(tables[category],env,[tables.threatType.uuid]);}
+    }
+    for(const leaf of result.entries){
+      const expected=['humanoid','monster'].includes(category)?'Actor':'JournalEntry';
+      if(leaf.documentType&&leaf.documentType!==expected)throw new Error(`${category} threat result must reference ${expected}, received ${leaf.documentType} (${leaf.uuid}).`);
+      threats.push({category,result:{...leaf,sources:leaf===selected?leaf.sources:[...selected.sources,...leaf.sources]}});
+    }
+  }
+  return threats;
+}
 export async function rollBasePool(level,env=globalThis){
   if(level===0)return [];
   const pool=await new env.Roll(`${level}d6`).evaluate();
@@ -182,11 +212,13 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   if(eligibility.ruins)add('locations',await take(eligibility.ruins==='normal'?'ruinsA':'ruinsB'));
   let threatCount=0;
   if(severity){
-    threatCount=options.threatMode==='individual-d3'?await dice('1d3'):1;
-    for(let i=0;i<threatCount;i++){
-      const typeResult=await take('threatType'),type=mapThreatType(typeResult),result=await take(type);result.sources=[...typeResult.sources,...result.sources];
-      const entry=add(type==='phenomenon'?'effects':'encounters',result);entry.generated.threatSeverity=severity;entry.generated.threatMode=options.threatMode;
-      entry.details+=`\nThreat roll severity: ${severity} Base ${severity===1?'Die':'Dice'} showing 1.${options.threatMode==='individual-d3'?' Individual threats: 1d3 house rule.':''}`;
+    const rolls=options.threatMode==='individual-d3'?await dice('1d3'):1;
+    for(let i=0;i<rolls;i++){
+      for(const {category,result} of await rollThreat(tables,env)){
+        threatCount++;
+        const entry=add(category==='phenomenon'?'effects':'encounters',result);entry.title=result.documentTitle||result.text;entry.generated.threatCategory=category;entry.generated.threatSeverity=severity;entry.generated.threatMode=options.threatMode;
+        entry.details+=`\nThreat roll severity: ${severity} Base ${severity===1?'Die':'Dice'} showing 1.${options.threatMode==='individual-d3'?' Individual threats: 1d3 house rule.':''}`;
+      }
     }
   }
   for(let i=0;i<artifactCount;i++)add('loot',await take('artifact'));
