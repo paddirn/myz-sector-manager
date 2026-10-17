@@ -259,10 +259,10 @@ const path=require('node:path');
     // Generation uses fixture RollTables; these examples are not rulebook table data.
     await page.evaluate(async()=>{
       const {TABLE_UUIDS}=await import('/scripts/sector-randomizer.mjs');
-      const texts={environment:'Overgrown Ruins',ruinsA:'Hospital',ruinsB:'Factory',rot:'Weak Rot',threatLevel:'Central Zone',threatType:'Phenomena',humanoid:'Humanoid fixture',monster:'Monster fixture',phenomenon:'Fog fixture',artifact:'Artifact fixture',mood:'A distant howl',scrap:'Scrap fixture'};
+      const texts={environment:'Overgrown Ruins',ruinsA:'Hospital',ruinsB:'Factory',rot:'Weak Rot',threatLevel:'2',threatType:'Phenomena',humanoid:'Humanoid fixture',monster:'Monster fixture',phenomenon:'Fog fixture',artifact:'Artifact fixture',mood:'A distant howl',scrap:'Scrap fixture'};
       for(const [key,uuid] of Object.entries(TABLE_UUIDS))docs.set(uuid,{uuid,name:key,documentName:'RollTable',roll:async()=>({results:[{description:texts[key]}]})});
-      globalThis.Roll=class{constructor(formula){this.formula=formula;}async evaluate(){return {total:1};}};
-      await game.settings.set('myz-sector-manager','randomizationProbabilities',JSON.stringify({threats:{fringe:1,central:1,dangerous:1},artifacts:{fringe:1,central:1,dangerous:1}}));
+      globalThis.Roll=class{constructor(formula){this.formula=formula;}async evaluate(){return {total:1,dice:[{results:this.formula==='2d6'?[{result:1,active:true},{result:6,active:true}]:[{result:1,active:true}]}]};}};
+      await game.settings.set('myz-sector-manager','threatGenerationMode','core');
       globalThis.beforeRandomization=structuredClone(records.get('sector1').flags);
       foundry.applications.api.DialogV2.wait=async()=>null;
     });
@@ -271,8 +271,9 @@ const path=require('node:path');
     await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>options.buttons.find(button=>button.action==='randomize').callback(null,null,{element:{querySelector:()=>({value:'core'})}});foundry.applications.api.DialogV2.confirm=async()=>false;});
     await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing);
     assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector1').flags)===JSON.stringify(beforeRandomization)),true);
-    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>true;});
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async options=>{globalThis.generationPreview=options.content;return true;};});
     await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing&&manager.draft.randomization?.method==='core');
+    assert.match(await page.evaluate(()=>generationPreview),/Threat Level: 2/);assert.match(await page.evaluate(()=>generationPreview),/Threat severity \(1s\): 1/);assert.match(await page.evaluate(()=>generationPreview),/Artifacts \(eligible 6s\): 1/);
     assert.equal(await page.locator('[name="terrain"]').inputValue(),'Overgrown Ruins');assert.equal(await page.locator('[name="mood"]').inputValue(),'A distant howl');
     assert.equal(await page.evaluate(()=>records.get('sector1').flags.notes===beforeRandomization.notes),true);
     await page.locator('[data-tab="Find the Path"]').click();assert(await page.locator('[data-tab="Find the Path"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
