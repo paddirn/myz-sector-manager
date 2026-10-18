@@ -6,7 +6,7 @@ import {tabHasContent} from '../scripts/sector-content.mjs';
 function fixture(overrides={},dice={},faces=[1,6]){
   const texts={environment:'<b>Overgrown Ruins</b>',ruinsA:'Hospital',ruinsB:'Factory',rot:'2 — Rot-Heavy Area',threatLevel:'2',threatType:'Humanoid',humanoid:'Zone Ghouls',encounter:'Wanderers',monster:'Devourer',phenomenon:'Acid Rain',artifact:'Ancient Rifle',mood:'A distant howl',scrap:'Copper wire',...overrides};
   const calls=[],pools=[];
-  const tables=new Map(Object.entries(TABLE_UUIDS).map(([key,uuid])=>[uuid,{uuid,name:key,documentName:'RollTable',async roll(options){assert.deepEqual(options,{recursive:false});calls.push(key);return {results:[{id:key,description:texts[key]}]};}}]));
+  const tables=new Map(Object.entries(TABLE_UUIDS).map(([key,uuid])=>[uuid,{uuid,name:key,documentName:'RollTable',async roll(options){assert.deepEqual(options,{recursive:false});calls.push(key);return {results:[{id:key,range:key==='artifact'?[111,111]:undefined,description:texts[key]}]};}}]));
   const env={game:{user:{isGM:true}},fromUuid:async uuid=>tables.get(uuid)};
   const queues=Object.fromEntries(Object.entries(dice).map(([key,value])=>[key,[...value]]));
   const roll=async formula=>queues[formula]?.length?queues[formula].shift():1;
@@ -47,7 +47,7 @@ test('explicit environment columns take precedence and rich table cells retain b
   assert.equal(mapEnvironment({text:'Thick Woods',mapping:{environment:{ruins:null,threats:true,artifacts:true}}}).artifacts,true);
 });
 test('one Base Dice pool supplies both counts; every eligible six creates an independent artifact',async()=>{
-  const f=fixture({threatLevel:'6'}, {},[1,1,6,6,6,3]);let artifacts=0;f.tables.get(TABLE_UUIDS.artifact).roll=async()=>({results:[{description:`Artifact ${++artifacts}`}]});
+  const f=fixture({threatLevel:'6'}, {},[1,1,6,6,6,3]);let artifacts=0;f.tables.get(TABLE_UUIDS.artifact).roll=async()=>({results:[{range:[111,111],description:`Artifact ${++artifacts}`}]});
   const output=await generateSector(f.existing,f.options);assert.deepEqual(f.pools,[6]);assert.equal(artifacts,3);assert.equal(output.randomization.threatSeverity,2);assert.equal(output.randomization.threatCount,1);assert.equal(output.encounters.length,1);assert.equal(output.encounters[0].generated.threatSeverity,2);assert.equal(output.randomization.artifactCount,3);assert.deepEqual(output.randomization.baseDice,[1,1,6,6,6,3]);assert.match(output.encounters[0].details,/2 Base Dice showing 1/);
 });
 test('Thick Woods permits threats but suppresses artifacts; custom independent flags suppress threats despite ones',async()=>{
@@ -111,7 +111,7 @@ test('unusable results, contradictory environment data, invalid pools and option
   assert.equal(mapRot({text:'0 — Rot Oasis',mapping:{}}),0);assert.equal(mapRot({text:'Weak Rot',mapping:{}}),1);assert.equal(mapRot({text:'Rot Hotspot',mapping:{}}),3);assert.equal(mapThreatType({text:'Localized entry',mapping:{threatType:'monster'}}),'monster');
 });
 test('document and nested table results preserve references and provenance; missing refs and cycles fail',async()=>{
-  const f=fixture();const item={uuid:'Item.rifle',name:'Rifle',documentName:'Item'};f.tables.set(item.uuid,item);const table=f.tables.get(TABLE_UUIDS.artifact);table.roll=async()=>({results:[{documentUuid:item.uuid}]});assert.equal((await generateSector(f.existing,f.options)).loot[1].uuid,item.uuid);
+  const f=fixture();const item={uuid:'Item.rifle',name:'Rifle',documentName:'Item'};f.tables.set(item.uuid,item);const table=f.tables.get(TABLE_UUIDS.artifact);table.roll=async()=>({results:[{range:[111,111],documentUuid:item.uuid}]});assert.equal((await generateSector(f.existing,f.options)).loot[1].uuid,item.uuid);
   const inner=f.tables.get(TABLE_UUIDS.ruinsA);table.roll=async()=>({results:[{documentUuid:inner.uuid}]});const nested=await rollTable(table,f.env);assert.equal(nested.text,'Hospital');assert.equal(nested.sources.length,2);
   inner.roll=async()=>({results:[{documentUuid:table.uuid}]});await assert.rejects(rollTable(table,f.env),/cycle/);table.roll=async()=>({results:[{documentUuid:'Item.missing'}]});await assert.rejects(rollTable(table,f.env),/missing/);
 });
@@ -224,11 +224,15 @@ test('randomization preserves all nine stunts and only removes redundant travel 
 });
 test('generated Loot classifies referenced world/compendium Items, plaintext artifacts and scrap',async()=>{
   for(const type of ['armor','artifact','chassis','gear','weapon']){
-    const f=fixture(),uuid=`Compendium.myz.items.Item.${type}`;f.tables.set(uuid,{uuid,name:'Reference',documentName:'Item',type:type.toUpperCase()});f.tables.get(TABLE_UUIDS.artifact).roll=async()=>({results:[{documentUuid:uuid}]});
+    const f=fixture(),uuid=`Compendium.myz.items.Item.${type}`;f.tables.set(uuid,{uuid,name:'Reference',documentName:'Item',type:type.toUpperCase()});f.tables.get(TABLE_UUIDS.artifact).roll=async()=>({results:[{range:[111,111],documentUuid:uuid}]});
     const next=await generateSector(f.existing,f.options);const entry=next.loot.find(item=>item.uuid===uuid);assert.equal(entry.type,type);assert.equal(entry.collected,false);assert.equal(entry.quantity,1);
   }
   const f=fixture(),next=await generateSector(f.existing,f.options);assert.equal(next.loot.find(entry=>entry.title==='Ancient Rifle').type,'artifact');assert.equal(next.loot.find(entry=>entry.title==='Copper wire').type,'scrap');
 });
 test('direct generation persistence cannot bypass the initial-save safeguard',async()=>{
   const f=fixture();f.existing.initialSavePending=true;const journal={getFlag:()=>f.existing,setFlag:()=>assert.fail('no write'),update:()=>assert.fail('no write')};await assert.rejects(saveGeneratedSector(journal,f.existing,f.existing,f.env),/Save this sector before randomizing/);
+});
+test('full sector generation uses bounded artifact exclusion and preserves source data on exhaustion',async()=>{
+  const f=fixture();let attempts=0;f.tables.get(TABLE_UUIDS.artifact).roll=async()=>({results:[++attempts===1?{range:[643,666],documentUuid:'Item.missingExcluded'}:{range:[111,111],description:'Allowed artifact'}]});const next=await generateSector(f.existing,f.options);assert.equal(attempts,2);assert(next.loot.some(entry=>entry.title==='Allowed artifact'));
+  const before=structuredClone(f.existing);f.tables.get(TABLE_UUIDS.artifact).roll=async()=>({results:[{range:[643,666],documentUuid:'Item.missingExcluded'}]});await assert.rejects(generateSector(f.existing,f.options),/30 attempts/);assert.deepEqual(f.existing,before);
 });
