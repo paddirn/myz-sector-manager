@@ -1,3 +1,4 @@
+import {LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected} from '../scripts/loot.mjs';
 import {canonicalCoordinate} from '../scripts/zone/grid.mjs';
 import {sectorIndicators,iconMarkup} from '../scripts/sector-icons.mjs';
 import {travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS} from '../scripts/travel-time.mjs';
@@ -15,7 +16,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -300,4 +301,45 @@ test('a coordinate duplicate discovered during folder initialization respects ca
   // The VM keeps the same runtime/store instance used by newSector.
   vm.runInContext("zone.store.sectorRecords=()=>globalThis.coordinateChecks++===0?[]:[{id:'duplicate'}];",context);context.coordinateChecks=0;
   await app.newSector('B7');assert.equal(app.sectorId,'original');assert.equal(app.tab,'Loot');
+});
+
+test('Randomize requires a valid persisted sector and successful explicit first save, including programmatic calls',async()=>{
+  const {app,context,notices}=fixture();let stored={version:1,initialSavePending:true,code:'',terrain:'',loot:[]},fail=true;
+  const journal={id:'new',name:'New',getFlag:()=>stored,async update(changes){if(fail)throw new Error('Save failed');stored=structuredClone(changes['flags.myz-sector-manager.sector']);}};
+  context.game.journal.get=()=>journal;context.ui.notifications.info=()=>{};context.console={error(){}};app.sectorId='new';app.draft=context.normalizeSector(stored);app.capture=()=>{};
+  context.foundry.applications.api.DialogV2={wait:async()=>assert.fail('must not open unsaved randomization')};assert.equal(app.canRandomize,false);assert.match(app.build(),/data-action="randomize" disabled title="Save this sector before randomizing\."/);
+  await app.randomizeSector();assert(notices.includes('Save this sector before randomizing.'));
+  await app.action('save');assert.equal(stored.initialSavePending,true);assert.equal(app.draft.initialSavePending,true);assert.equal(app.canRandomize,false);
+  fail=false;await app.action('save');assert.equal(stored.initialSavePending,false);assert.equal(app.canRandomize,true);assert.doesNotMatch(app.build(),/data-action="randomize" disabled/);
+  delete stored.initialSavePending;assert.equal(app.canRandomize,true);journal.isTemporary=true;assert.equal(app.canRandomize,false);delete journal.isTemporary;stored={};assert.equal(app.canRandomize,false);
+});
+test('loot reference detection handles world/compendium Items and preserves manual choices until a different assignment',async()=>{
+  const {app,documents}=fixture();app.tab='Loot';app.draft={loot:[normalizeLoot({title:'Stored name',uuid:'Item.original'})]};app.capture=()=>{};app.renderReference=async()=>{};app.element={contains:()=>true,querySelector:()=>null};
+  const input={name:'loot.0.uuid',value:'Item.original'},typeControl={},title={};const card={querySelector:selector=>selector.includes('.type')?typeControl:title};const zone={dataset:{type:'Item'},querySelector:()=>input,closest:()=>card};
+  const event={payload:{uuid:'Item.world'},preventDefault(){},stopPropagation(){}};
+  for(const [uuid,type] of [['Item.world','weapon'],['Compendium.pack.items.Item.abc','armor']]){documents.set(uuid,{uuid,documentName:'Item',type});event.payload.uuid=uuid;await app.dropReference(event,zone);assert.equal(app.draft.loot[0].type,type);assert.equal(typeControl.value,type);assert.equal(title.textContent,`Stored name (${type})`);}
+  app.draft.loot[0].type='gear';app.draft.loot[0].typeSource='manual';await app.dropReference(event,zone);assert.equal(app.draft.loot[0].type,'gear');app.assignLootType(zone,{documentName:'Item',type:'weapon'});assert.equal(app.draft.loot[0].type,'gear');
+  documents.set('Item.unsupported',{uuid:'Item.unsupported',documentName:'Item',type:'talent'});event.payload.uuid='Item.unsupported';await app.dropReference(event,zone);assert.equal(app.draft.loot[0].type,'gear');
+  app.draft.loot[0].typeSource='legacy';app.assignLootType(zone,{documentName:'Item',type:'chassis'});assert.equal(app.draft.loot[0].type,'chassis');assert.equal(app.draft.loot[0].title,'Stored name');
+});
+test('collection autosaves the Loot list, preserves other saved fields, serializes toggles, and detects conflicting changes',async()=>{
+  const {app,context}=fixture();let stored={version:1,loot:[{title:'Radio',uuid:'Item.radio',status:'Hidden',quantity:2}],notes:'Saved notes',custom:{keep:true}},writes=0;
+  const journal={id:'loot',name:'Sector',getFlag:()=>stored,setFlag:async(m,k,value)=>{writes++;stored=structuredClone(value);}};context.game.journal.get=()=>journal;app.sectorId='loot';app.draft=app.loadDraft(stored,journal);app.draft.notes='Unsaved notes';app.draft.loot[0].collected=true;
+  const first=app.persistLoot();app.draft.loot[0].collected=false;const second=app.persistLoot();await Promise.all([first,second]);assert.equal(writes,2);assert.equal(stored.loot[0].collected,false);assert.equal(stored.loot[0].status,'Hidden');assert.equal(stored.notes,'Saved notes');assert.deepEqual(stored.custom,{keep:true});
+  const reopened=new context.Manager();await reopened.navigate('loot');assert.equal(reopened.draft.loot[0].collected,false);assert.equal(reopened.draft.loot[0].uuid,'Item.radio');
+  stored.loot.push({title:'Other GM loot'});app.draft.loot[0].collected=true;await assert.rejects(app.persistLoot(),/Saved Loot changed/);assert.equal(writes,2);assert.equal(stored.loot[0].collected,false);
+});
+test('collected entries initially collapse but remain manually expandable; other tabs retain Status controls',()=>{
+  const {app,context}=fixture();context.game.journal.get=()=>({id:'a',getFlag:()=>({version:1})});app.sectorId='loot-collapse';app.draft=context.normalizeSector({...entries(),loot:[{title:'Taken',status:'Collected',uuid:'Item.keep'}]});app.tab='Loot';const state=app.entryState('loot');assert(state.collapsed.has(state.entries[0].id));assert.match(app.build(),/is-collected/);assert.match(app.build(),/name="loot.0.collected" checked/);assert.doesNotMatch(app.build(),/name="loot.0.status"/);
+  state.collapsed.delete(state.entries[0].id);assert.equal(app.entryState('loot').collapsed.size,0);app.tab='Locations';assert.match(app.build(),/name="locations.0.status"/);
+});
+test('stunt and Loot autosaves share a queue so concurrent flags cannot overwrite one another',async()=>{
+  const {app,context}=fixture();let stored={version:1,loot:[{title:'Keep'}],pathStunts:{artifact:false},notes:'Keep'};
+  const journal={id:'a',getFlag:()=>stored,setFlag:async(m,k,value)=>{await new Promise(resolve=>setTimeout(resolve,1));stored=structuredClone(value);}};context.game.journal.get=()=>journal;app.draft=app.loadDraft(stored,journal);app.draft.loot[0].collected=true;app.draft.pathStunts.artifact=true;
+  await Promise.all([app.persistLoot(),app.persistStunts()]);assert.equal(stored.loot[0].collected,true);assert.equal(stored.pathStunts.artifact,true);assert.equal(stored.notes,'Keep');
+});
+test('a manual type selection made while an Item lookup is pending wins over late inference',async()=>{
+  const {app,documents}=fixture();let resolve;documents.set('Item.slow',new Promise(done=>resolve=done));app.draft={loot:[normalizeLoot({title:'Keep',type:'scrap',uuid:'Item.old'})]};app.capture=()=>{};app.renderReference=async()=>{};app.element={contains:()=>true,querySelector:()=>null};
+  const input={name:'loot.0.uuid',value:'Item.old'},zone={dataset:{type:'Item'},querySelector:()=>input,closest:()=>null},event={payload:{uuid:'Item.slow'},preventDefault(){},stopPropagation(){}};
+  const pending=app.dropReference(event,zone);app.draft.loot[0].type='gear';app.draft.loot[0].typeSource='manual';app.lootTypeRevisions.set(app.draft.loot[0],1);resolve({uuid:'Item.slow',documentName:'Item',type:'weapon'});await pending;assert.equal(app.draft.loot[0].type,'gear');assert.equal(input.value,'Item.slow');
 });

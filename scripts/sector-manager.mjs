@@ -1,3 +1,4 @@
+import {LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected} from './loot.mjs';
 import {canonicalCoordinate} from './zone/grid.mjs';
 import {sectorIndicators,iconMarkup} from './sector-icons.mjs';
 import {travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS} from './travel-time.mjs';
@@ -56,7 +57,7 @@ const travelCalculator=data=>{
 const pathStunts = data => `<section class="sm-path"><p>Track benefits obtained during the current visit or exploration. Each stunt is available once per Find the Path roll (p. 56). The repeat-search guidance also limits each stunt to once per sector (p. 160). The GM controls resets; these checkboxes do not enforce either restriction. Checkboxes save automatically. Nothing resets automatically, awards resources, changes Rot, or advances world time. Linked time stunts update the reference calculator below.</p><h3>Find the Path Stunts</h3><div class="sm-stunt-columns">${[PATH_STUNTS.slice(0,5),PATH_STUNTS.slice(5)].map(column=>`<div>${column.map(stunt=>stuntLabel(stunt,data)).join('')}</div>`).join('')}</div><button type="button" data-action="reset-stunts">Reset Stunts</button>${travelCalculator(data)}</section>`;
 const sectorIcon=(data,key)=>{const info=sectorIndicators(data)[key];return `<span data-icon-slot="${key}">${iconMarkup(info.icon,info.title)}</span>`;};
 const environmentFields = data => `<label class="sm-field"><span>${sectorIcon(data,'terrain')} Terrain</span><input name="terrain" type="text" list="sm-terrain-options" value="${attr(data.terrain)}"><datalist id="sm-terrain-options">${TERRAIN_OPTIONS.map(value=>`<option value="${attr(value)}"></option>`).join('')}</datalist></label><label class="sm-field"><span>${sectorIcon(data,'rot')} Rot Level</span><select name="rot">${ROT_LEVELS.some(entry=>String(entry.level)===String(data.rot))?'':`<option value="${attr(data.rot)}" selected>Existing value: ${escapeHTML(data.rot)}</option>`}${ROT_LEVELS.map(entry=>`<option value="${entry.level}" ${String(entry.level)===String(data.rot)?'selected':''}>${entry.level} — ${entry.label}: ${entry.exposure}</option>`).join('')}</select><small data-rot-exposure>${escapeHTML(ROT_LEVELS.find(entry=>String(entry.level)===String(data.rot))?.exposure||'Existing value retained; select a level to change it.')}</small></label>`;
-const normalize = (data,title='') => {const result=sectorNaming(foundry.utils.deepClone(data),title);  result.pathStunts ??= {}; for(const stunt of PATH_STUNTS) result.pathStunts[stunt.id] ??= false; result.travel=sectorTravelOptions(result); result.supplies ??= {}; for(const key of Object.keys(SUPPLIES)) result.supplies[key] ??= {quantity:0,collected:false}; return result;};
+const normalize = (data,title='') => {const result=sectorNaming(foundry.utils.deepClone(data),title);  result.pathStunts ??= {}; for(const stunt of PATH_STUNTS) result.pathStunts[stunt.id] ??= false; result.travel=sectorTravelOptions(result); result.loot=(result.loot||[]).map(normalizeLoot); result.supplies ??= {}; for(const key of Object.keys(SUPPLIES)) result.supplies[key] ??= {quantity:0,collected:false}; return result;};
 const DEFAULT = () => ({version:1, nameOverride:false, customName:'', pathStunts:{}, code:'', terrain:'', rot:0, status:'Unexplored', description:'', notes:'', locations:[], encounters:[], loot:[], effects:[], secrets:[], history:[], supplies:supplyDefaults()});
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const attr = escapeHTML;
@@ -87,9 +88,10 @@ const randomizeDialogContent = content => `<style>
 
 class SectorManager extends foundry.applications.api.ApplicationV2 {
   static DEFAULT_OPTIONS = {id:'myz-sector-manager-app', window:{title:'MYZ Sector Manager',resizable:true}, position:{width:920,height:730}, classes:['myz-sector-manager']};
-  constructor(options={}) {super(options); this.sectorId = options.sectorId ?? null; this.tab='Overview'; this.draft=null; this.dirty=false; this.filter=''; this.busy=false;}
+  constructor(options={}) {super(options); this.sectorId = options.sectorId ?? null; this.tab='Overview'; this.draft=null; this.dirty=false; this.filter=''; this.busy=false;this.lootTypeRevisions=new WeakMap();}
   get journals(){return game.journal.filter(j=>j.getFlag(MOD,KEY)?.version===1).sort((a,b)=>{const ac=a.getFlag(MOD,KEY)?.code?.trim()||'', bc=b.getFlag(MOD,KEY)?.code?.trim()||''; return (ac&&bc?ac.localeCompare(bc,undefined,{numeric:true,sensitivity:'base'}):ac?-1:bc?1:0)||a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'});});}
   get journal(){return game.journal.get(this.sectorId);}
+  get canRandomize(){const journal=this.journal,record=journal?.getFlag?.(MOD,KEY);return Boolean(journal?.id&&!journal.isTemporary&&record?.version===1&&record.initialSavePending!==true);}
   get data(){return this.draft ?? DEFAULT();}
   async _prepareContext(){return {};}
   async _renderHTML(){
@@ -121,10 +123,10 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
         const key=COLLECTIONS[this.tab], arr=d[key]||[];
         const state=this.entryState(key);
         body=({Encounters:'encounters',Effects:'phenomena',Loot:'loot'}[this.tab]?`<h3 data-sector-section>${sectorIcon(d,{Encounters:'encounters',Effects:'phenomena',Loot:'loot'}[this.tab])} ${escapeHTML(this.tab)}</h3>`:'')+(this.tab==='Loot'?supplies(d,this.consumablesState().collapsed):'')+`<div class="sm-section-header"><p>${this.tab==='Effects'?'Track weather, Zone phenomena, hazards, and special environmental effects.':`Track sector ${this.tab.toLowerCase()} as individual editable records.`}</p><div class="sm-entry-controls">${arr.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}">+ Add Entry</button></div></div>`+
-          arr.map((item,i)=>{const id=state.entries[i].id, collapsed=state.collapsed.has(id);return `<article class="sm-entry ${collapsed?'is-collapsed':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body"><span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span><strong data-entry-title>${escapeHTML(item.title||`Entry ${i+1}`)}</strong></button><button type="button" data-remove="${key}:${id}" title="Remove entry" aria-label="Remove ${attr(item.title||`Entry ${i+1}`)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}><div class="sm-grid">${field('Title',`${key}.${i}.title`,item.title||'')}${this.tab==='Loot'&&item.quantity!==undefined?field('Quantity',`${key}.${i}.quantity`,item.quantity,'number'):''}${select('Status',`${key}.${i}.status`,item.status||'Active',['Active','Hidden','Discovered','Resolved','Collected','Depleted','Inactive'])}${this.tab==='Effects'?select('Category',`${key}.${i}.category`,item.category||'Weather',['Weather','Phenomenon','Special Effect','Hazard'])+reference(key,i,item.uuid||''):reference(key,i,item.uuid||'')}</div>${item.referenceWarning?`<p class="sm-reference-missing" data-reference-warning role="status">${escapeHTML(item.referenceWarning)}</p>`:''}${area('Details / Rules / Notes',`${key}.${i}.details`,item.details||'')}${this.tab==='Effects'?field('Duration / Trigger',`${key}.${i}.duration`,item.duration||''):''}</div></article>`;}).join('')+
+          arr.map((item,i)=>{const id=state.entries[i].id, collapsed=state.collapsed.has(id);return `<article class="sm-entry ${collapsed?'is-collapsed':''} ${key==='loot'&&lootCollected(item)?'is-collected':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body"><span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span><strong data-entry-title>${escapeHTML(key==='loot'?lootTitle(item,`Entry ${i+1}`):item.title||`Entry ${i+1}`)}</strong></button><button type="button" data-remove="${key}:${id}" title="Remove entry" aria-label="Remove ${attr(item.title||`Entry ${i+1}`)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}><div class="sm-grid">${field('Title',`${key}.${i}.title`,item.title||'')}${this.tab==='Loot'?field('Quantity',`${key}.${i}.quantity`,normalizeLoot(item).quantity,'number')+`<label class="sm-field"><span>Type</span><select name="loot.${i}.type">${LOOT_TYPES.map(type=>`<option value="${type}" ${normalizeLoot(item).type===type?'selected':''}>${type[0].toUpperCase()+type.slice(1)}</option>`).join('')}</select></label><label class="sm-loot-collected" title="Collected saves this sector’s Loot entries automatically; other sector fields still use Save Sector."><input type="checkbox" name="loot.${i}.collected" ${lootCollected(item)?'checked':''}> Collected</label>${item.status&&item.status!=='Active'?`<small title="Previous status retained for compatibility; the checkbox now controls availability.">Previous status: ${escapeHTML(item.status)}</small>`:''}`:select('Status',`${key}.${i}.status`,item.status||'Active',['Active','Hidden','Discovered','Resolved','Collected','Depleted','Inactive'])}${this.tab==='Effects'?select('Category',`${key}.${i}.category`,item.category||'Weather',['Weather','Phenomenon','Special Effect','Hazard'])+reference(key,i,item.uuid||''):reference(key,i,item.uuid||'')}</div>${item.referenceWarning?`<p class="sm-reference-missing" data-reference-warning role="status">${escapeHTML(item.referenceWarning)}</p>`:''}${area('Details / Rules / Notes',`${key}.${i}.details`,item.details||'')}${this.tab==='Effects'?field('Duration / Trigger',`${key}.${i}.duration`,item.duration||''):''}</div></article>`;}).join('')+
           (!arr.length?`<div class="sm-empty">No ${escapeHTML(this.tab.toLowerCase())} yet. Add an entry to get started.</div>`:'');
       }
-      main=`<section class="sm-main"><header class="sm-header"><div><h2 data-sector-heading>${escapeHTML(sectorName(d))}</h2><small>GM only · Journal-backed · ${escapeHTML(d.code||'No sector ID')}</small></div><div class="sm-header-buttons"><button type="button" data-action="journal">Open Journal</button><button type="button" data-action="delete">Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<nav class="sm-tabs">${TABS.map(t=>`<button type="button" data-tab="${t}" class="${t===this.tab?'active':''} ${tabHasContent(d,t)?'':'sm-tab-empty'}">${t}</button>`).join('')}<button type="button" data-action="randomize">Randomize</button></nav><div class="sm-content">${body}</div><footer class="sm-footer"><span>${this.dirty?'● Unsaved changes':'Changes saved'}</span><button type="button" data-action="save" ${this.busy?'disabled':''}>Save Sector</button></footer></section>`;
+      main=`<section class="sm-main"><header class="sm-header"><div><h2 data-sector-heading>${escapeHTML(sectorName(d))}</h2><small>GM only · Journal-backed · ${escapeHTML(d.code||'No sector ID')}</small></div><div class="sm-header-buttons"><button type="button" data-action="journal">Open Journal</button><button type="button" data-action="delete">Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<nav class="sm-tabs">${TABS.map(t=>`<button type="button" data-tab="${t}" class="${t===this.tab?'active':''} ${tabHasContent(d,t)?'':'sm-tab-empty'}">${t}</button>`).join('')}<button type="button" data-action="randomize" ${this.canRandomize?'':'disabled title="Save this sector before randomizing."'}>Randomize</button></nav><div class="sm-content">${body}</div><footer class="sm-footer"><span>${this.dirty?'● Unsaved changes':'Changes saved'}</span><button type="button" data-action="save" ${this.busy?'disabled':''}>Save Sector</button></footer></section>`;
     }
     return `<style>
       .myz-sector-manager .sm-window-content{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;padding:0;overflow:hidden}
@@ -157,6 +159,9 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-field input,.myz-sector-manager .sm-field textarea,.myz-sector-manager .sm-field select{width:100%;box-sizing:border-box}
       .myz-sector-manager .sm-field textarea{resize:vertical}
       .myz-sector-manager .sm-footer{flex-shrink:0;padding:10px 15px;display:flex;justify-content:space-between;gap:8px;align-items:center;border-top:1px solid #777}
+      .myz-sector-manager .sm-entry.is-collected [data-entry-title]{text-decoration:line-through;opacity:.75}
+      .myz-sector-manager .sm-loot-collected{display:flex;gap:6px;align-items:center}
+      .myz-sector-manager .sm-loot-collected input{appearance:auto;flex:none;width:18px;height:18px;margin:0;accent-color:#3875b4}
       .myz-sector-manager .sm-entry{border:1px solid #777;border-radius:5px;margin:0 0 12px;min-width:0}
       .myz-sector-manager .sm-entry-head{display:flex;align-items:center;gap:8px;padding:8px;cursor:pointer}
       .myz-sector-manager .sm-entry-toggle{display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:auto;text-align:left;white-space:normal;background:transparent;border:0;box-shadow:none;padding:4px}
@@ -217,6 +222,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     el.querySelector('[data-consumables-toggle]')?.addEventListener('click',()=>{const state=this.consumablesState();state.collapsed=!state.collapsed;this.refreshConsumables();});
     el.querySelectorAll('[data-reference]').forEach(zone=>{
       zone.addEventListener('dragover',event=>{event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy';});
+      const referenceInput=zone.querySelector('input');zone.assignedUuid=referenceInput.value;referenceInput.addEventListener('change',()=>{const changed=referenceInput.value!==zone.assignedUuid;this.capture();this.markDirty();void this.renderReference(zone,{detectType:changed});});
       zone.addEventListener('drop',event=>this.dropReference(event,zone));
       zone.querySelector('[data-reference-clear]').addEventListener('click',()=>this.clearReference(zone));
     });
@@ -226,6 +232,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       b.addEventListener('dblclick',event=>{event.preventDefault();clearTimeout(this.sidebarClick);void this.centerSidebarSector(b.dataset.open);});
     });
     el.querySelectorAll('[name^="pathStunts."],[name="travel.stalker"],[name="travel.rushed"]').forEach(input=>input.addEventListener('change',()=>{this.syncTimeStunt(input);this.capture();this.refreshTravelTimes();void this.persistStunts().catch(error=>{this.markDirty();ui.notifications.error(`Could not save stunts: ${error.message}. Use Save Sector to retry.`);});}));
+    el.querySelectorAll('[name^="loot."][name$=".collected"]').forEach(input=>input.addEventListener('change',()=>{this.capture();this.refreshLootCards();const card=input.closest('[data-entry]');this.setCollapsed('loot',card.dataset.entry,input.checked);void this.persistLoot().catch(error=>{this.markDirty();ui.notifications.error(`Could not save Loot: ${error.message}. Use Save Sector to retry.`);});}));
     el.querySelector('[name="rot"]')?.addEventListener('change',event=>{
       const hint=el.querySelector('[data-rot-exposure]');if(hint)hint.textContent=ROT_LEVELS.find(entry=>String(entry.level)===event.target.value)?.exposure||'Existing value retained.';
     });
@@ -246,9 +253,10 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       if(e.matches('[data-sector-name]')){this.draft.customName=e.value;this.draft.nameOverride=true;}
       if(e.name==='travel.open'&&e.checked){this.draft.travel.difficult=false;el.querySelector('[name="travel.difficult"]').checked=false;}
       if(e.name==='travel.difficult'&&e.checked){this.draft.travel.open=false;el.querySelector('[name="travel.open"]').checked=false;}
-      this.capture();if(e.name?.startsWith('travel.')||e.name?.startsWith('pathStunts.'))this.refreshTravelTimes();
+      if(/^loot\.\d+\.type$/.test(e.name)){const i=Number(e.name.split('.')[1]);this.draft.loot[i].typeSource='manual';this.lootTypeRevisions.set(this.draft.loot[i],(this.lootTypeRevisions.get(this.draft.loot[i])||0)+1);}
+      this.capture();if(e.name?.startsWith('loot.'))this.refreshLootCards();if(e.name?.startsWith('travel.')||e.name?.startsWith('pathStunts.'))this.refreshTravelTimes();
       if(e.name?.startsWith('supplies.'))this.refreshConsumables();this.refreshTabIndicators();this.refreshSectorIcons();if(e.matches('[data-sector-name]')||['code','terrain'].includes(e.name)){this.refreshSectorLabels();this.refreshZoneSummary();}
-      if(e.name?.endsWith('.title')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title)title.textContent=e.value||'Untitled Entry';}
+      if(e.name?.endsWith('.title')&&!e.name.startsWith('loot.')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title)title.textContent=e.value||'Untitled Entry';}
     }));
   }
   syncTimeStunt(input){
@@ -286,7 +294,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   refreshTabIndicators(){
     for(const button of this.element.querySelectorAll('[data-tab]'))button.classList.toggle('sm-tab-empty',!tabHasContent(this.data,button.dataset.tab));
   }
-  capture(){if(!this.journal)return;const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){if(f.type==='radio'&&!f.checked)continue;const parts=f.name.split('.');let target=this.draft;for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(/^loot\.\d+\.quantity$/.test(f.name)){const quantity=Number(v);v=Number.isFinite(quantity)?Math.max(0,quantity):0;}if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;if(f.name==='travel.difficulty')v=travelOptions({difficulty:v}).difficulty;target[parts.at(-1)]=v;}this.draft.travel=sectorTravelOptions(this.draft);for(const key of Object.values(COLLECTIONS))this.entryState(key);}
+  capture(){if(!this.journal)return;const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){if(f.type==='radio'&&!f.checked)continue;const parts=f.name.split('.');let target=this.draft;for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(/^loot\.\d+\.quantity$/.test(f.name)){const quantity=Number(v);v=lootQuantity(v);}if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;if(f.name==='travel.difficulty')v=travelOptions({difficulty:v}).difficulty;target[parts.at(-1)]=v;}this.draft.travel=sectorTravelOptions(this.draft);for(const key of Object.values(COLLECTIONS))this.entryState(key);}
   refreshZoneSummary(){
     const container=this.element?.querySelector('.sm-zone-summary');
     if(!container)return;
@@ -309,12 +317,12 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const existing=code?zone.store.sectorRecords(code):[];
     if(existing.length){await this.navigate(existing[0].id);if(this.sectorId===existing[0].id){this.tab='Overview';await this.render();}return;}
     if(!await this.confirmLose()||!valid())return;
-    const data=DEFAULT();data.code=code;
+    const data=DEFAULT();data.code=code;data.initialSavePending=true;
     const folders=await ensureJournalFolders();
     if(!valid())return;
     const duplicate=code?zone.store.sectorRecords(code):[];if(duplicate.length){await this.navigate(duplicate[0].id);if(this.sectorId===duplicate[0].id){this.tab='Overview';await this.render();}return;}
     const journal=await JournalEntry.create({name:sectorName(data),folder:folders.sectors.id,ownership:{default:0},pages:[{name:'Sector Record',type:'text',text:{content:'<p>Sector record managed by MYZ Sector Manager. Use the Sector Manager to edit structured fields.</p>'}}],flags:{[MOD]:{[KEY]:data}}});
-    this.sectorId=journal.id;this.draft=normalize(data);this.tab='Overview';this.dirty=false;this.filter='';await this.render();
+    this.sectorId=journal.id;this.draft=this.loadDraft(data,journal);this.tab='Overview';this.dirty=false;this.filter='';await this.render();
   }
   markDirty(){this.dirty=true;const status=this.element.querySelector('.sm-footer span');if(status)status.textContent='● Unsaved changes';}
 
@@ -331,7 +339,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       const old=Array.from(available).find(entry=>entry.item===item)
         ||Array.from(available).find(entry=>entry.snapshot===snapshot);
       if(old)available.delete(old);
-      return {id:old?.id||`sm-entry-${++entrySequence}`,item,snapshot};
+      const record={id:old?.id||`sm-entry-${++entrySequence}`,item,snapshot};if(!old&&key==='loot'&&lootCollected(item))state.collapsed.add(record.id);return record;
     });
     for(const removed of available)state.collapsed.delete(removed.id);
     state.entries=entries;
@@ -371,11 +379,44 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     await this.render();
   }
 
-  async renderReference(zone){
+  loadDraft(data,journal=this.journal){
+    this.lootContext={journal,baseline:JSON.stringify(data.loot||[])};
+    return normalize(data,journal?.name);
+  }
+  refreshLootCards(){
+    if(this.tab!=='Loot')return;
+    const entries=this.entryState('loot').entries;
+    for(const [index,record] of entries.entries()){
+      const card=this.element.querySelector(`[data-entry="${record.id}"]`);if(!card)continue;
+      card.querySelector('[data-entry-title]').textContent=lootTitle(record.item,`Entry ${index+1}`);
+      card.classList.toggle('is-collected',lootCollected(record.item));
+    }
+  }
+  assignLootType(zone,document,force=false){
+    const input=zone.querySelector('input'),[key,index]=input.name?.split('.')||[];
+    const entry=key==='loot'&&this.draft?.loot?.[index];if(!entry||(!force&&entry.typeSource!=='legacy'))return;
+    const type=itemLootType(document);if(!type)return;
+    entry.type=type;entry.typeSource='reference';
+    const card=zone.closest?.('[data-entry]');const control=card?.querySelector(`[name="loot.${index}.type"]`);if(control)control.value=type;
+    const title=card?.querySelector('[data-entry-title]');if(title)title.textContent=lootTitle(entry,`Entry ${Number(index)+1}`);
+  }
+  persistLoot(){
+    const journal=this.journal,loot=foundry.utils.deepClone(this.draft.loot);
+    if(!this.lootContext||this.lootContext.journal!==journal)this.lootContext={journal,baseline:JSON.stringify(journal.getFlag(MOD,KEY).loot||[])};
+    const context=this.lootContext;
+    const write=(this.autosaveWrite||Promise.resolve()).catch(()=>{}).then(async()=>{
+      if(!game.user.isGM)throw new Error('GM access required');
+      const stored=foundry.utils.deepClone(journal.getFlag(MOD,KEY));
+      if(JSON.stringify(stored.loot||[])!==context.baseline)throw new Error('Saved Loot changed; review the latest sector before retrying.');
+      stored.loot=loot;await journal.setFlag(MOD,KEY,stored);context.baseline=JSON.stringify(loot);
+    });
+    this.autosaveWrite=write;this.lootWrite=write;return write;
+  }
+  async renderReference(zone,{detectType=false}={}){
     const input=zone.querySelector('input'), target=zone.querySelector('[data-reference-link]');
-    const uuid=input.value;
+    const uuid=input.value,draft=this.draft,entry=input.name?.startsWith('loot.')?draft?.loot?.[Number(input.name.split('.')[1])]:null,revision=entry?this.lootTypeRevisions.get(entry)||0:0;zone.assignedUuid=uuid;
     const request=zone.referenceRequest=(zone.referenceRequest||0)+1;
-    const current=()=>zone.referenceRequest===request && input.value===uuid;
+    const current=()=>zone.referenceRequest===request && input.value===uuid && this.draft===draft;
     zone.querySelector('[data-reference-clear]').disabled=!uuid;
     target.classList.remove('sm-reference-missing');
     if(!uuid){target.textContent='Drop a document here';return;}
@@ -386,6 +427,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       const doc=await fromUuid(uuid);
       if(!current())return;
       if(!doc){target.textContent=`Missing reference (${uuid})`;target.classList.add('sm-reference-missing');return;}
+      if(!entry||(this.lootTypeRevisions.get(entry)||0)===revision)this.assignLootType(zone,doc,detectType);
       const html=await foundry.applications.ux.TextEditor.implementation.enrichHTML(`@UUID[${uuid}]`,{documents:true,links:false,rolls:false,embeds:false,custom:false});
       if(!current())return;
       target.innerHTML=html;
@@ -415,7 +457,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
 
   async dropReference(event,zone){
     event.preventDefault();event.stopPropagation();
-    const draft=this.draft;
+    const draft=this.draft,input=zone.querySelector('input'),entry=input.name?.startsWith('loot.')?draft?.loot?.[Number(input.name.split('.')[1])]:null,revision=entry?this.lootTypeRevisions.get(entry)||0:0;
     try{
       const payload=foundry.applications.ux.TextEditor.implementation.getDragEventData(event);
       if(!payload.uuid){ui.notifications.warn('Drop a document from Foundry.');return;}
@@ -423,8 +465,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       if(this.draft!==draft || !this.element.contains(zone))return;
       if(!doc)throw new Error('Reference could not be found.');
       if(zone.dataset.type && !zone.dataset.type.split('|').includes(doc.documentName)){ui.notifications.warn(`This entry expects a ${zone.dataset.type.replaceAll('|',' or ').replaceAll('JournalEntryPage','Journal Entry Page').replaceAll('JournalEntry','Journal Entry')}.`);return;}
-      zone.querySelector('input').value=doc.uuid;
-      this.capture();this.clearReferenceWarning(zone);this.markDirty();
+      const changed=zone.querySelector('input').value!==doc.uuid;zone.querySelector('input').value=doc.uuid;
+      this.capture();if(!entry||(this.lootTypeRevisions.get(entry)||0)===revision)this.assignLootType(zone,doc,changed);this.clearReferenceWarning(zone);this.markDirty();
       await this.renderReference(zone);
     }catch(err){ui.notifications.error(`Unable to attach reference: ${err.message}`);}
   }
@@ -439,10 +481,11 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     }catch(err){ui.notifications.error(`Unable to open reference: ${err.message}`);}
   }
   async randomizeSector(){
-    if(!game.user.isGM||!this.journal||this.randomizing)return;
+    if(!game.user.isGM||this.randomizing)return;
+    if(!this.canRandomize){ui.notifications.warn('Save this sector before randomizing.');return;}
     this.randomizing=true;
     try{
-      await this.stuntWrite;this.capture();
+      await Promise.all([this.stuntWrite,this.lootWrite]);this.capture();
       const journal=this.journal,expected=foundry.utils.deepClone(journal.getFlag(MOD,KEY)),base=foundry.utils.deepClone(this.draft),signature=JSON.stringify(base);
       const method=await foundry.applications.api.DialogV2.wait({...randomizeDialogOptions(),window:{title:'Randomize Sector'},content:randomizeDialogContent(`<p>Randomization replaces terrain, Rot, mood, and previous generated entries. Consumable quantities will be replaced; collected checkboxes are retained. Manual entries, notes, coordinates, and other fields are retained. Review the generated results before saving.</p><label>Randomization Method<select name="randomizationMethod">${RANDOMIZATION_METHODS.map(method=>`<option value="${method.id}">${escapeHTML(method.label)}</option>`).join('')}</select></label><label>Threat Generation<select name="threatGeneration"><option value="core" ${game.settings.get(MOD,'threatGenerationMode')!=='individual-d3'?'selected':''}>Core Rulebook (Default)</option><option value="individual-d3" ${game.settings.get(MOD,'threatGenerationMode')==='individual-d3'?'selected':''}>Multiple Threats (House Rule)</option></select></label><p>Core Rulebook: one threat if eligible 1s occur, with their count as severity. Multiple Threats: roll 1d3 independent threats after the same eligible 1s. Both use the original 6s for artifacts.</p>`),buttons:[{action:'cancel',label:'Cancel',default:true,callback:()=>null},{action:'randomize',label:'Randomize',callback:(event,button,dialog)=>({method:dialog.element.querySelector('[name="randomizationMethod"]').value,threatMode:dialog.element.querySelector('[name="threatGeneration"]').value})}],close:()=>null,rejectClose:false});
       if(!method)return;
@@ -456,28 +499,28 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       if(!await foundry.applications.api.DialogV2.confirm({...randomizeDialogOptions(),window:{title:'Save Randomized Sector?'},content:randomizeDialogContent(`<p>Terrain: ${escapeHTML(next.terrain)} · Rot: ${next.rot}</p><p>Mood: ${escapeHTML(next.mood)}</p><p>Threat Level: ${next.randomization.numericThreatLevel} (${escapeHTML(next.randomization.threatLevel)}) · ${escapeHTML(next.randomization.levelSelection)}</p><p>Environment eligibility — Ruin: ${escapeHTML(next.randomization.environment.ruins||'No')}; Threat: ${next.randomization.environment.threats?'Yes':'No'}; Artifact: ${next.randomization.environment.artifacts?'Yes':'No'}.</p><p>Base Dice: ${escapeHTML(next.randomization.baseDice.join(', ')||'None (level 0)')}. Threat severity (1s): ${next.randomization.threatSeverity}. Artifacts (eligible 6s): ${next.randomization.artifactCount}. Threat identities: ${next.randomization.threatCount} (${next.randomization.threatMode==='core'?'Core: one threat, severity from 1s':'House rule: 1d3 individual threats'}).</p>${supplySummary}${summary}<p>Replace this sector's generated information? Manual entries and notes are retained.</p>`)}))return;
       if(this.sectorId!==journal.id||this.rendered===false||JSON.stringify(this.draft)!==signature)throw new Error('Sector selection or edits changed during generation. Nothing was saved; try again.');
       await saveGeneratedSector(journal,expected,next);
-      this.draft=normalize(journal.getFlag(MOD,KEY),journal.name);CONSUMABLE_UI.delete(this.sectorId);this.dirty=false;await this.render();ui.notifications.info('Sector randomized and saved.');
+      this.draft=this.loadDraft(journal.getFlag(MOD,KEY),journal);CONSUMABLE_UI.delete(this.sectorId);this.dirty=false;await this.render();ui.notifications.info('Sector randomized and saved.');
     }catch(error){ui.notifications.error(`Sector randomization: ${error.message}`);}
     finally{this.randomizing=false;}
   }
-  async _onClose(options){clearTimeout(this.sidebarClick);await this.stuntWrite;return super._onClose(options);}
+  async _onClose(options){clearTimeout(this.sidebarClick);await Promise.allSettled([this.stuntWrite,this.lootWrite]);return super._onClose(options);}
   persistStunts(){
     const journal=this.journal,states=foundry.utils.deepClone(this.draft.pathStunts);
-    const write=(this.stuntWrite||Promise.resolve()).catch(()=>{}).then(async()=>{
+    const write=(this.autosaveWrite||Promise.resolve()).catch(()=>{}).then(async()=>{
       if(!game.user.isGM)throw new Error('GM access required');
       const stored=foundry.utils.deepClone(journal.getFlag(MOD,KEY));
       stored.pathStunts={...stored.pathStunts,...states};
       if(stored.travel)stored.travel=storedTravel(stored.travel);
       await journal.setFlag(MOD,KEY,stored);
     });
-    this.stuntWrite=write;return write;
+    this.autosaveWrite=write;this.stuntWrite=write;return write;
   }
   async centerSidebarSector(id){
     try{await this.navigate(id);const record=game.journal.get(id)?.getFlag(MOD,KEY);if(this.sectorId===id&&record)await zone.centerSector(record.code);}
     catch(error){ui.notifications.error(`Zone Map: ${error.message}`);}
   }
   async confirmLose(){if(!this.dirty)return true;return await foundry.applications.api.DialogV2.confirm({window:{title:'Unsaved Changes'},content:'Discard unsaved changes?'});}
-  async navigate(id){if(id===this.sectorId)return;if(!await this.confirmLose())return;await this.stuntWrite;this.sectorId=id;this.draft=normalize(this.journal.getFlag(MOD,KEY),this.journal.name);this.tab='Overview';this.dirty=false;await this.render();}
+  async navigate(id){if(id===this.sectorId)return;if(!await this.confirmLose())return;await Promise.allSettled([this.stuntWrite,this.lootWrite]);this.sectorId=id;this.draft=this.loadDraft(this.journal.getFlag(MOD,KEY),this.journal);this.tab='Overview';this.dirty=false;await this.render();}
   async action(which,key){try{
     if(which==='reset-name'){this.draft.nameOverride=false;this.draft.customName='';this.markDirty();this.refreshSectorLabels();return;}
     if(which==='randomize'){await this.randomizeSector();return;}
@@ -488,8 +531,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       this.capture();for(const stunt of PATH_STUNTS)this.draft.pathStunts[stunt.id]=false;try{await this.persistStunts();}catch(error){this.markDirty();throw error;}await this.render();return;
     }
     if(which==='new'){await this.promptNewSector();return;}
-    if(which==='add'){this.capture();this.draft[key].push({title:'',status:'Active',details:'',uuid:'',category:'Weather',duration:''});this.dirty=true;await this.render();return;}
-    if(which==='save'){const pendingStunts=this.stuntWrite;await pendingStunts?.catch(()=>{});this.capture();this.busy=true;const j=this.journal;if(!j)return;const name=sectorName(this.draft);delete this.draft.journalName;const stored=foundry.utils.deepClone(this.draft);stored.travel=storedTravel(stored.travel);await j.update({...(j.name===name?{}:{name}),[`flags.${MOD}.${KEY}`]:stored});if(this.stuntWrite===pendingStunts)this.stuntWrite=undefined;this.dirty=false;this.busy=false;await this.render();ui.notifications.info('Sector saved.');return;}
+    if(which==='add'){this.capture();this.draft[key].push(key==='loot'?normalizeLoot({title:'',type:'scrap',typeSource:'default',status:'Active',details:'',uuid:'',quantity:1}):{title:'',status:'Active',details:'',uuid:'',category:'Weather',duration:''});this.dirty=true;await this.render();return;}
+    if(which==='save'){const pendingStunts=this.stuntWrite,pendingLoot=this.lootWrite;await Promise.all([pendingStunts?.catch(()=>{}),pendingLoot?.catch(()=>{})]);this.capture();this.busy=true;const j=this.journal;if(!j)return;const name=sectorName(this.draft);delete this.draft.journalName;const stored=foundry.utils.deepClone(this.draft);stored.travel=storedTravel(stored.travel);if(stored.initialSavePending===true)stored.initialSavePending=false;await j.update({...(j.name===name?{}:{name}),[`flags.${MOD}.${KEY}`]:stored});if(this.stuntWrite===pendingStunts)this.stuntWrite=undefined;if(this.lootWrite===pendingLoot)this.lootWrite=undefined;this.lootContext={journal:j,baseline:JSON.stringify(stored.loot||[])};if(this.draft.initialSavePending===true)this.draft.initialSavePending=false;this.dirty=false;this.busy=false;await this.render();ui.notifications.info('Sector saved.');return;}
     if(which==='journal'){this.journal?.sheet?.render(true);return;}
     if(which==='delete'){if(!await foundry.applications.api.DialogV2.confirm({window:{title:'Delete Sector'},content:`Permanently delete the Journal Entry for ${escapeHTML(this.journal.name)}? This cannot be undone.`}))return;await this.journal.delete();ENTRY_UI.delete(this.sectorId);CONSUMABLE_UI.delete(this.sectorId);this.sectorId=null;this.draft=null;this.dirty=false;await this.render();return;}
   }catch(err){this.busy=false;console.error(`${MOD} |`,err);ui.notifications.error(`Sector Manager: ${err.message}`);}}
@@ -514,7 +557,7 @@ Hooks.once('ready',()=>{
       if(!game.user.isGM){ui.notifications.warn('GM access only.');return;}
       if(app?.rendered){if(id && id!==app.sectorId)await app.navigate(id);app.bringToFront();return app;}
       app=new SectorManager({sectorId:id});
-      if(id && app.journal)app.draft=normalize(app.journal.getFlag(MOD,KEY),app.journal.name);
+      if(id && app.journal)app.draft=app.loadDraft(app.journal.getFlag(MOD,KEY),app.journal);
       await app.render(true);return app;
     },
     getSector:(journalId)=>{if(!game.user.isGM)return null;const j=game.journal.get(journalId);return j?.getFlag(MOD,KEY)??null;}

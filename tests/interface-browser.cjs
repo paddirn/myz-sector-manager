@@ -382,6 +382,32 @@ const path=require('node:path');
     await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
     await page.locator('[data-tab="Loot"]').click();assert.equal(await page.locator('[name="supplies.components.quantity"]').inputValue(),'2.75');
 
+    // Loot display metadata remains separate from the stored name.
+    const lootCard=page.locator('.sm-entry').first();
+    if(await lootCard.locator('[data-entry-toggle]').getAttribute('aria-expanded')==='false')await lootCard.locator('[data-entry-toggle]').click();
+    await lootCard.locator('[name="loot.0.title"]').fill('Scrap Rifle');await lootCard.locator('[name="loot.0.quantity"]').fill('3');await lootCard.locator('[name="loot.0.type"]').selectOption('weapon');
+    assert.equal(await lootCard.locator('[data-entry-title]').innerText(),'Scrap Rifle x 3 (weapon)');
+    await lootCard.locator('[name="loot.0.quantity"]').fill('4');assert.equal(await lootCard.locator('[data-entry-title]').innerText(),'Scrap Rifle x 4 (weapon)');
+    assert.equal(await lootCard.locator('[name="loot.0.status"]').count(),0);
+    await page.evaluate(()=>{for(const [uuid,type] of [['Item.armor','armor'],['Compendium.myz.items.Item.chassis','chassis']])docs.set(uuid,{uuid,name:type,documentName:'Item',type,_onClickDocumentLink:async()=>nativeClicks.push(uuid)});});
+    const dropLoot=async uuid=>lootCard.locator('[data-reference]').evaluate((el,uuid)=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({type:'Item',uuid}));el.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));},uuid);
+    await dropLoot('Item.armor');await page.waitForFunction(()=>manager.draft.loot[0].type==='armor');assert.equal(await lootCard.locator('[data-entry-title]').innerText(),'Scrap Rifle x 4 (armor)');
+    await lootCard.locator('[name="loot.0.type"]').selectOption('gear');await dropLoot('Item.armor');assert.equal(await lootCard.locator('[name="loot.0.type"]').inputValue(),'gear');
+    await dropLoot('Compendium.myz.items.Item.chassis');await page.waitForFunction(()=>manager.draft.loot[0].type==='chassis');
+    await lootCard.locator('[name="loot.0.type"]').selectOption('artifact');
+    await page.evaluate(()=>{globalThis.savedNotes=records.get('sector1').getFlag('myz-sector-manager','sector').notes;manager.draft.notes='Unrelated unsaved notes';});
+    await lootCard.locator('[name="loot.0.collected"]').check();await page.waitForFunction(()=>records.get('sector1').getFlag('myz-sector-manager','sector').loot[0].collected===true);
+    assert.equal(await lootCard.locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');assert.equal(await lootCard.locator('[data-entry-title]').evaluate(el=>getComputedStyle(el).textDecorationLine),'line-through');
+    assert.equal(await page.evaluate(()=>records.get('sector1').flags.notes===savedNotes),true);
+    await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');manager.tab='Loot';await manager.render();});
+    assert.equal(await lootCard.locator('[data-entry-title]').innerText(),'Scrap Rifle x 4 (artifact)');assert.equal(await lootCard.locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');
+    await lootCard.locator('[data-entry-toggle]').focus();await page.keyboard.press('Enter');assert.equal(await lootCard.locator('[name="loot.0.collected"]').isChecked(),true);
+    await lootCard.locator('[name="loot.0.collected"]').uncheck();await page.waitForFunction(()=>records.get('sector1').flags.loot[0].collected===false);
+    assert.equal(await lootCard.locator('[data-entry-toggle]').getAttribute('aria-expanded'),'true');assert.equal(await lootCard.locator('[data-entry-title]').evaluate(el=>getComputedStyle(el).textDecorationLine),'none');
+    assert.equal(await page.evaluate(()=>records.get('sector1').flags.loot[0].title),'Scrap Rifle');
+    assert.equal(await page.evaluate(()=>records.get('sector1').flags.loot[0].uuid),'Compendium.myz.items.Item.chassis');
+    console.log('Loot quantities/types, world and compendium detection, manual overrides, collection autosave/collapse/strike, reopening and keyboard reversal pass');
+
     await page.locator('[data-tab="Find the Path"]').click();
     for(const name of ['pathStunts.halfTime','pathStunts.rush','pathStunts.saferRoute','travel.rushed','travel.stalker'])assert.equal(await page.locator(`[name="${name}"]`).isChecked(),true);
     assert.equal(await page.locator('[data-tab="Find the Path"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);
@@ -501,6 +527,15 @@ const path=require('node:path');
     await page.waitForFunction(()=>manager.draft?.code==='C3');
     assert.equal(await page.evaluate(()=>records.filter(j=>j.getFlag('myz-sector-manager','sector')?.code==='C3').length),1);
     assert.equal(await page.evaluate(()=>records.filter(j=>j.getFlag('myz-sector-manager','sector')?.version===1).length),71);
+
+    assert.equal(await page.locator('[data-action="randomize"]').isDisabled(),true);assert.equal(await page.locator('[data-action="randomize"]').getAttribute('title'),'Save this sector before randomizing.');
+    await page.evaluate(async()=>{await manager.randomizeSector();const doc=manager.journal;globalThis.originalInitialUpdate=doc.update;doc.update=async()=>{throw new Error('Expected initial save failure');};});
+    await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.busy);
+    assert.equal(await page.locator('[data-action="randomize"]').isDisabled(),true);assert.equal(await page.evaluate(()=>manager.journal.getFlag('myz-sector-manager','sector').initialSavePending),true);
+    assert.match(await page.evaluate(()=>notifyErrors.pop()),/Expected initial save failure/);
+    await page.evaluate(()=>manager.journal.update=originalInitialUpdate);await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.busy&&!manager.dirty);
+    assert.equal(await page.locator('[data-action="randomize"]').isDisabled(),false);
+    console.log('New-sector Randomize stays blocked through programmatic attempts and failed saves; successful initial save enables it immediately');
 
     // Enabled overlay background clicks reuse the manager and open Overview.
     await page.evaluate(()=>{globalThis.beforeOverlaySelection=JSON.stringify(records.map(j=>({id:j.id,flags:j.flags,name:j.name})));globalThis.sameManager=manager;manager.tab='Loot';});

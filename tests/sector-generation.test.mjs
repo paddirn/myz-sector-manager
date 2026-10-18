@@ -1,3 +1,4 @@
+import {normalizeLoot} from '../scripts/loot.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {generateSector,TABLE_UUIDS,ENVIRONMENTS,resolveTables,rollTable,rollBasePool,mapRot,mapThreatLevel,mapThreatType,mapEnvironment,saveGeneratedSector} from '../scripts/sector-randomizer.mjs';
@@ -82,12 +83,12 @@ test('consumable quantities use existing fields, classifications are exclusive, 
   const output=await generateSector(f.existing,f.options);
   assert.equal(output.supplies.rotGrub.quantity,2);assert.equal(output.supplies.cleanGrub.quantity,0);assert.equal(output.supplies.rotWater.quantity,3);assert.equal(output.supplies.cleanWater.quantity,0);assert.equal(output.supplies.bullets.quantity,4);assert.equal(output.supplies.booze.quantity,2);assert.equal(output.supplies.components.quantity,3);
   assert.deepEqual(output.loot.map(entry=>entry.title),['Manual treasure','Copper wire']);assert.equal(output.loot[1].quantity,5);
-  const empty=fixture({}, {'1d10000':Array(6).fill(10000)},[3,4]);const none=await generateSector(empty.existing,empty.options);assert.deepEqual(none.loot,[{title:'Manual treasure'}]);assert(Object.values(none.supplies).every(entry=>entry.quantity===0));
+  const empty=fixture({}, {'1d10000':Array(6).fill(10000)},[3,4]);const none=await generateSector(empty.existing,empty.options);assert.deepEqual(none.loot,[normalizeLoot({title:'Manual treasure'})]);assert(Object.values(none.supplies).every(entry=>entry.quantity===0));
 });
 test('Booze and Components independently use 25 percent thresholds, including simultaneous presence',async()=>{
   for(const [booze,components] of [[1,1],[2500,2501],[2501,2500],[10000,10000]]){
     const f=fixture({}, {'1d10000':[10000,10000,10000,booze,components,10000],'1d3':[3,3]},[2,3]);
-    const output=await generateSector(f.existing,f.options);assert.equal(output.supplies.booze.quantity,booze<=2500?3:0);assert.equal(output.supplies.components.quantity,components<=2500?3:0);assert.deepEqual(output.loot,[{title:'Manual treasure'}]);
+    const output=await generateSector(f.existing,f.options);assert.equal(output.supplies.booze.quantity,booze<=2500?3:0);assert.equal(output.supplies.components.quantity,components<=2500?3:0);assert.deepEqual(output.loot,[normalizeLoot({title:'Manual treasure'})]);
   }
 });
 test('repeat generation resets quantities without duplicating loot or deleting manual/historical resources',async()=>{
@@ -220,4 +221,14 @@ test('randomization preserves all nine stunts and only removes redundant travel 
   const next=await generateSector(f.existing,f.options);assert.deepEqual(next.pathStunts,f.existing.pathStunts);let stored;
   const journal={getFlag:()=>f.existing,update:async changes=>{stored=changes['flags.myz-sector-manager.sector'];},setFlag:async(m,k,value)=>{stored=value;}};
   await saveGeneratedSector(journal,f.existing,next,f.env);assert.deepEqual(stored.pathStunts,f.existing.pathStunts);assert.deepEqual(stored.travel,{mode:'vehicle',night:true,difficulty:3});
+});
+test('generated Loot classifies referenced world/compendium Items, plaintext artifacts and scrap',async()=>{
+  for(const type of ['armor','artifact','chassis','gear','weapon']){
+    const f=fixture(),uuid=`Compendium.myz.items.Item.${type}`;f.tables.set(uuid,{uuid,name:'Reference',documentName:'Item',type:type.toUpperCase()});f.tables.get(TABLE_UUIDS.artifact).roll=async()=>({results:[{documentUuid:uuid}]});
+    const next=await generateSector(f.existing,f.options);const entry=next.loot.find(item=>item.uuid===uuid);assert.equal(entry.type,type);assert.equal(entry.collected,false);assert.equal(entry.quantity,1);
+  }
+  const f=fixture(),next=await generateSector(f.existing,f.options);assert.equal(next.loot.find(entry=>entry.title==='Ancient Rifle').type,'artifact');assert.equal(next.loot.find(entry=>entry.title==='Copper wire').type,'scrap');
+});
+test('direct generation persistence cannot bypass the initial-save safeguard',async()=>{
+  const f=fixture();f.existing.initialSavePending=true;const journal={getFlag:()=>f.existing,setFlag:()=>assert.fail('no write'),update:()=>assert.fail('no write')};await assert.rejects(saveGeneratedSector(journal,f.existing,f.existing,f.env),/Save this sector before randomizing/);
 });
