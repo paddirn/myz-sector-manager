@@ -1,3 +1,4 @@
+import {imagePath,journalImageSource} from '../scripts/sector-images.mjs';
 import {isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle} from '../scripts/sector-types.mjs';
 import {generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES} from '../scripts/entry-generation.mjs';
 import {normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion} from '../scripts/sector-fields.mjs';
@@ -19,7 +20,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,imagePath,journalImageSource,isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -421,4 +422,44 @@ test('conversion cannot apply a stale confirmation to changed drafts or another 
 test('shared History generation remains available for Special sectors and inactive Normal adds are blocked',async()=>{
   const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='history-special';app.draft=context.normalizeSector({sectorType:'special',history:[]});app.capture=()=>{};let eventFlag;context.generateEntry=async(key,data,options)=>{assert.equal(key,'history');assert.equal(data.sectorType,'special');eventFlag=options.event;return {title:'Ark or Zone event',uuid:'JournalEntry.parent.JournalEntryPage.page'};};
   await app.addContextEntry('history',{event:true});assert.equal(eventFlag,true);assert.equal(app.draft.history.length,1);assert.equal(app.draft.history[0].uuid,'JournalEntry.parent.JournalEntryPage.page');
+});
+
+function specialDropFixture(){
+  const f=fixture();let saved=structuredClone(normalizeSectorType({version:1,sectorType:'special',code:'A1',notes:'Saved notes',special:{inhabitants:[],gear:[],images:[]}}));
+  const journal={id:'drop',name:'Sector',getFlag:()=>saved,setFlag:async(mod,key,data)=>{saved=structuredClone(data);}};
+  f.context.game.journal.get=()=>journal;f.app.sectorId='drop';f.app.draft=f.context.normalizeSector(saved);f.app.capture=()=>{};
+  return {...f,journal,getSaved:()=>saved,event:uuid=>({payload:{uuid}})};
+}
+test('blank Actor/Item drops resolve world/compendium UUIDs, classify all MYZ Items, collapse and persist only their collection',async()=>{
+  for(const [key,type] of [['special.inhabitants','Actor'],['special.gear','Item']])for(const prefix of ['',`Compendium.myz.docs.`])for(const itemType of (type==='Item'?['armor','artifact','chassis','gear','weapon','other']:[''])){
+    const f=specialDropFixture(),uuid=`${prefix}${type}.one`;f.documents.set(uuid,{uuid,documentName:type,name:'Document title',type:itemType});f.app.draft.notes='Unsaved other edits';f.app.dirty=true;
+    const event=f.event(uuid);await f.app.dropSpecialEntry(event,key);await f.app.dropSpecialEntry(event,key);
+    const entries=sectorCollection(f.app.draft,key);assert.equal(entries.length,1);assert.equal(entries[0].uuid,uuid);assert.equal(entries[0].title,'Document title');assert.equal(sectorCollection(f.getSaved(),key).length,1);assert.equal(f.getSaved().notes,'Saved notes');assert.equal(f.app.draft.notes,'Unsaved other edits');assert.equal(f.app.dirty,true);assert(f.app.entryState(key).collapsed.has(f.app.entryState(key).entries[0].id));
+    if(type==='Item'){assert.equal(entries[0].quantity,1);assert.equal(entries[0].type,itemType==='other'?'scrap':itemType);}
+  }
+});
+test('image drops require image pages, preserve actual page UUIDs and paths, and never save broken/plain-text references',async()=>{
+  for(const uuid of ['JournalEntry.a.JournalEntryPage.p','Compendium.myz.book.JournalEntry.a.JournalEntryPage.p']){
+    const f=specialDropFixture();f.documents.set(uuid,{uuid,documentName:'JournalEntryPage',type:'image',src:'worlds/test/picture.webp',name:'Illustration'});await f.app.dropSpecialEntry(f.event(uuid),'special.images');assert.equal(f.getSaved().special.images[0].uuid,uuid);assert.equal(f.getSaved().special.images[0].imageSrc,'worlds/test/picture.webp');assert.equal(f.app.dirty,false);
+  }
+  for(const document of [null,{documentName:'Actor'},{documentName:'JournalEntryPage',type:'text'},{documentName:'JournalEntryPage',type:'image',src:''}]){const f=specialDropFixture();f.documents.set('JournalEntry.a.JournalEntryPage.p',document);await f.app.dropSpecialEntry(f.event('JournalEntry.a.JournalEntryPage.p'),'special.images');assert.equal(f.app.draft.special.images.length,0);assert.equal(f.getSaved().special.images.length,0);assert(f.notices.length);}
+});
+test('unsaved sectors reject blank drops and asynchronous selection changes cannot append entries',async()=>{
+  const f=specialDropFixture();f.getSaved().initialSavePending=true;await f.app.dropSpecialEntry(f.event('Actor.a'),'special.inhabitants');assert.match(f.notices.at(-1),/Save this Special sector/);assert.equal(f.app.draft.special.inhabitants.length,0);
+  delete f.getSaved().initialSavePending;let resolve;f.context.fromUuid=()=>new Promise(done=>resolve=done);const pending=f.app.dropSpecialEntry(f.event('Actor.a'),'special.inhabitants');f.app.sectorId='another';resolve({documentName:'Actor',name:'Actor',uuid:'Actor.a'});await pending;assert.equal(f.app.draft.special.inhabitants.length,0);assert.match(f.notices.at(-1),/selection or edits changed/);
+});
+test('drop autosave conflicts retain the draft for review and do not overwrite another GM change',async()=>{
+  const f=specialDropFixture();let release;f.app.autosaveWrite=new Promise(resolve=>release=resolve);f.documents.set('Actor.a',{documentName:'Actor',name:'Actor',uuid:'Actor.a'});
+  const pending=f.app.dropSpecialEntry(f.event('Actor.a'),'special.inhabitants');await Promise.resolve();f.getSaved().special.inhabitants.push({title:'Other GM'});release();await pending;assert.equal(f.app.draft.special.inhabitants.length,1);assert.equal(f.getSaved().special.inhabitants[0].title,'Other GM');assert.match(f.notices.at(-1),/Saved entries changed/);assert.equal(f.app.dirty,true);
+});
+test('Situation sizing grows and shrinks from its native/CSS minimum without resizing the window',()=>{
+  const {app}=fixture();const area={style:{},scrollHeight:800,offsetHeight:160,clientHeight:158};app.element.querySelector=()=>area;app.sizeSituation();assert.equal(area.style.height,'802px');area.scrollHeight=158;app.sizeSituation();assert.equal(area.style.height,'160px');
+});
+test('Images previews remain visible while metadata uses optional details and page-only references',()=>{
+  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='gallery';app.draft=context.normalizeSector({sectorType:'special',special:{images:[{title:'One',uuid:'JournalEntry.a.JournalEntryPage.p'},{title:'Two'}]}});app.tab='Images';const html=app.build();assert.match(html,/\+ Add Image/);assert.equal((html.match(/data-image-preview/g)||[]).length,2);assert.match(html,/data-type="JournalEntryPage"/);assert.doesNotMatch(html,/data-image-preview[^>]*hidden|data-entry-toggle/);
+});
+
+test('a permission failure preserves an image page reference and shows an unavailable preview',async()=>{
+  const {app,context}=fixture(),ref=referenceZone('Compendium.myz.book.JournalEntry.a.JournalEntryPage.p');ref.input.name='special.images.0.uuid';const preview={textContent:'',replaceChildren(){this.textContent='';}};ref.zone.closest=()=>({querySelector:()=>preview});context.fromUuid=async()=>{throw new Error('Permission denied');};
+  await app.renderReference(ref.zone);assert.match(preview.textContent,/unavailable: Permission denied/);assert.equal(ref.input.value,'Compendium.myz.book.JournalEntry.a.JournalEntryPage.p');assert.match(ref.target.textContent,/Reference unavailable/);
 });
