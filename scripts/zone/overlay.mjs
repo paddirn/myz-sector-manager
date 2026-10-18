@@ -1,3 +1,4 @@
+import {imagePath,fitImage,SPECIAL_ACCENT} from '../sector-images.mjs';
 import {gridBounds,coordinateToBounds,positionToCoordinate,canonicalCoordinate} from './grid.mjs';
 import {MODULE} from './store.mjs';
 import {sectorIndicators,drawSectorIcon} from '../sector-icons.mjs';
@@ -5,7 +6,7 @@ import {sectorIndicators,drawSectorIcon} from '../sector-icons.mjs';
 // Passive PIXI objects; board listeners observe background gestures without
 // cancelling Foundry events. One-shot calibration remains explicitly armed.
 export class ZoneOverlay {
-  constructor(store,env=globalThis){this.store=store;this.env=env;this.root=null;this.cancelPick=null;this.suppressed=false;this.preview=null;this.cells=new Map();this.onSelect=async()=>{};}
+  constructor(store,env=globalThis){this.store=store;this.env=env;this.root=null;this.cancelPick=null;this.suppressed=false;this.preview=null;this.cells=new Map();this.onSelect=async()=>{};this.imageLoads=new Map();this.draft=null;}
   destroy(){
     this.unbind?.();this.unbind=null;this.tooltip?.remove();this.tooltip=null;this.hoverCode=null;this.gesture=null;this.cells.clear();this.signature=null;
     if(this.root){this.root.parent?.removeChild(this.root);if(!this.root.destroyed)this.root.destroy({children:true});this.root=null;}
@@ -30,7 +31,7 @@ export class ZoneOverlay {
     }
     const signature=JSON.stringify([config.sceneId,config.grid,config.overlay,config.arkCoordinate,clip,labelClip,Boolean(this.preview)]);
     if(this.root&&this.signature===signature&&this.root.parent===canvas.stage){this.refreshSectors();return;}
-    this.destroy();this.signature=signature;this.clip=clip;this.config=config;
+    this.destroy();this.signature=signature;this.clip=clip;this.labelClip=labelClip;this.config=config;
     const root=this.root=new PIXI.Container();root.eventMode='none';root.interactiveChildren=false;root.name='myz-zone-overlay';canvas.stage.addChild(root);
     const graphics=new PIXI.Graphics();root.addChild(graphics);
     const mask=new PIXI.Graphics().beginFill(0xffffff).drawRect(clip.x,clip.y,clip.right-clip.x,clip.bottom-clip.y).endFill();mask.eventMode='none';root.addChild(mask);root.mask=mask;
@@ -46,13 +47,14 @@ export class ZoneOverlay {
     }
     this.hover=new PIXI.Graphics();this.hover.eventMode='none';root.addChild(this.hover);
     this.refreshSectors();
-    if(config.overlay.labels&&labelClip.right>labelClip.x&&labelClip.bottom>labelClip.y){
+    if(labelClip.right>labelClip.x&&labelClip.bottom>labelClip.y){
       // Preserve the existing 2,000-label budget. All squares remain navigable.
       let labels=0;
       for(let x=bounds.x+Math.floor((labelClip.x-bounds.x)/config.grid.width)*config.grid.width;x<labelClip.right;x+=config.grid.width){
         for(let y=bounds.y+Math.floor((labelClip.y-bounds.y)/config.grid.height)*config.grid.height;y<labelClip.bottom;y+=config.grid.height){
           if(labels++>=2000)break;
           const code=positionToCoordinate({x:x+config.grid.width/2,y:y+config.grid.height/2},config.grid);if(!code)continue;
+          if(this.cells.has(code))continue;
           const cell={code,bounds:{x,y,width:config.grid.width,height:config.grid.height},signature:null,root:null};this.cells.set(code,cell);this.updateCell(cell);
         }
         if(labels>=2000)break;
@@ -60,26 +62,39 @@ export class ZoneOverlay {
     }
     if(!this.preview)this.bind();
   }
+  setDraft(id,data){this.draft={id,data};this.draw();}
+  clearDraft(){this.draft=null;this.draw();}
   refreshSectors(){
     this.records=new Map();
-    for(const journal of this.env.game.journal){const data=journal.getFlag(MODULE,'sector');if(data?.version!==1)continue;const code=canonicalCoordinate(data.code);if(code&&!this.records.has(code))this.records.set(code,data);}
+    for(const journal of this.env.game.journal){const data=this.draft&&this.draft.id===journal.id?this.draft.data:journal.getFlag(MODULE,'sector');if(data?.version!==1)continue;const code=canonicalCoordinate(data.code);if(code&&!this.records.has(code))this.records.set(code,data);}
+    if(!this.preview&&this.labelClip)for(const [code,data] of this.records){
+      if(data.sectorType!=='special'||this.cells.has(code))continue;const b=coordinateToBounds(code,this.config.grid),c=this.labelClip;
+      if(b&&b.x<c.right&&b.x+b.width>c.x&&b.y<c.bottom&&b.y+b.height>c.y)this.cells.set(code,{code,bounds:b,signature:null,root:null});
+    }
     for(const cell of this.cells.values())this.updateCell(cell);
     if(this.hoverCode&&this.lastPointer)this.showTooltip(this.hoverCode,this.lastPointer);
   }
   updateCell(cell){
     const data=this.records.get(cell.code),info=data?sectorIndicators(data):null;
-    const signature=JSON.stringify(info);if(cell.signature===signature&&cell.root)return;
+    const special=data?.sectorType==='special'&&!this.preview;
+    const signature=JSON.stringify([info,special,special?data.special?.overlayImage:null]);if(cell.signature===signature&&cell.root)return;
     cell.signature=signature;
     if(cell.root){this.root.removeChild(cell.root);cell.root.destroy({children:true});}
     const {PIXI}=this.env,b=cell.bounds,root=cell.root=new PIXI.Container();root.eventMode='none';root.interactiveChildren=false;this.root.addChild(root);
+    if(special){const highlight=new PIXI.Graphics();highlight.eventMode='none';highlight.name='special-sector-highlight';highlight.lineStyle(4,0x17111f,.9).drawRect(b.x+2,b.y+2,b.width-4,b.height-4);highlight.lineStyle(2,SPECIAL_ACCENT,1).beginFill(SPECIAL_ACCENT,.12).drawRect(b.x+2,b.y+2,b.width-4,b.height-4).endFill();root.addChild(highlight);}
     const mask=new PIXI.Graphics().beginFill(0xffffff).drawRect(b.x+1,b.y+1,b.width-2,b.height-2).endFill();root.addChild(mask);root.mask=mask;
     const font=Math.max(1,Math.min(18,b.width/7,b.height/7)),padding=Math.min(4,b.width*.04,b.height*.04),available=b.width-padding*2;
     const text=(value,x,y,size=font,fill=0xfaf0d4)=>{
       const label=new PIXI.Text(String(value),{fontFamily:'Arial',fontSize:size,fill,stroke:0x111111,strokeThickness:Math.min(3,font/5),wordWrap:true,wordWrapWidth:available,breakWords:true});label.eventMode='none';label.position.set(x,y);root.addChild(label);return label;
     };
+    if(special&&imagePath(data.special?.overlayImage))this.addImage(cell,root,data.special.overlayImage,{x:b.x+padding,y:b.y+padding+font*1.2,width:available,height:Math.max(1,b.height/3-padding*2-font*1.2)});
+    if(!this.config.overlay.labels)return;
     text(cell.code,b.x+padding,b.y+padding,font,data?0xfaf0d4:0x929a9f);
     if(!info)return;
-    if(info.terrain.visible)text(info.terrain.value,b.x+padding,b.y+padding+font*1.25,font*.7);
+    if(info.terrain.visible){
+      if(special){const label=text(info.terrain.value,0,0,font*.8);label.name='special-sector-terrain';const region={width:available,height:b.height*.22};if(label.width>0&&label.height>0){const scale=Math.min(1,region.width/label.width,region.height/label.height);label.scale?.set(scale);label.position.set(b.x+(b.width-label.width)/2,b.y+b.height-padding-label.height);}}
+      else text(info.terrain.value,b.x+padding,b.y+padding+font*1.25,font*.7);
+    }
     const size=font*.85,step=font*1.35;let x=b.x+padding,y=b.y+b.height*.56;
     for(const key of ['rot','encounters','phenomena','loot','status']){
       const indicator=info[key];if(!indicator.visible||(key==='status'&&!this.config.overlay.status))continue;
@@ -89,6 +104,19 @@ export class ZoneOverlay {
       if(indicator.value!=='')text(indicator.value,x+size,y,font*.7);
       x+=width;
     }
+  }
+  async addImage(cell,root,path,region){
+    const {PIXI}=this.env;
+    if(!this.imageLoads.has(path)){
+      if(this.imageLoads.size>=64)this.imageLoads.delete(this.imageLoads.keys().next().value);
+      const load=this.env.foundry?.canvas?.loadTexture;
+      const pending=Promise.resolve().then(()=>load?load(path):PIXI.Assets.load(path)).catch(()=>{if(this.imageLoads.get(path)===pending)this.imageLoads.delete(path);return null;});
+      this.imageLoads.set(path,pending);
+    }
+    const texture=await this.imageLoads.get(path);
+    if(!texture||root.destroyed||cell.root!==root||!this.root||!PIXI.Sprite)return;
+    const size=fitImage(texture.width,texture.height,region);if(!size)return;
+    const image=new PIXI.Sprite(texture);image.eventMode='none';image.name='special-sector-image';image.position.set(size.x,size.y);image.width=size.width;image.height=size.height;root.addChild(image);
   }
   point(event){
     const {canvas,PIXI}=this.env,board=canvas.app?.canvas||canvas.app?.view,rect=board?.getBoundingClientRect(),screen=canvas.app?.screen;

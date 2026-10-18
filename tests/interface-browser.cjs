@@ -12,6 +12,8 @@ const path=require('node:path');
   const browser=await chromium.launch({headless:true,executablePath,args:['--no-sandbox']});
   const root=path.resolve(__dirname,'..');
   const server=http.createServer((request,response)=>{
+    if(['/test-wide.svg','/test-tall.svg'].includes(request.url)){response.setHeader('Content-Type','image/svg+xml');response.end(`<svg xmlns="http://www.w3.org/2000/svg" width="${request.url.includes('wide')?600:100}" height="${request.url.includes('wide')?100:600}"><rect width="100%" height="100%" fill="orange"/></svg>`);return;}
+    if(request.url==='/missing.png'){response.writeHead(404);response.end();return;}
     const file=path.resolve(root,'.'+decodeURIComponent(request.url));
     if(!file.startsWith(root+'/scripts/')){response.writeHead(200,{'Content-Type':'text/html'});response.end('<html></html>');return;}
     try{response.writeHead(200,{'Content-Type':'text/javascript'});response.end(readFileSync(file));}catch{response.writeHead(404);response.end();}
@@ -29,7 +31,7 @@ const path=require('node:path');
       button{cursor:pointer}textarea{font:inherit}input,select{height:28px}input[type=checkbox]{height:16px}
     </style>`);
     await page.addScriptTag({content:`
-      let ready;const initCallbacks=[];let identity=0;const hookCallbacks=new Map();globalThis.notifyErrors=[];
+      let ready;const initCallbacks=[];let identity=0;const hookCallbacks=new Map();globalThis.notifyErrors=[];globalThis.notifyWarnings=[];
       globalThis.nativeClicks=[];
       class ApplicationV2 {
         constructor(options={}){this.options=options;this.rendered=false;}
@@ -62,7 +64,7 @@ const path=require('node:path');
       globalThis.foundry={utils:{deepClone:value=>structuredClone(value),randomID:()=> 'identity'+(++identity)},applications:{api:{ApplicationV2,DialogV2:{confirm:async()=>true}},ux:{TextEditor:{implementation:editor}}}};
       globalThis.Hooks={once:(name,callback)=>{if(name==='ready')ready=callback;else initCallbacks.push(callback);},on:(name,callback)=>{if(!hookCallbacks.has(name))hookCallbacks.set(name,new Map());const id=++identity;hookCallbacks.get(name).set(id,callback);return id;},off:(name,id)=>hookCallbacks.get(name)?.delete(id),call:(name,...args)=>{for(const callback of hookCallbacks.get(name)?.values()||[])callback(...args);}};
       globalThis.fromUuid=async uuid=>docs.get(uuid);
-      globalThis.ui={notifications:{info(){},warn(){},error:message=>notifyErrors.push(message)}};
+      globalThis.ui={notifications:{info(){},warn:message=>notifyWarnings.push(message),error:message=>notifyErrors.push(message)}};
       const data={version:1,nameOverride:false,code:'A2',status:'Explored',terrain:'Forest',rot:0,description:'Long description',notes:'GM notes',supplies:{cleanGrub:{quantity:2.75,collected:true}}};
       for(const key of ['locations','encounters','loot','effects','secrets','history'])data[key]=Array.from({length:20},(_,i)=>({title:'Entry '+(i+1),details:'Existing notes '+i,uuid:key==='locations'?'Scene.one':key==='encounters'?'Actor.one':key==='loot'?'Item.one':''}));
       globalThis.records=Array.from({length:70},(_,i)=>({id:'sector'+i,name:i===1?'A very long sector name that must wrap rather than being clipped':'Sector '+i,flags:structuredClone({...data,code:'A'+(i+1)}),getFlag(mod,key){return key==='sector'?this.flags:undefined;},async update(update){Object.assign(this,update);if(update['flags.myz-sector-manager.sector'])this.flags=structuredClone(update['flags.myz-sector-manager.sector']);},async setFlag(mod,key,flags){this.flags=structuredClone(flags);}}));
@@ -76,7 +78,7 @@ const path=require('node:path');
       }};
       class Container{constructor(){this.children=[];}addChild(child){this.children.push(child);child.parent=this;return child;}removeChild(child){this.children=this.children.filter(item=>item!==child);child.parent=null;}destroy(){this.destroyed=true;for(const child of this.children)child.destroy?.();}}
       class Graphics extends Container{clear(){return this;}drawCircle(){return this;}lineStyle(){return this;}moveTo(){return this;}lineTo(){return this;}beginFill(){return this;}drawRect(){return this;}endFill(){return this;}}
-      class Text extends Container{constructor(){super();this.position={set(){}};}}
+      class Text extends Container{constructor(text,style){super();this.text=text;this.width=String(text).length*style.fontSize*.5;this.height=style.fontSize;this.scale={set:v=>{this.width*=v;this.height*=v;}};this.position={set:(x,y)=>{this.x=x;this.y=y;}};}}
       globalThis.PIXI={Container,Graphics,Text,Point:class{constructor(x,y){this.x=x;this.y=y;}}};
       const board=document.createElement('canvas');board.width=1400;board.height=900;board.style.cssText='position:fixed;left:0;top:0;width:1400px;height:900px';document.body.prepend(board);
       const stage=new Container();stage.zoom=1;stage.pan={x:0,y:0};stage.toLocal=point=>({x:(point.x-stage.pan.x)/stage.zoom,y:(point.y-stage.pan.y)/stage.zoom});
@@ -656,7 +658,7 @@ const path=require('node:path');
     await page.evaluate(()=>{const scene=game.scenes.get('zone'),token=scene.tokens.get('party');scene.tokens.delete('party');Hooks.call('deleteToken',token);});
     await page.waitForFunction(()=>zoneState().groups[0].location.status==='missing-token');
     assert.equal(await page.evaluate(()=>zoneState().groups[0].lastKnown),'C1');
-    await page.evaluate(()=>{game.scenes.delete('zone');Hooks.call('deleteScene',{id:'zone'});});
+    await page.evaluate(()=>{globalThis.lastZoneScene=game.scenes.get('zone');game.scenes.delete('zone');Hooks.call('deleteScene',{id:'zone'});});
     await page.waitForFunction(()=>document.querySelector('.sm-zone-summary').textContent.includes('Scene is missing'));
     // Author a complete Special sector, then convert it repeatedly without losing hidden data.
     await page.evaluate(()=>docs.set('Scene.one',{uuid:'Scene.one',name:'World Scene',documentName:'Scene',_onClickDocumentLink:async()=>nativeClicks.push('Scene.one')}));
@@ -668,7 +670,7 @@ const path=require('node:path');
     await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>{const element=document.createElement('div');element.innerHTML=options.content;element.querySelector('[name="newSectorType"][value="special"]').checked=true;element.querySelector('[name="newSectorCode"]').value='Z99';return options.buttons.find(button=>button.action==='create').callback(null,null,{element});};});
     await page.locator('[data-action="new"]').click();await page.waitForFunction(()=>manager.draft?.code==='Z99');
     const specialId=await page.evaluate(()=>manager.sectorId);
-    assert.deepEqual(await tabs(),['Overview','The Situation','Inhabitants','Gear & Artifacts','Events','Find the Path','History']);
+    assert.deepEqual(await tabs(),['Overview','The Situation','Inhabitants','Gear & Artifacts','Events','Images','Find the Path','History']);
     assert.equal(await page.locator('[data-action="randomize"]').count(),0);assert.equal(await page.evaluate(()=>manager.draft.initialSavePending),true);
     await page.locator('[data-sector-name]').fill('The Doom Sphere');assert.equal(await page.locator('[data-sector-heading]').innerText(),'Z99 - The Doom Sphere');
     await page.locator('[name="code"]').fill('Z100');assert.equal(await page.locator('[data-sector-heading]').innerText(),'Z100 - The Doom Sphere');
@@ -719,9 +721,52 @@ const path=require('node:path');
     await page.evaluate(async()=>{manager.draft.special.sceneUuid='Scene.missing';await manager.render();});assert.match(await page.locator('[data-reference-link]').innerText(),/Missing reference/);await page.locator('[data-reference-clear]').click();await saveSpecial();
     await page.evaluate(()=>manager.element.style.width='600px');
     assert(await page.locator('.sm-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
-    await page.locator('[data-tab="The Situation"]').click();assert.equal(await page.locator('[name="special.situation"]').getAttribute('rows'),'12');
+    await page.locator('[data-tab="The Situation"]').click();assert.equal(await page.locator('[name="special.situation"]').getAttribute('rows'),'7');
     assert(await page.locator('.sm-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
     console.log('Special creation, full authoring, world/compendium references, manual item types, multiline persistence, shared stunts/history and repeated lossless conversion pass');
+
+    // Image assets are served by this fixture; no licensed Foundry instance is loaded.
+    await page.evaluate(async()=>{
+      game.scenes.set('zone',lastZoneScene);await lastZoneScene.view();manager.element.style.width='920px';
+      class Picker{constructor(options){globalThis.filePickerOptions=options;}async render(){globalThis.filePickerOpens=(globalThis.filePickerOpens||0)+1;filePickerOptions.callback(globalThis.pickedImagePath);}}
+      foundry.applications.apps={FilePicker:{implementation:Picker}};globalThis.pickedImagePath='/test-wide.svg';
+      for(const [uuid,documentName,name,type,src] of [['Actor.drop','Actor','World drop Actor'],['Compendium.myz.actors.Actor.drop','Actor','Pack drop Actor'],['Item.drop','Item','World drop Weapon','weapon'],['Compendium.myz.items.Item.drop','Item','Pack drop Armor','armor'],['JournalEntry.images.JournalEntryPage.wide','JournalEntryPage','Wide Illustration','image','/test-wide.svg'],['Compendium.myz.images.JournalEntry.book.JournalEntryPage.tall','JournalEntryPage','Tall Illustration','image','/test-tall.svg'],['JournalEntry.images.JournalEntryPage.text','JournalEntryPage','Text Page','text','/test-wide.svg']])docs.set(uuid,{uuid,documentName,name,type,src,_onClickDocumentLink:async()=>nativeClicks.push(uuid)});
+    });
+    await page.locator('[data-tab="Overview"]').click();await page.locator('[name="code"]').fill('B2');await saveSpecial();
+    const overlayChildren=()=>page.evaluate(()=>canvas.stage.children.flatMap(root=>root.children||[]).flatMap(root=>root.children||[]).map(child=>({name:child.name,text:child.text})));
+    await page.waitForFunction(()=>canvas.stage.children.some(root=>root.children.some(cell=>cell.children?.some(child=>child.name==='special-sector-highlight'))));
+    await page.locator('[data-overlay-image-pick]').click();await page.waitForFunction(()=>manager.draft.special.overlayImage==='/test-wide.svg');assert.equal(await page.evaluate(()=>filePickerOptions.type),'image');
+    await page.waitForFunction(()=>document.querySelector('[data-overlay-preview] img')?.naturalWidth===600);
+    await page.locator('[name="terrain"]').fill('Live Special Terrain');assert((await overlayChildren()).some(child=>child.name==='special-sector-terrain'&&child.text==='Live Special Terrain'));
+    await page.evaluate(()=>pickedImagePath='/test-tall.svg');await page.locator('[data-overlay-image-pick]').click();assert.equal(await page.evaluate(()=>filePickerOptions.current),'/test-wide.svg');await page.waitForFunction(()=>manager.draft.special.overlayImage==='/test-tall.svg');
+    await page.locator('[data-overlay-image-clear]').click();assert.equal(await page.evaluate(()=>manager.draft.special.overlayImage),'');assert.equal(await page.locator('[data-overlay-preview] img').count(),0);
+    await page.evaluate(()=>pickedImagePath='/missing.png');await page.locator('[data-overlay-image-pick]').click();await page.waitForFunction(()=>document.querySelector('[data-overlay-preview]').textContent.includes('missing'));
+    await page.evaluate(()=>pickedImagePath='/test-wide.svg');await page.locator('[data-overlay-image-pick]').click();await saveSpecial();assert.equal(await page.evaluate(()=>manager.journal.getFlag('myz-sector-manager','sector').special.overlayImage),'/test-wide.svg');
+    await page.locator('[data-tab="The Situation"]').click();const situation=page.locator('[data-autosize]');
+    await situation.fill('');const minimum=await situation.evaluate(el=>({height:el.offsetHeight,line:parseFloat(getComputedStyle(el).lineHeight)}));assert(minimum.height>=minimum.line*7);
+    const situationLong=Array.from({length:45},(_,i)=>'Situation line '+i).join('\n');await situation.fill(situationLong);const expanded=await situation.evaluate(el=>({height:el.offsetHeight,scroll:el.scrollHeight,client:el.clientHeight}));assert(expanded.height>minimum.height*3);assert(expanded.scroll<=expanded.client+1);
+    await situation.fill('Short\nTwo lines');assert(await situation.evaluate(el=>el.offsetHeight)<expanded.height);await situation.fill(situationLong);await saveSpecial();await page.locator('[data-tab="Overview"]').click();await page.locator('[data-tab="The Situation"]').click();assert(await page.locator('[data-autosize]').evaluate(el=>el.offsetHeight)>minimum.height*3);
+    const blankDrop=async(uuid,type,twice=false)=>{await page.locator('.sm-content').evaluate((el,{uuid,type,twice})=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({uuid,type}));const event=new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true});el.dispatchEvent(event);if(twice)el.dispatchEvent(event);},{uuid,type,twice});await page.waitForFunction(()=>!manager.droppingEntry);};
+    await page.locator('[data-tab="Inhabitants"]').click();const inhabitantCount=await page.locator('.sm-entry').count();
+    await page.evaluate(()=>{manager.journal.getFlag('myz-sector-manager','sector').initialSavePending=true;});await blankDrop('Actor.drop','Actor');assert.equal(await page.locator('.sm-entry').count(),inhabitantCount);assert.match(await page.evaluate(()=>notifyWarnings.at(-1)),/Save this Special sector/);await page.evaluate(()=>delete manager.journal.getFlag('myz-sector-manager','sector').initialSavePending);
+    await page.locator('.sm-content').evaluate(el=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({uuid:'Actor.drop',type:'Actor'}));el.dispatchEvent(new DragEvent('dragover',{dataTransfer:transfer,bubbles:true,cancelable:true}));});assert(await page.locator('.sm-content').evaluate(el=>el.classList.contains('sm-drop-hover')));
+    await blankDrop('Actor.drop','Actor',true);assert.equal(await page.locator('.sm-entry').count(),inhabitantCount+1);assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');assert.equal(await page.evaluate(()=>manager.journal.getFlag('myz-sector-manager','sector').special.inhabitants.at(-1).uuid),'Actor.drop');
+    await blankDrop('Compendium.myz.actors.Actor.drop','Actor');assert.equal(await page.locator('.sm-entry').count(),inhabitantCount+2);
+    const droppedActor=page.locator('.sm-entry').last();await droppedActor.locator('[data-entry-toggle]').click();await dropSpecial(droppedActor.locator('[data-reference]'),'Actor.drop');assert.equal(await page.locator('.sm-entry').count(),inhabitantCount+2);await saveSpecial();
+    await blankDrop('Item.drop','Item');assert.equal(await page.locator('.sm-entry').count(),inhabitantCount+2);assert.match(await page.evaluate(()=>notifyWarnings.at(-1)),/requires an Actor/);
+    await page.locator('[data-tab="Gear & Artifacts"]').click();const gearCount=await page.locator('.sm-entry').count();for(const [uuid,type] of [['Item.drop','weapon'],['Compendium.myz.items.Item.drop','armor']]){await blankDrop(uuid,'Item');assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');assert.equal(await page.evaluate(()=>manager.journal.getFlag('myz-sector-manager','sector').special.gear.at(-1).type),type);assert.equal(await page.evaluate(()=>manager.draft.special.gear.at(-1).quantity),1);}assert.equal(await page.locator('.sm-entry').count(),gearCount+2);
+    await page.locator('[data-tab="Images"]').click();assert.equal(await page.locator('.sm-entry').count(),0);
+    for(const uuid of ['JournalEntry.images.JournalEntryPage.wide','Compendium.myz.images.JournalEntry.book.JournalEntryPage.tall'])await blankDrop(uuid,'JournalEntryPage');
+    assert.equal(await page.locator('.sm-entry').count(),2);assert.equal(await page.locator('[data-image-preview] img').count(),2);assert.equal(await page.locator('[data-image-metadata][open]').count(),0);await page.waitForFunction(()=>document.querySelector('[data-image-preview] img')?.naturalWidth===600);
+    await blankDrop('JournalEntry.images.JournalEntryPage.text','JournalEntryPage');assert.equal(await page.locator('.sm-entry').count(),2);assert.match(await page.evaluate(()=>notifyWarnings.at(-1)),/Image-type Journal page/);
+    await page.locator('[data-action="add"]').click();assert.equal(await page.locator('.sm-entry').count(),3);const manualImage=page.locator('.sm-entry').last();assert.match(await manualImage.locator('[data-image-preview]').innerText(),/Assign an Image-type/);await manualImage.locator('summary').click();await dropSpecial(manualImage.locator('[data-reference]'),'JournalEntry.images.JournalEntryPage.wide');await manualImage.locator('[data-reference] a').click();await page.waitForFunction(()=>nativeClicks.includes('JournalEntry.images.JournalEntryPage.wide'));
+    await manualImage.locator('[name$=".title"]').fill('Manual image title');await manualImage.locator('textarea').fill('Image notes\n\nSecond paragraph');await page.evaluate(()=>globalThis.galleryImage=document.querySelectorAll('[data-image-preview] img')[2]);await manualImage.locator('textarea').fill('Updated notes\n\nSecond paragraph');assert(await page.evaluate(()=>galleryImage===document.querySelectorAll('[data-image-preview] img')[2]));
+    await saveSpecial();const savedGallery=await page.evaluate(()=>structuredClone(manager.journal.getFlag('myz-sector-manager','sector').special));
+    await page.evaluate(async()=>{await manager.navigate('sector1');});await page.evaluate(async id=>{await manager.navigate(id);},specialId);await page.locator('[data-tab="Images"]').click();assert.equal(await page.locator('[data-image-preview] img').count(),3);assert.deepEqual(await page.evaluate(()=>manager.draft.special),savedGallery);
+    await page.locator('[data-action="change-type"]').click();await page.waitForFunction(()=>manager.draft.sectorType==='normal');assert.equal(await page.locator('[data-tab="Images"]').count(),0);await saveSpecial();await page.locator('[data-action="change-type"]').click();await page.waitForFunction(()=>manager.draft.sectorType==='special');await saveSpecial();assert.deepEqual(await page.evaluate(()=>manager.draft.special),savedGallery);
+    await page.locator('[data-tab="Images"]').click();await page.evaluate(async()=>{manager.draft.special.images[0].uuid='JournalEntry.missing.JournalEntryPage.page';await manager.render();});assert.match(await page.locator('[data-image-preview]').first().innerText(),/missing or unavailable/);const broken=page.locator('.sm-entry').first();await broken.locator('summary').click();await broken.locator('[data-reference-clear]').click();assert.match(await broken.locator('[data-image-preview]').innerText(),/Assign an Image-type/);await saveSpecial();
+    await page.evaluate(async()=>{await manager.close();});await page.evaluate(async id=>{globalThis.manager=await game.myzSectorManager.open(id);},specialId);await page.locator('[data-tab="The Situation"]').click();assert.equal(await page.locator('[data-autosize]').inputValue(),situationLong);assert(await page.locator('[data-autosize]').evaluate(el=>el.scrollHeight<=el.clientHeight+1));
+    console.log('FilePicker overlay previews/persistence/live Terrain, seven-line Situation growth/shrink, blank-area autosaved drops, reference isolation, gallery previews/page sources and conversion persistence pass');
 
     assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>notifyErrors),[]);
     console.log('Zone dialog units/tokens/Actor links persist; origin picking respects zoom; confirmed map creation, overlay isolation, closed-window tracking and missing references pass');
