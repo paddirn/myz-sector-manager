@@ -1,3 +1,4 @@
+import {normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion} from './sector-fields.mjs';
 import {LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected} from './loot.mjs';
 import {canonicalCoordinate} from './zone/grid.mjs';
 import {sectorIndicators,iconMarkup} from './sector-icons.mjs';
@@ -14,6 +15,7 @@ const REFERENCES = {locations:'Scene|JournalEntry|JournalEntryPage', encounters:
 // Session-only UI identities: never written to Journal flags.
 const ENTRY_UI = new Map();
 const CONSUMABLE_UI = new Map();
+const OVERVIEW_UI = new Map();
 let entrySequence = 0;
 const SUPPLIES = CONSUMABLES;
 const supplyDefaults = () => Object.fromEntries(Object.keys(SUPPLIES).map(key=>[key,{quantity:0,collected:false}]));
@@ -48,17 +50,19 @@ const TERRAIN_OPTIONS = [
   'Subway Station','Supermarket','Swimming Hall','Tank','Theater','Thick Woods','Train Station',
   'Unscathed Ruins','Windmill'
 ];
-const stuntLabel=(stunt,data)=>`<label class="sm-stunt" title="${attr(stunt.description)}"><input type="checkbox" name="pathStunts.${stunt.id}" ${data.pathStunts?.[stunt.id]?'checked':''}><span>${escapeHTML(stunt.label)}${stunt.group==='talent'?` (${escapeHTML(stunt.source)})`:''}<small>${escapeHTML(stunt.description!==stunt.label?stunt.description:'')}</small></span></label>`;
+const stuntLabel=(stunt,data)=>`<label class="sm-stunt" title="${attr(stunt.description)}"><input type="checkbox" name="pathStunts.${stunt.id}" ${stunt.id!=='safePath'&&!data.pathStunts?.safePath?'disabled':''} ${data.pathStunts?.[stunt.id]?'checked':''}><span>${escapeHTML(stunt.label)}${stunt.group==='talent'?` (${escapeHTML(stunt.source)})`:''}<small>${escapeHTML(stunt.id==='safePath'?'Basic effect: does not use an additional stunt success.':stunt.description!==stunt.label?stunt.description:'')}</small></span></label>`;
 const travelCalculator=data=>{
   const o=sectorTravelOptions(data),t=travelTimes(o);
   const modifiers=[['rushed','Rushed Exploration (×¼)','Rush through without fully exploring.'],['stalker','Stalker / Find the Path (×½)','Apply the exploration-time benefit only when obtained.'],['open','Open / Empty Terrain (×½)','Open terrain halves exploration time; excludes Difficult Terrain.'],['difficult','Difficult Terrain (×2+)','Use the GM-selected multiplier, at least 2; excludes Open Terrain.'],['night','Nighttime (×2)','Exploring at night doubles exploration time.']];
-  return `<section class="sm-travel"><h3>Exploration &amp; Travel Time</h3><p>Explore Sector: <strong data-explore-time>${formatDuration(t.explore)}</strong></p><p>Pass Through Explored Sector: <strong data-pass-time>${formatDuration(t.pass)}</strong></p><fieldset><legend>Travel Mode</legend>${[['foot','On Foot'],['vehicle','Vehicle']].map(([value,label])=>`<label><input type="radio" name="travel.mode" value="${value}" ${o.mode===value?'checked':''}> ${label}</label>`).join(' ')}</fieldset><fieldset><legend>Exploration Modifiers</legend><div class="sm-modifier-columns">${[modifiers.slice(0,3),modifiers.slice(3)].map(column=>`<div>${column.map(([key,label,tip])=>`<label class="sm-stunt" title="${tip}"><input type="checkbox" name="travel.${key}" ${o[key]?'checked':''}>${label}${key==='difficult'?` <input aria-label="Difficult Terrain multiplier" name="travel.difficulty" type="number" min="2" step="any" value="${o.difficulty}">`:''}</label>`).join('')}</div>`).join('')}</div></fieldset><small>Planning reference only. Linked time stunts save automatically; other options save with Save Sector. Does not advance time, move the party, consume resources, or perform rolls.</small></section>`;
+  return `<section class="sm-travel"><h3>Exploration &amp; Travel Time</h3><p>Explore Sector: <strong data-explore-time>${formatDuration(t.explore)}</strong></p><p>Pass Through Explored Sector: <strong data-pass-time>${formatDuration(t.pass)}</strong></p><fieldset><legend>Travel Mode</legend>${[['foot','On Foot'],['vehicle','Vehicle']].map(([value,label])=>`<label><input type="radio" name="travel.mode" value="${value}" ${o.mode===value?'checked':''}> ${label}</label>`).join(' ')}</fieldset><fieldset><legend>Exploration Modifiers</legend><div class="sm-modifier-columns">${[modifiers.slice(0,3),modifiers.slice(3)].map(column=>`<div>${column.map(([key,label,tip])=>`<label class="sm-stunt" title="${tip}"><input type="checkbox" name="travel.${key}" ${['rushed','stalker'].includes(key)&&!data.pathStunts?.safePath?'disabled':''} ${o[key]?'checked':''}>${label}${key==='difficult'?` <input aria-label="Difficult Terrain multiplier" name="travel.difficulty" type="number" min="2" step="any" value="${o.difficulty}">`:''}</label>`).join('')}</div>`).join('')}</div></fieldset><small>Planning reference only. Linked time stunts save automatically; other options save with Save Sector. Does not advance time, move the party, consume resources, or perform rolls.</small></section>`;
 };
 const pathStunts = data => `<section class="sm-path"><p>Track benefits obtained during the current visit or exploration. Each stunt is available once per Find the Path roll (p. 56). The repeat-search guidance also limits each stunt to once per sector (p. 160). The GM controls resets; these checkboxes do not enforce either restriction. Checkboxes save automatically. Nothing resets automatically, awards resources, changes Rot, or advances world time. Linked time stunts update the reference calculator below.</p><h3>Find the Path Stunts</h3><div class="sm-stunt-columns">${[PATH_STUNTS.slice(0,5),PATH_STUNTS.slice(5)].map(column=>`<div>${column.map(stunt=>stuntLabel(stunt,data)).join('')}</div>`).join('')}</div><button type="button" data-action="reset-stunts">Reset Stunts</button>${travelCalculator(data)}</section>`;
 const sectorIcon=(data,key)=>{const info=sectorIndicators(data)[key];return `<span data-icon-slot="${key}">${iconMarkup(info.icon,info.title)}</span>`;};
-const environmentFields = data => `<label class="sm-field"><span>${sectorIcon(data,'terrain')} Terrain</span><input name="terrain" type="text" list="sm-terrain-options" value="${attr(data.terrain)}"><datalist id="sm-terrain-options">${TERRAIN_OPTIONS.map(value=>`<option value="${attr(value)}"></option>`).join('')}</datalist></label><label class="sm-field"><span>${sectorIcon(data,'rot')} Rot Level</span><select name="rot">${ROT_LEVELS.some(entry=>String(entry.level)===String(data.rot))?'':`<option value="${attr(data.rot)}" selected>Existing value: ${escapeHTML(data.rot)}</option>`}${ROT_LEVELS.map(entry=>`<option value="${entry.level}" ${String(entry.level)===String(data.rot)?'selected':''}>${entry.level} — ${entry.label}: ${entry.exposure}</option>`).join('')}</select><small data-rot-exposure>${escapeHTML(ROT_LEVELS.find(entry=>String(entry.level)===String(data.rot))?.exposure||'Existing value retained; select a level to change it.')}</small></label>`;
-const normalize = (data,title='') => {const result=sectorNaming(foundry.utils.deepClone(data),title);  result.pathStunts ??= {}; for(const stunt of PATH_STUNTS) result.pathStunts[stunt.id] ??= false; result.travel=sectorTravelOptions(result); result.loot=(result.loot||[]).map(normalizeLoot); result.supplies ??= {}; for(const key of Object.keys(SUPPLIES)) result.supplies[key] ??= {quantity:0,collected:false}; return result;};
-const DEFAULT = () => ({version:1, nameOverride:false, customName:'', pathStunts:{}, code:'', terrain:'', rot:0, status:'Unexplored', description:'', notes:'', locations:[], encounters:[], loot:[], effects:[], secrets:[], history:[], supplies:supplyDefaults()});
+const threatField=data=>`<div class="sm-field"><label for="sm-threat-level">Threat Level</label><div class="sm-threat-stepper"><button type="button" data-threat-step="-1" aria-label="Decrease Threat Level">−</button><input id="sm-threat-level" name="threatLevel" type="number" min="0" step="1" value="${sectorThreatLevel(data)}"><button type="button" data-threat-step="1" aria-label="Increase Threat Level">+</button></div><small data-threat-descriptor>${threatDescriptor(sectorThreatLevel(data))}</small></div>`;
+const terrainField = data => `<label class="sm-field"><span>${sectorIcon(data,'terrain')} Terrain</span><input name="terrain" type="text" list="sm-terrain-options" value="${attr(data.terrain)}"><datalist id="sm-terrain-options">${TERRAIN_OPTIONS.map(value=>`<option value="${attr(value)}"></option>`).join('')}</datalist></label>`;
+const rotField=data=>`<label class="sm-field"><span>${sectorIcon(data,'rot')} Rot Level</span><select name="rot">${ROT_LEVELS.some(entry=>String(entry.level)===String(data.rot))?'':`<option value="${attr(data.rot)}" selected>Existing value: ${escapeHTML(data.rot)}</option>`}${ROT_LEVELS.map(entry=>`<option value="${entry.level}" ${String(entry.level)===String(data.rot)?'selected':''}>${entry.level} - ${entry.label}</option>`).join('')}</select><small data-rot-exposure>${escapeHTML(ROT_LEVELS.find(entry=>String(entry.level)===String(data.rot))?.exposure||'Existing value retained; select a level to change it.')}</small></label>`;
+const normalize = (data,title='') => {const result=sectorNaming(cleanThreatRecord(data),title);  result.pathStunts=normalizePathStunts(result.pathStunts,{legacy:true});result.threatLevel=sectorThreatLevel(result); result.travel=sectorTravelOptions(result); result.loot=(result.loot||[]).map(normalizeLoot); result.supplies ??= {}; for(const key of Object.keys(SUPPLIES)) result.supplies[key] ??= {quantity:0,collected:false}; return result;};
+const DEFAULT = () => ({version:1, threatLevel:1, nameOverride:false, customName:'', pathStunts:{}, code:'', terrain:'', rot:0, status:'Unexplored', description:'', notes:'', locations:[], encounters:[], loot:[], effects:[], secrets:[], history:[], supplies:supplyDefaults()});
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const attr = escapeHTML;
 const field = (label,name,value='',type='text') => `<label class="sm-field"><span>${escapeHTML(label)}</span><input name="${attr(name)}" type="${type}" value="${attr(value)}" ${type==='number'?'min="0" step="1"':''}></label>`;
@@ -117,7 +121,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     let main=`<section class="sm-main"><header class="sm-header"><h2>Zone Sectors</h2><div class="sm-header-buttons"><button type="button" disabled>Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<div class="sm-content"><div class="sm-empty"><p>Create a sector or select one from the list. Each record is a GM-only Journal Entry.</p></div></div></section>`;
     if(j){
       let body='';
-      if(this.tab==='Overview') body=`<div class="sm-grid"><div class="sm-field"><label for="sm-sector-name">Sector name</label><div class="sm-name-control"><input id="sm-sector-name" data-sector-name value="${attr(sectorName(d))}"><button type="button" data-action="reset-name">Reset to Default</button></div></div>${field('Sector ID / Coordinates','code',d.code)}${environmentFields(d)}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost']).replace('<span>Exploration Status</span>',`<span>${sectorIcon(d,'status')} Exploration Status</span>`)}</div>${area('Mood','mood',d.mood||'')}${area('Description','description',d.description)}${area('GM Notes','notes',d.notes)}`;
+      if(this.tab==='Overview') body=`<div class="sm-overview-grid"><div class="sm-field"><label for="sm-sector-name">Sector name</label><div class="sm-name-control"><input id="sm-sector-name" data-sector-name value="${attr(sectorName(d))}"><button type="button" data-action="reset-name">Reset to Default</button></div></div>${field('Coordinates','code',d.code).replace('<input name="code"','<input size="4" name="code"')}${terrainField(d)}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost']).replace('<span>Exploration Status</span>',`<span>${sectorIcon(d,'status')} Exploration Status</span>`)}${rotField(d)}${threatField(d)}</div>${this.overviewSection('Mood','mood',d.mood)}${this.overviewSection('Description','description',d.description)}${area('GM Notes','notes',d.notes)}`;
       else if(this.tab==='Find the Path') body=pathStunts(d);
       else {
         const key=COLLECTIONS[this.tab], arr=d[key]||[];
@@ -153,6 +157,19 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-tabs .sm-tab-empty:not(.active){opacity:.65}
       .myz-sector-manager .sm-tabs .sm-tab-empty.active{border-style:dashed}
       .myz-sector-manager .sm-content{flex:1;min-height:0;min-width:0;overflow-y:auto;overflow-x:hidden;padding:15px;scrollbar-gutter:stable}
+      .myz-sector-manager .sm-overview-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,.8fr) minmax(0,1fr);gap:10px;align-items:start}
+      .myz-sector-manager .sm-overview-grid [name=code]{width:6ch;max-width:100%}
+      .myz-sector-manager .sm-overview-grid [name=terrain]{width:100%;min-width:0}
+      .myz-sector-manager .sm-overview-grid select{width:auto;max-width:100%;min-width:0}
+      .myz-sector-manager .sm-threat-stepper{display:flex;gap:3px;align-items:center}
+      .myz-sector-manager .sm-threat-stepper input{width:6ch;min-width:0;text-align:center}
+      .myz-sector-manager .sm-threat-stepper button{width:26px;flex:none;padding:0}
+      .myz-sector-manager .sm-overview-section{border:1px solid #777;border-radius:4px;padding:8px;margin:8px 0}
+      .myz-sector-manager .sm-overview-section summary{cursor:pointer;font-weight:bold}
+      .myz-sector-manager .sm-overview-section textarea{width:100%;margin-top:6px}
+      .myz-sector-manager .sm-stunt:has(input:disabled){opacity:.5;cursor:default}
+      @container (max-width:560px){.myz-sector-manager .sm-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      @container (max-width:380px){.myz-sector-manager .sm-overview-grid{grid-template-columns:1fr}}
       .myz-sector-manager .sm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
       .myz-sector-manager .sm-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;min-width:0}
       .myz-sector-manager .sm-field span{font-weight:bold}
@@ -231,8 +248,11 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       b.addEventListener('click',event=>{clearTimeout(this.sidebarClick);if(event.detail===0){void this.navigate(b.dataset.open);return;}this.sidebarClick=setTimeout(()=>{void this.navigate(b.dataset.open);},300);});
       b.addEventListener('dblclick',event=>{event.preventDefault();clearTimeout(this.sidebarClick);void this.centerSidebarSector(b.dataset.open);});
     });
-    el.querySelectorAll('[name^="pathStunts."],[name="travel.stalker"],[name="travel.rushed"]').forEach(input=>input.addEventListener('change',()=>{this.syncTimeStunt(input);this.capture();this.refreshTravelTimes();void this.persistStunts().catch(error=>{this.markDirty();ui.notifications.error(`Could not save stunts: ${error.message}. Use Save Sector to retry.`);});}));
+    el.querySelectorAll('[name^="pathStunts."],[name="travel.stalker"],[name="travel.rushed"]').forEach(input=>input.addEventListener('change',()=>{this.syncTimeStunt(input);this.capture();this.refreshStuntControls();this.refreshTravelTimes();void this.persistStunts().catch(error=>{this.markDirty();ui.notifications.error(`Could not save stunts: ${error.message}. Use Save Sector to retry.`);});}));
     el.querySelectorAll('[name^="loot."][name$=".collected"]').forEach(input=>input.addEventListener('change',()=>{this.capture();this.refreshLootCards();const card=input.closest('[data-entry]');this.setCollapsed('loot',card.dataset.entry,input.checked);void this.persistLoot().catch(error=>{this.markDirty();ui.notifications.error(`Could not save Loot: ${error.message}. Use Save Sector to retry.`);});}));
+    el.querySelectorAll('[data-overview-section]').forEach(section=>section.addEventListener('toggle',()=>{this.overviewState()[section.dataset.overviewSection]=!section.open;}));
+    el.querySelectorAll('[data-threat-step]').forEach(button=>button.addEventListener('click',()=>{const input=el.querySelector('[name="threatLevel"]');input.value=normalizeThreatLevel(Number(input.value)+Number(button.dataset.threatStep),sectorThreatLevel(this.data));input.dispatchEvent(new Event('input',{bubbles:true}));}));
+    el.querySelector('[name="threatLevel"]')?.addEventListener('change',event=>{event.target.value=this.draft.threatLevel;});
     el.querySelector('[name="rot"]')?.addEventListener('change',event=>{
       const hint=el.querySelector('[data-rot-exposure]');if(hint)hint.textContent=ROT_LEVELS.find(entry=>String(entry.level)===event.target.value)?.exposure||'Existing value retained.';
     });
@@ -249,15 +269,26 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     el.querySelector('[data-filter]')?.addEventListener('input',e=>{this.filter=e.target.value;el.querySelectorAll('[data-open]').forEach(b=>{b.hidden=!b.dataset.search.includes(this.filter.toLowerCase());});const empty=el.querySelector('[data-sector-empty]');if(empty)empty.hidden=Array.from(el.querySelectorAll('[data-open]')).some(b=>!b.hidden);});
     el.querySelectorAll('.sm-content input,.sm-content select,.sm-content textarea').forEach(e=>e.addEventListener('input',()=>{
       if(!e.name?.startsWith('pathStunts.')&&!LINKED_STUNTS[e.name])this.markDirty();
+      if(e.name==='pathStunts.safePath'&&!e.checked){for(const input of el.querySelectorAll('[name^="pathStunts."],[name="travel.stalker"],[name="travel.rushed"]'))if(input!==e)input.checked=false;}
       this.syncTimeStunt(e);
       if(e.matches('[data-sector-name]')){this.draft.customName=e.value;this.draft.nameOverride=true;}
       if(e.name==='travel.open'&&e.checked){this.draft.travel.difficult=false;el.querySelector('[name="travel.difficult"]').checked=false;}
       if(e.name==='travel.difficult'&&e.checked){this.draft.travel.open=false;el.querySelector('[name="travel.open"]').checked=false;}
       if(/^loot\.\d+\.type$/.test(e.name)){const i=Number(e.name.split('.')[1]);this.draft.loot[i].typeSource='manual';this.lootTypeRevisions.set(this.draft.loot[i],(this.lootTypeRevisions.get(this.draft.loot[i])||0)+1);}
-      this.capture();if(e.name?.startsWith('loot.'))this.refreshLootCards();if(e.name?.startsWith('travel.')||e.name?.startsWith('pathStunts.'))this.refreshTravelTimes();
+      this.capture();if(e.name?.startsWith('pathStunts.')||LINKED_STUNTS[e.name])this.refreshStuntControls();if(e.name==='threatLevel')el.querySelector('[data-threat-descriptor]').textContent=threatDescriptor(this.draft.threatLevel);if(e.name?.startsWith('loot.'))this.refreshLootCards();if(e.name?.startsWith('travel.')||e.name?.startsWith('pathStunts.'))this.refreshTravelTimes();
       if(e.name?.startsWith('supplies.'))this.refreshConsumables();this.refreshTabIndicators();this.refreshSectorIcons();if(e.matches('[data-sector-name]')||['code','terrain'].includes(e.name)){this.refreshSectorLabels();this.refreshZoneSummary();}
       if(e.name?.endsWith('.title')&&!e.name.startsWith('loot.')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title)title.textContent=e.value||'Untitled Entry';}
     }));
+  }
+  overviewState(){
+    let state=OVERVIEW_UI.get(this.sectorId);if(!state){state={mood:!meaningfulText(this.data.mood),description:!meaningfulText(this.data.description)};OVERVIEW_UI.set(this.sectorId,state);}return state;
+  }
+  overviewSection(label,key,value){return `<details class="sm-overview-section" data-overview-section="${key}" ${this.overviewState()[key]?'':'open'}><summary>${label}</summary><textarea name="${key}" aria-label="${label}" rows="5">${escapeHTML(value||'')}</textarea></details>`;}
+  refreshStuntControls(){
+    const active=Boolean(this.draft.pathStunts?.safePath);
+    for(const input of this.element.querySelectorAll('[name^="pathStunts."],[name="travel.stalker"],[name="travel.rushed"]')){
+      if(input.name==='pathStunts.safePath')continue;input.disabled=!active;if(!active)input.checked=false;
+    }
   }
   syncTimeStunt(input){
     const peer=LINKED_STUNTS[input.name]||Object.keys(LINKED_STUNTS).find(key=>LINKED_STUNTS[key]===input.name);
@@ -294,7 +325,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   refreshTabIndicators(){
     for(const button of this.element.querySelectorAll('[data-tab]'))button.classList.toggle('sm-tab-empty',!tabHasContent(this.data,button.dataset.tab));
   }
-  capture(){if(!this.journal)return;const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){if(f.type==='radio'&&!f.checked)continue;const parts=f.name.split('.');let target=this.draft;for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(/^loot\.\d+\.quantity$/.test(f.name)){const quantity=Number(v);v=lootQuantity(v);}if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;if(f.name==='travel.difficulty')v=travelOptions({difficulty:v}).difficulty;target[parts.at(-1)]=v;}this.draft.travel=sectorTravelOptions(this.draft);for(const key of Object.values(COLLECTIONS))this.entryState(key);}
+  capture(){if(!this.journal)return;const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){if(f.disabled)continue;if(f.type==='radio'&&!f.checked)continue;const parts=f.name.split('.');let target=this.draft;for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(/^loot\.\d+\.quantity$/.test(f.name)){const quantity=Number(v);v=lootQuantity(v);}if(f.name==='threatLevel')v=normalizeThreatLevel(v,sectorThreatLevel(this.draft));if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;if(f.name==='travel.difficulty')v=travelOptions({difficulty:v}).difficulty;target[parts.at(-1)]=v;}this.draft.pathStunts=normalizePathStunts(this.draft.pathStunts);this.draft.travel=sectorTravelOptions(this.draft);for(const key of Object.values(COLLECTIONS))this.entryState(key);}
   refreshZoneSummary(){
     const container=this.element?.querySelector('.sm-zone-summary');
     if(!container)return;
@@ -339,7 +370,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       const old=Array.from(available).find(entry=>entry.item===item)
         ||Array.from(available).find(entry=>entry.snapshot===snapshot);
       if(old)available.delete(old);
-      const record={id:old?.id||`sm-entry-${++entrySequence}`,item,snapshot};if(!old&&key==='loot'&&lootCollected(item))state.collapsed.add(record.id);return record;
+      const record={id:old?.id||`sm-entry-${++entrySequence}`,item,snapshot};if(!old&&key==='loot'&&(lootCollected(item)||item.generated?.method==='core'))state.collapsed.add(record.id);return record;
     });
     for(const removed of available)state.collapsed.delete(removed.id);
     state.entries=entries;
@@ -496,16 +527,16 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       const next=await selectedMethod.generate(base,{options:{threatMode:method.threatMode,dangerousLevel:game.settings.get(MOD,'dangerousThreatLevel')??DEFAULT_GENERATION_OPTIONS.dangerousLevel}});
       const summary=['locations','encounters','effects','loot'].map(key=>`<h4>${escapeHTML(key)}</h4><ul>${next[key].filter(entry=>entry.generated?.method==='core').map(entry=>`<li>${escapeHTML(entry.title)}${entry.quantity!==undefined?` × ${entry.quantity}`:''}${entry.referenceWarning?` — ${escapeHTML(entry.referenceWarning)}`:''}</li>`).join('')||'<li>None generated</li>'}</ul>`).join('');
       const supplySummary=`<h4>Consumables (new quantities)</h4><ul>${Object.entries(SUPPLIES).map(([key,label])=>`<li>${escapeHTML(label)}: ${next.supplies[key].quantity}</li>`).join('')}</ul>`;
-      if(!await foundry.applications.api.DialogV2.confirm({...randomizeDialogOptions(),window:{title:'Save Randomized Sector?'},content:randomizeDialogContent(`<p>Terrain: ${escapeHTML(next.terrain)} · Rot: ${next.rot}</p><p>Mood: ${escapeHTML(next.mood)}</p><p>Threat Level: ${next.randomization.numericThreatLevel} (${escapeHTML(next.randomization.threatLevel)}) · ${escapeHTML(next.randomization.levelSelection)}</p><p>Environment eligibility — Ruin: ${escapeHTML(next.randomization.environment.ruins||'No')}; Threat: ${next.randomization.environment.threats?'Yes':'No'}; Artifact: ${next.randomization.environment.artifacts?'Yes':'No'}.</p><p>Base Dice: ${escapeHTML(next.randomization.baseDice.join(', ')||'None (level 0)')}. Threat severity (1s): ${next.randomization.threatSeverity}. Artifacts (eligible 6s): ${next.randomization.artifactCount}. Threat identities: ${next.randomization.threatCount} (${next.randomization.threatMode==='core'?'Core: one threat, severity from 1s':'House rule: 1d3 individual threats'}).</p>${supplySummary}${summary}<p>Replace this sector's generated information? Manual entries and notes are retained.</p>`)}))return;
+      if(!await foundry.applications.api.DialogV2.confirm({...randomizeDialogOptions(),window:{title:'Save Randomized Sector?'},content:randomizeDialogContent(`<p>Terrain: ${escapeHTML(next.terrain)} · Rot: ${next.rot}</p><p>Mood: ${escapeHTML(next.mood)}</p><p>Threat Level: ${next.threatLevel} (${escapeHTML(next.randomization.threatLevel)}) · ${escapeHTML(next.randomization.levelSelection)}</p><p>Environment eligibility — Ruin: ${escapeHTML(next.randomization.environment.ruins||'No')}; Threat: ${next.randomization.environment.threats?'Yes':'No'}; Artifact: ${next.randomization.environment.artifacts?'Yes':'No'}.</p><p>Base Dice: ${escapeHTML(next.randomization.baseDice.join(', ')||'None (level 0)')}. Threat severity (1s): ${next.randomization.threatSeverity}. Artifacts (eligible 6s): ${next.randomization.artifactCount}. Threat identities: ${next.randomization.threatCount} (${next.randomization.threatMode==='core'?'Core: one threat, severity from 1s':'House rule: 1d3 individual threats'}).</p>${supplySummary}${summary}<p>Replace this sector's generated information? Manual entries and notes are retained.</p>`)}))return;
       if(this.sectorId!==journal.id||this.rendered===false||JSON.stringify(this.draft)!==signature)throw new Error('Sector selection or edits changed during generation. Nothing was saved; try again.');
       await saveGeneratedSector(journal,expected,next);
-      this.draft=this.loadDraft(journal.getFlag(MOD,KEY),journal);CONSUMABLE_UI.delete(this.sectorId);this.dirty=false;await this.render();ui.notifications.info('Sector randomized and saved.');
+      this.draft=this.loadDraft(journal.getFlag(MOD,KEY),journal);const lootState=this.entryState('loot');for(const entry of lootState.entries)if(entry.item.generated?.method==='core'&&!entry.item.resource&&entry.item.title!=='COMPONENTS')lootState.collapsed.add(entry.id);CONSUMABLE_UI.delete(this.sectorId);this.dirty=false;await this.render();ui.notifications.info('Sector randomized and saved.');
     }catch(error){ui.notifications.error(`Sector randomization: ${error.message}`);}
     finally{this.randomizing=false;}
   }
   async _onClose(options){clearTimeout(this.sidebarClick);await Promise.allSettled([this.stuntWrite,this.lootWrite]);return super._onClose(options);}
   persistStunts(){
-    const journal=this.journal,states=foundry.utils.deepClone(this.draft.pathStunts);
+    const journal=this.journal,states=normalizePathStunts(foundry.utils.deepClone(this.draft.pathStunts));
     const write=(this.autosaveWrite||Promise.resolve()).catch(()=>{}).then(async()=>{
       if(!game.user.isGM)throw new Error('GM access required');
       const stored=foundry.utils.deepClone(journal.getFlag(MOD,KEY));
@@ -532,9 +563,9 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     }
     if(which==='new'){await this.promptNewSector();return;}
     if(which==='add'){this.capture();this.draft[key].push(key==='loot'?normalizeLoot({title:'',type:'scrap',typeSource:'default',status:'Active',details:'',uuid:'',quantity:1}):{title:'',status:'Active',details:'',uuid:'',category:'Weather',duration:''});this.dirty=true;await this.render();return;}
-    if(which==='save'){const pendingStunts=this.stuntWrite,pendingLoot=this.lootWrite;await Promise.all([pendingStunts?.catch(()=>{}),pendingLoot?.catch(()=>{})]);this.capture();this.busy=true;const j=this.journal;if(!j)return;const name=sectorName(this.draft);delete this.draft.journalName;const stored=foundry.utils.deepClone(this.draft);stored.travel=storedTravel(stored.travel);if(stored.initialSavePending===true)stored.initialSavePending=false;await j.update({...(j.name===name?{}:{name}),[`flags.${MOD}.${KEY}`]:stored});if(this.stuntWrite===pendingStunts)this.stuntWrite=undefined;if(this.lootWrite===pendingLoot)this.lootWrite=undefined;this.lootContext={journal:j,baseline:JSON.stringify(stored.loot||[])};if(this.draft.initialSavePending===true)this.draft.initialSavePending=false;this.dirty=false;this.busy=false;await this.render();ui.notifications.info('Sector saved.');return;}
+    if(which==='save'){const pendingStunts=this.stuntWrite,pendingLoot=this.lootWrite;await Promise.all([pendingStunts?.catch(()=>{}),pendingLoot?.catch(()=>{})]);this.capture();this.busy=true;const j=this.journal;if(!j)return;const name=sectorName(this.draft);delete this.draft.journalName;const stored=cleanThreatRecord(this.draft);stored.travel=storedTravel(stored.travel);if(stored.initialSavePending===true)stored.initialSavePending=false;await j.update({...(j.name===name?{}:{name}),[`flags.${MOD}.${KEY}`]:stored,...threatDeletion(j.getFlag(MOD,KEY))});if(this.stuntWrite===pendingStunts)this.stuntWrite=undefined;if(this.lootWrite===pendingLoot)this.lootWrite=undefined;this.lootContext={journal:j,baseline:JSON.stringify(stored.loot||[])};if(this.draft.initialSavePending===true)this.draft.initialSavePending=false;this.dirty=false;this.busy=false;await this.render();ui.notifications.info('Sector saved.');return;}
     if(which==='journal'){this.journal?.sheet?.render(true);return;}
-    if(which==='delete'){if(!await foundry.applications.api.DialogV2.confirm({window:{title:'Delete Sector'},content:`Permanently delete the Journal Entry for ${escapeHTML(this.journal.name)}? This cannot be undone.`}))return;await this.journal.delete();ENTRY_UI.delete(this.sectorId);CONSUMABLE_UI.delete(this.sectorId);this.sectorId=null;this.draft=null;this.dirty=false;await this.render();return;}
+    if(which==='delete'){if(!await foundry.applications.api.DialogV2.confirm({window:{title:'Delete Sector'},content:`Permanently delete the Journal Entry for ${escapeHTML(this.journal.name)}? This cannot be undone.`}))return;await this.journal.delete();ENTRY_UI.delete(this.sectorId);CONSUMABLE_UI.delete(this.sectorId);OVERVIEW_UI.delete(this.sectorId);this.sectorId=null;this.draft=null;this.dirty=false;await this.render();return;}
   }catch(err){this.busy=false;console.error(`${MOD} |`,err);ui.notifications.error(`Sector Manager: ${err.message}`);}}
 }
 let app;

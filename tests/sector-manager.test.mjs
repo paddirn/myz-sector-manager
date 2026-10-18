@@ -1,3 +1,4 @@
+import {normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion} from '../scripts/sector-fields.mjs';
 import {LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected} from '../scripts/loot.mjs';
 import {canonicalCoordinate} from '../scripts/zone/grid.mjs';
 import {sectorIndicators,iconMarkup} from '../scripts/sector-icons.mjs';
@@ -16,7 +17,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -194,7 +195,7 @@ test('Effects exposes an Actor drop reference without changing older record cate
 
 test('Find the Path defaults are additive, independent and include eight core benefits plus talent metadata',()=>{
   const {context,app}=fixture();const original={version:1,rot:'Custom Rot',terrain:'A bespoke place',pathStunts:{artifact:true,futureStunt:true},loot:[{title:'Keep'}]};
-  const data=context.normalizeSector(original);assert.equal(data.pathStunts.artifact,true);assert.equal(data.pathStunts.safePath,false);assert.equal(data.pathStunts.futureStunt,true);assert.equal(original.pathStunts.safePath,undefined);
+  const data=context.normalizeSector(original);assert.equal(data.pathStunts.artifact,true);assert.equal(data.pathStunts.safePath,true);assert.equal(data.pathStunts.futureStunt,true);assert.equal(original.pathStunts.safePath,undefined);
   data.pathStunts.bullets=true;assert.equal(context.normalizeSector({version:1}).pathStunts.bullets,false);
   context.game.journal.get=()=>({name:'Sector',getFlag:()=>original});app.draft=data;app.tab='Find the Path';
   const html=app.build();assert.equal((html.match(/name="pathStunts\./g)||[]).length,9);assert.doesNotMatch(html,/Talent Stunts|Standard Benefits and Stunts/);assert(html.indexOf('<h3>Find the Path Stunts</h3>')<html.indexOf('<h3>Exploration &amp; Travel Time</h3>'));assert.match(html,/Rot Finder talent; Core Rulebook p. 64/);assert.match(html,/once per Find the Path roll/);assert.match(html,/Checkboxes save automatically/);
@@ -203,7 +204,7 @@ test('Find the Path defaults are additive, independent and include eight core be
 test('stunt autosaves persist per sector across reopen without saving unrelated draft fields or overwriting old loot',async()=>{
   const {context,app}=fixture();let stored={version:1,code:'A1',terrain:'Original',loot:[{title:'Keep'}]};
   const j={id:'a',name:'A',getFlag:()=>stored,setFlag:async(mod,key,value)=>{stored=structuredClone(value);}};context.game.journal.get=id=>id==='a'?j:undefined;
-  app.sectorId='a';app.draft=context.normalizeSector(stored);app.draft.terrain='Unsaved terrain';app.draft.pathStunts.artifact=true;
+  app.sectorId='a';app.draft=context.normalizeSector(stored);app.draft.terrain='Unsaved terrain';app.draft.pathStunts.safePath=true;app.draft.pathStunts.artifact=true;
   const first=app.persistStunts();app.draft.pathStunts.bullets=true;const second=app.persistStunts();await Promise.all([first,second]);
   const reopened=new context.Manager();await reopened.navigate('a');assert.equal(reopened.draft.pathStunts.artifact,true);assert.equal(reopened.draft.pathStunts.bullets,true);assert.equal(stored.terrain,'Original');assert.equal(stored.loot[0].title,'Keep');
   assert.equal(context.normalizeSector({version:1,code:'B1'}).pathStunts.artifact,false);
@@ -218,7 +219,7 @@ test('reset stunts requires confirmation and persists only defined checkboxes fo
 
 test('environment controls retain custom terrain and legacy Rot values, then capture selected numeric levels',()=>{
   const {context,app}=fixture();context.game.journal.get=()=>({name:'A'});app.draft=context.normalizeSector({version:1,terrain:'My custom & unusual ruins',rot:'Deadly mist'});
-  let html=app.build();assert.match(html,/list="sm-terrain-options"/);assert.match(html,/My custom &amp; unusual ruins/);assert.match(html,/value="Deadly mist" selected/);assert.match(html,/Localized Rot hotspot; not a sector-wide level/);
+  let html=app.build();assert.match(html,/list="sm-terrain-options"/);assert.match(html,/My custom &amp; unusual ruins/);assert.match(html,/value="Deadly mist" selected/);assert.match(html,/3 - Rot Hotspot/);
   app.element.querySelectorAll=()=>[{name:'terrain',type:'text',value:'Another custom terrain'},{name:'rot',type:'select-one',value:'Deadly mist'}];app.capture();assert.equal(app.draft.rot,'Deadly mist');assert.equal(app.draft.terrain,'Another custom terrain');
   for(const level of [0,1,2,3]){app.element.querySelectorAll=()=>[{name:'rot',type:'select-one',value:String(level)}];app.capture();assert.equal(app.draft.rot,level);assert.match(app.build(),new RegExp(`value="${level}" selected`));}
 });
@@ -335,11 +336,29 @@ test('collected entries initially collapse but remain manually expandable; other
 });
 test('stunt and Loot autosaves share a queue so concurrent flags cannot overwrite one another',async()=>{
   const {app,context}=fixture();let stored={version:1,loot:[{title:'Keep'}],pathStunts:{artifact:false},notes:'Keep'};
-  const journal={id:'a',getFlag:()=>stored,setFlag:async(m,k,value)=>{await new Promise(resolve=>setTimeout(resolve,1));stored=structuredClone(value);}};context.game.journal.get=()=>journal;app.draft=app.loadDraft(stored,journal);app.draft.loot[0].collected=true;app.draft.pathStunts.artifact=true;
+  const journal={id:'a',getFlag:()=>stored,setFlag:async(m,k,value)=>{await new Promise(resolve=>setTimeout(resolve,1));stored=structuredClone(value);}};context.game.journal.get=()=>journal;app.draft=app.loadDraft(stored,journal);app.draft.loot[0].collected=true;app.draft.pathStunts.safePath=true;app.draft.pathStunts.artifact=true;
   await Promise.all([app.persistLoot(),app.persistStunts()]);assert.equal(stored.loot[0].collected,true);assert.equal(stored.pathStunts.artifact,true);assert.equal(stored.notes,'Keep');
 });
 test('a manual type selection made while an Item lookup is pending wins over late inference',async()=>{
   const {app,documents}=fixture();let resolve;documents.set('Item.slow',new Promise(done=>resolve=done));app.draft={loot:[normalizeLoot({title:'Keep',type:'scrap',uuid:'Item.old'})]};app.capture=()=>{};app.renderReference=async()=>{};app.element={contains:()=>true,querySelector:()=>null};
   const input={name:'loot.0.uuid',value:'Item.old'},zone={dataset:{type:'Item'},querySelector:()=>input,closest:()=>null},event={payload:{uuid:'Item.slow'},preventDefault(){},stopPropagation(){}};
   const pending=app.dropReference(event,zone);app.draft.loot[0].type='gear';app.draft.loot[0].typeSource='manual';app.lootTypeRevisions.set(app.draft.loot[0],1);resolve({uuid:'Item.slow',documentName:'Item',type:'weapon'});await pending;assert.equal(app.draft.loot[0].type,'gear');assert.equal(input.value,'Item.slow');
+});
+test('generated Loot initially collapses while manual entries stay expanded and manual toggles survive rerenders',()=>{
+  const {app}=fixture();app.sectorId='generated-defaults';app.draft={loot:[{title:'Generated',generated:{method:'core'},collected:false},{title:'Manual',collected:false},{title:'Taken',collected:true}]};const state=app.entryState('loot');assert(state.collapsed.has(state.entries[0].id));assert(!state.collapsed.has(state.entries[1].id));assert(state.collapsed.has(state.entries[2].id));
+  state.collapsed.delete(state.entries[0].id);assert(!app.entryState('loot').collapsed.has(state.entries[0].id));app.draft.loot[0].details='Edited';assert(!app.entryState('loot').collapsed.has(state.entries[0].id));
+});
+test('unchecking the basic effect clears known stunts during capture and autosave, preserving unrelated fields',async()=>{
+  const {app,context}=fixture();let stored={version:1,pathStunts:{safePath:true,artifact:true,rush:true},loot:[],notes:'Keep'};const j={id:'gate',name:'Sector',getFlag:()=>stored,setFlag:async(m,k,value)=>{stored=structuredClone(value);}};context.game.journal.get=()=>j;app.sectorId='gate';app.draft=app.loadDraft(stored,j);
+  app.element.querySelectorAll=()=>[{name:'pathStunts.safePath',type:'checkbox',checked:false},{name:'pathStunts.artifact',type:'checkbox',checked:true,disabled:true}];app.capture();assert.equal(app.draft.pathStunts.artifact,false);assert.equal(app.draft.pathStunts.rush,false);assert.equal(app.draft.travel.rushed,false);await app.persistStunts();assert.equal(stored.pathStunts.artifact,false);assert.equal(stored.pathStunts.safePath,false);assert.equal(stored.notes,'Keep');
+});
+test('Overview accordions initialize from meaningful content and retain independent per-sector choices',()=>{
+  const {app}=fixture();app.sectorId='empty-overview';app.draft={mood:'<p>&nbsp;</p>',description:' '};assert.equal(app.overviewState().mood,true);assert.equal(app.overviewState().description,true);
+  app.overviewState().mood=false;app.draft.mood='New text';assert.equal(app.overviewState().mood,false);assert.equal(app.overviewState().description,true);
+  app.sectorId='populated-overview';app.draft={mood:'A mood',description:'<p>A ruin</p>'};assert.equal(app.overviewState().mood,false);assert.equal(app.overviewState().description,false);app.overviewState().description=true;assert.equal(app.overviewState().description,true);
+});
+test('Threat Level persists independently of generation metadata and does not reroll other data',async()=>{
+  const {app,context}=fixture();let stored={version:1,randomization:{numericThreatLevel:6,baseDice:[1,2,3,4,5,6]},loot:[{title:'Keep'}]};const j={id:'threat',name:'Sector',getFlag:()=>stored,update:async changes=>{stored=structuredClone(changes['flags.myz-sector-manager.sector']);}};context.game.journal.get=()=>j;context.ui.notifications.info=()=>{};app.sectorId='threat';app.draft=app.loadDraft(stored,j);assert.equal(app.draft.threatLevel,6);
+  app.element.querySelectorAll=()=>[{name:'threatLevel',type:'number',value:'12'}];app.capture();await app.action('save');assert.equal(stored.threatLevel,12);assert.deepEqual(stored.randomization.baseDice,[1,2,3,4,5,6]);assert.equal(stored.loot[0].title,'Keep');
+  const reopened=new context.Manager();await reopened.navigate('threat');assert.equal(reopened.draft.threatLevel,12);
 });

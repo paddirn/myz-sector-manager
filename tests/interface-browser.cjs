@@ -183,6 +183,32 @@ const path=require('node:path');
     assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-toggle]').getAttribute('aria-expanded'),'true');
     console.log('Save/reopen retains data and session UI state; deletion cleans identity; new entries expand');
 
+    await page.locator('[data-tab="Overview"]').click();
+    assert.equal(await page.locator('[name="threatLevel"]').inputValue(),'1');
+    await page.locator('[data-threat-step="-1"]').click();assert.equal(await page.locator('[name="threatLevel"]').inputValue(),'0');
+    await page.locator('[data-threat-step="-1"]').click();assert.equal(await page.locator('[name="threatLevel"]').inputValue(),'0');
+    await page.locator('[data-threat-step="1"]').click();assert.equal(await page.locator('[name="threatLevel"]').inputValue(),'1');
+    for(const [value,label] of [['5','Central Zone'],['9','Unusually Dangerous Area'],['0','Fringe Zone']]){await page.locator('[name="threatLevel"]').fill(value);assert.equal(await page.locator('[data-threat-descriptor]').innerText(),label);}
+    await page.locator('[name="threatLevel"]').fill('-2');await page.locator('[name="threatLevel"]').blur();assert.equal(await page.locator('[name="threatLevel"]').inputValue(),'0');
+    assert.equal(await page.locator('[name="code"]').getAttribute('maxlength'),null);assert.equal(await page.locator('[name="code"]').locator('..').locator('span').innerText(),'Coordinates');
+    assert.deepEqual(await page.locator('[name="rot"] option').allTextContents(),['0 - Rot Oasis','1 - Weak Rot','2 - Rot-Heavy Area','3 - Rot Hotspot']);
+    assert.equal(await page.locator('[data-overview-section="mood"]').getAttribute('open'),null);
+    assert.notEqual(await page.locator('[data-overview-section="description"]').getAttribute('open'),null);
+    await page.locator('[data-overview-section="mood"] summary').click();await page.locator('[name="mood"]').fill('Custom mood');
+    await page.locator('[data-overview-section="mood"] summary').click();await page.locator('[data-overview-section="mood"] summary').click();assert.equal(await page.locator('[name="mood"]').inputValue(),'Custom mood');
+    await page.locator('[data-overview-section="description"] summary').click();assert.equal(await page.locator('[data-overview-section="mood"]').getAttribute('open'),'');
+    for(const width of [1100,920,700,520]){
+      await page.evaluate(width=>manager.element.style.width=width+'px',width);
+      const layout=await page.locator('.sm-overview-grid').evaluate(grid=>({overflow:grid.scrollWidth>grid.clientWidth+1,boxes:[...grid.children].map(c=>({x:c.getBoundingClientRect().x,y:c.getBoundingClientRect().y,width:c.getBoundingClientRect().width}))}));
+      assert.equal(layout.overflow,false);assert.equal(layout.boxes.length,6);
+      if(width>=920){assert.equal(layout.boxes[0].y,layout.boxes[1].y);assert.equal(layout.boxes[1].y,layout.boxes[2].y);assert.equal(layout.boxes[3].y,layout.boxes[4].y);assert.equal(layout.boxes[4].y,layout.boxes[5].y);assert(layout.boxes[0].width>layout.boxes[1].width);assert(layout.boxes[0].width>layout.boxes[2].width);}
+    }
+    await page.evaluate(()=>manager.element.style.width='1100px');
+    await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    await page.locator('[data-tab="Locations"]').click();await page.locator('[data-tab="Overview"]').click();assert.equal(await page.locator('[name="threatLevel"]').inputValue(),'0');assert.equal(await page.locator('[data-overview-section="description"]').getAttribute('open'),null);assert.equal(await page.locator('[name="description"]').inputValue(),'Long description');
+    await page.locator('[data-overview-section="description"] summary').click();await page.locator('[data-tab="Locations"]').click();
+    console.log('Overview zero/default Threat Level, steppers/descriptors, compact Rot/Coordinates, independent accordions and responsive three-column layout pass');
+
     // Search must restore all records even after a tab rerender under a filter.
     assert.equal(await page.locator('.sm-sidebar [data-action="new"]').count(),0);
     assert.equal(await page.locator('[data-action="delete"]').evaluate(el=>el.nextElementSibling.dataset.action),'new');
@@ -260,7 +286,9 @@ const path=require('node:path');
     assert.deepEqual(await page.evaluate(()=>lastPan),{x:250,y:1000,duration:350});
     await page.locator('[data-open="sector1"]').click();await page.waitForFunction(()=>manager.sectorId==='sector1');
     await page.locator('[data-tab="Find the Path"]').click();
-    await page.locator('[name="pathStunts.artifact"]').check();
+    assert.equal(await page.locator('[name="pathStunts.safePath"]').isDisabled(),false);
+    for(const name of ['pathStunts.artifact','pathStunts.halfTime','pathStunts.rush','pathStunts.saferRoute','travel.stalker','travel.rushed'])assert.equal(await page.locator(`[name="${name}"]`).isDisabled(),true);
+    await page.locator('[name="pathStunts.safePath"]').check();await page.locator('[name="pathStunts.artifact"]').check();
     await page.waitForFunction(()=>records.get('sector1').getFlag('myz-sector-manager','sector').pathStunts?.artifact===true);
     await page.locator('[data-open="sector2"]').click();await page.waitForFunction(()=>manager.sectorId==='sector2');
     await page.locator('[data-tab="Find the Path"]').click();assert.equal(await page.locator('[name="pathStunts.artifact"]').isChecked(),false);
@@ -296,6 +324,7 @@ const path=require('node:path');
     await page.locator('[data-tab="Find the Path"]').click();
     assert.equal(await page.locator('[data-explore-time]').innerText(),'4 hours');
     assert.equal(await page.locator('[data-pass-time]').innerText(),'1 hour');
+    await page.locator('[name="pathStunts.safePath"]').check();
     const otherBefore=await page.evaluate(()=>JSON.stringify(records.get('sector2').flags));
     assert.deepEqual(await page.locator('.sm-path h3').allTextContents(),['Find the Path Stunts','Exploration & Travel Time']);
     assert.equal(await page.locator('[name="pathStunts.saferRoute"]').count(),1);
@@ -316,6 +345,10 @@ const path=require('node:path');
     }
     await page.locator('[name="pathStunts.saferRoute"]').check();
     await page.waitForFunction(()=>records.get('sector1').flags.pathStunts.saferRoute);
+    await page.locator('[name="pathStunts.safePath"]').uncheck();await page.waitForFunction(()=>!records.get('sector1').flags.pathStunts.safePath);
+    for(const name of ['pathStunts.artifact','pathStunts.halfTime','pathStunts.rush','pathStunts.saferRoute','travel.stalker','travel.rushed']){assert.equal(await page.locator(`[name="${name}"]`).isChecked(),false);assert.equal(await page.locator(`[name="${name}"]`).isDisabled(),true);}
+    await page.locator('[name="pathStunts.safePath"]').check();await page.locator('[name="pathStunts.saferRoute"]').check();
+
 
     await page.locator('[name="travel.mode"][value="vehicle"]').check();
     await page.locator('[name="travel.rushed"]').check();await page.locator('[name="travel.stalker"]').check();await page.locator('[name="travel.open"]').check();
@@ -375,6 +408,12 @@ const path=require('node:path');
     assert.match(await page.evaluate(()=>generationPreview),/Components: 1/);
     await page.locator('[data-tab="Loot"]').click();
     assert.equal(await page.locator('[name="supplies.components.quantity"]').inputValue(),'1');
+    const generatedIds=await page.evaluate(()=>manager.entryState('loot').entries.filter(e=>e.item.generated?.method==='core').map(e=>e.id));
+    assert(generatedIds.length>0);for(const id of generatedIds)assert.equal(await page.locator(`[data-entry="${id}"] [data-entry-toggle]`).getAttribute('aria-expanded'),'false');
+    await page.locator(`[data-entry="${generatedIds[0]}"] [data-entry-toggle]`).click();await page.locator('[data-tab="Overview"]').click();
+    assert.equal(await page.locator('[name="threatLevel"]').inputValue(),'2');assert.equal(await page.evaluate(()=>manager.draft.randomization.numericThreatLevel),undefined);
+    await page.locator('[data-tab="Loot"]').click();assert.equal(await page.locator(`[data-entry="${generatedIds[0]}"] [data-entry-toggle]`).getAttribute('aria-expanded'),'true');
+
     assert.equal(await page.locator('.sm-supplies tbody tr').last().locator('th').innerText(),'Components');
     assert.equal(await page.locator('.sm-supplies tbody tr').last().locator('input[type="number"]').evaluate(el=>Math.round(el.getBoundingClientRect().width)),38);
     assert.equal(await page.evaluate(()=>manager.draft.loot.some(entry=>['Clean Grub','Rot Grub','Clean Water','Rot Water','Bullets','Booze','COMPONENTS'].includes(entry.title))),false);
@@ -416,7 +455,7 @@ const path=require('node:path');
     for(const name of ['pathStunts.halfTime','pathStunts.rush','pathStunts.saferRoute','travel.rushed','travel.stalker'])assert.equal(await page.locator(`[name="${name}"]`).isChecked(),false);
     assert.equal(await page.locator('[data-explore-time]').innerText(),'1 hour');
     assert(await page.locator('[data-tab="Find the Path"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
-    await page.locator('[name="pathStunts.bullets"]').check();await page.waitForFunction(()=>!document.querySelector('[data-tab="Find the Path"]').classList.contains('sm-tab-empty'));
+    await page.locator('[name="pathStunts.safePath"]').check();await page.locator('[name="pathStunts.bullets"]').check();await page.waitForFunction(()=>!document.querySelector('[data-tab="Find the Path"]').classList.contains('sm-tab-empty'));
     await page.locator('[data-tab="Effects"]').click();assert.equal(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);
     await page.evaluate(async()=>{manager.draft.effects=[];await manager.render();});assert(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
     await page.locator('[data-action="add"]').click();assert(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
