@@ -91,7 +91,7 @@ const path=require('node:path');
     await page.addScriptTag({type:'module',url:origin+'/scripts/sector-manager.mjs'});
     await page.evaluate(async()=>{for(const callback of initCallbacks)callback();ready();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
 
-    for(const tab of ['Overview','Find the Path','Locations','Encounters','Loot','Effects','Secrets','History']){
+    for(const tab of ['Overview','Find the Path','Locations','Encounters','Loot','Effects','History']){
       await page.locator(`[data-tab="${tab}"]`).click();
       await page.waitForFunction(tab=>manager.tab===tab,tab);
       await page.locator('.sm-content').hover();await page.mouse.wheel(0,400);
@@ -102,7 +102,7 @@ const path=require('node:path');
       });
       assert(geometry.tabsInFrame&&geometry.footerInFrame,`${tab}: tabs/footer remain visible`);
     }
-    console.log('Mouse wheel works across all eight tabs; navigation/footer stay visible');
+    console.log('Mouse wheel works across all seven Normal tabs; navigation/footer stay visible');
     const contentScroll=await page.locator('.sm-content').evaluate(el=>el.scrollTop);
     await page.locator('.sm-list').hover();await page.mouse.wheel(0,500);
     await page.waitForFunction(()=>document.querySelector('.sm-list').scrollTop>0);
@@ -319,7 +319,7 @@ const path=require('node:path');
     await page.locator('[name="code"]').fill('A2');
     await page.locator('[name="terrain"]').fill('Thick Woods');
     assert.equal(await page.locator('[data-sector-name]').inputValue(),'The Last Tower');
-    assert.equal(await page.locator('[data-open="sector1"] [data-sector-label]').innerText(),'The Last Tower');
+    assert.equal(await page.locator('[data-open="sector1"] [data-sector-label]').innerText(),'A2 - The Last Tower');
     await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
     assert.equal(await page.evaluate(()=>records.get('sector1').name),'The Last Tower');
     await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');});
@@ -613,7 +613,7 @@ const path=require('node:path');
     await dialog.locator('[data-cancel-zone]').click(); // discard the origin preview without touching saved config
     // Pick cleanup was already one-shot; restore the configured origin and scale.
     await page.evaluate(()=>{canvas.stage.zoom=1;canvas.stage.pan={x:0,y:0};});
-    await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>{if(options.window.title!=='+New Sector')throw new Error('Expected New Sector dialog');if(!options.content.includes('value="C3"'))throw new Error('Coordinates not prefilled');return options.buttons.find(b=>b.action==='create').callback(null,null,{element:{querySelector:()=>({value:'C3'})}});};});
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>{if(options.window.title!=='Create New Sector')throw new Error('Expected New Sector dialog');if(!options.content.includes('value="C3"'))throw new Error('Coordinates not prefilled');return options.buttons.find(b=>b.action==='create').callback(null,null,{element:{querySelector:selector=>({value:selector.includes('newSectorType')?'normal':'C3'})}});};});
     await page.locator('[data-zone-select]').click();await page.mouse.click(1300,850); // C3: no existing record
     await page.waitForFunction(()=>manager.draft?.code==='C3');
     assert.equal(await page.evaluate(()=>records.filter(j=>j.getFlag('myz-sector-manager','sector')?.code==='C3').length),1);
@@ -634,7 +634,7 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>manager===sameManager),true);
     assert.equal(await page.evaluate(()=>JSON.stringify(records.map(j=>({id:j.id,flags:j.flags,name:j.name})))===beforeOverlaySelection),true);
     // Empty-square selection presents prefilled coordinates and cancellation creates nothing.
-    await page.evaluate(()=>{globalThis.emptyDialogs=0;foundry.applications.api.DialogV2.wait=async options=>{if(options.window.title!=='+New Sector'||!options.content.includes('value="C2"'))throw new Error('Wrong empty-square dialog');emptyDialogs++;return null;};});
+    await page.evaluate(()=>{globalThis.emptyDialogs=0;foundry.applications.api.DialogV2.wait=async options=>{if(options.window.title!=='Create New Sector'||!options.content.includes('value="C2"'))throw new Error('Wrong empty-square dialog');emptyDialogs++;return null;};});
     await page.mouse.click(1300,650);await page.waitForFunction(()=>emptyDialogs===1);
     assert.equal(await page.evaluate(()=>records.some(j=>j.getFlag('myz-sector-manager','sector')?.code==='C2')),false);
     // A sector appearing while the dialog is open is selected rather than duplicated.
@@ -658,6 +658,71 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>zoneState().groups[0].lastKnown),'C1');
     await page.evaluate(()=>{game.scenes.delete('zone');Hooks.call('deleteScene',{id:'zone'});});
     await page.waitForFunction(()=>document.querySelector('.sm-zone-summary').textContent.includes('Scene is missing'));
+    // Author a complete Special sector, then convert it repeatedly without losing hidden data.
+    await page.evaluate(()=>docs.set('Scene.one',{uuid:'Scene.one',name:'World Scene',documentName:'Scene',_onClickDocumentLink:async()=>nativeClicks.push('Scene.one')}));
+    const tabs=()=>page.locator('[data-tab]').evaluateAll(nodes=>nodes.map(node=>node.dataset.tab));
+    const saveSpecial=async()=>{await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.busy&&!manager.dirty);};
+    const dropSpecial=async(zone,uuid)=>{await zone.evaluate((el,uuid)=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({uuid}));el.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));},uuid);await page.waitForFunction(uuid=>Array.from(document.querySelectorAll('[data-reference] input')).some(input=>input.value===uuid),uuid);};
+    await page.evaluate(()=>{globalThis.newDialogChecks=0;foundry.applications.api.DialogV2.wait=async options=>{if(options.window.title!=='Create New Sector')throw new Error('Wrong creation title');const element=document.createElement('div');element.innerHTML=options.content;if(element.querySelector('[name="newSectorType"]:checked').value!=='normal')throw new Error('Normal must be default');newDialogChecks++;return null;};});
+    const recordsBefore=await page.evaluate(()=>records.length);await page.locator('[data-action="new"]').click();await page.waitForFunction(()=>newDialogChecks===1);assert.equal(await page.evaluate(()=>records.length),recordsBefore);
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>{const element=document.createElement('div');element.innerHTML=options.content;element.querySelector('[name="newSectorType"][value="special"]').checked=true;element.querySelector('[name="newSectorCode"]').value='Z99';return options.buttons.find(button=>button.action==='create').callback(null,null,{element});};});
+    await page.locator('[data-action="new"]').click();await page.waitForFunction(()=>manager.draft?.code==='Z99');
+    const specialId=await page.evaluate(()=>manager.sectorId);
+    assert.deepEqual(await tabs(),['Overview','The Situation','Inhabitants','Gear & Artifacts','Events','Find the Path','History']);
+    assert.equal(await page.locator('[data-action="randomize"]').count(),0);assert.equal(await page.evaluate(()=>manager.draft.initialSavePending),true);
+    await page.locator('[data-sector-name]').fill('The Doom Sphere');assert.equal(await page.locator('[data-sector-heading]').innerText(),'Z99 - The Doom Sphere');
+    await page.locator('[name="code"]').fill('Z100');assert.equal(await page.locator('[data-sector-heading]').innerText(),'Z100 - The Doom Sphere');
+    assert.equal(await page.locator(`[data-open="${specialId}"] [data-sector-label]`).innerText(),'Z100 - The Doom Sphere');
+    assert(await page.locator(`[data-open="${specialId}"]`).evaluate(el=>el.classList.contains('sm-sector-special')));
+    await page.locator('[name="terrain"]').fill('Custom special terrain');await page.locator('[name="rot"]').selectOption('2');await page.locator('[name="threatLevel"]').fill('0');await page.locator('[name="status"]').selectOption('Scouted');
+    const longSpecialText=('Published introduction\n\nAnother paragraph with details.\n').repeat(100);
+    await page.locator('[name="special.source"]').fill('Custom Adventure – Test');await page.locator('[name="special.overview"]').fill(longSpecialText);
+    await dropSpecial(page.locator('[data-reference]'),'Scene.one');await page.locator('[data-reference] a').click();await page.waitForFunction(()=>nativeClicks.includes('Scene.one'));
+    await page.locator('[data-reference-clear]').click();assert.equal(await page.locator('[name="special.sceneUuid"]').inputValue(),'');
+    await page.evaluate(()=>{for(const [uuid,documentName,name,type] of [['Compendium.myz.scenes.Scene.special','Scene','Published Scene'],['Compendium.myz.actors.Actor.special','Actor','Published Actor'],['JournalEntry.special','JournalEntry','World event'],['JournalEntry.special.JournalEntryPage.page','JournalEntryPage','World page'],['Compendium.myz.events.JournalEntry.special.JournalEntryPage.page','JournalEntryPage','Published page']])docs.set(uuid,{uuid,documentName,name,type,_onClickDocumentLink:async()=>nativeClicks.push(uuid)});for(const type of ['armor','artifact','chassis','gear','weapon','unknown']){const uuid='Compendium.myz.gear.Item.'+type;docs.set(uuid,{uuid,documentName:'Item',name:'Published '+type,type,_onClickDocumentLink:async()=>nativeClicks.push(uuid)});}});
+    await dropSpecial(page.locator('[data-reference]'),'Compendium.myz.scenes.Scene.special');
+    await page.locator('[data-tab="The Situation"]').click();await page.locator('[name="special.situation"]').fill('Conflict\n\nMotivations and developments');
+    await page.locator('[data-tab="Inhabitants"]').click();
+    for(const uuid of ['Actor.one','Compendium.myz.actors.Actor.special',null]){
+      await page.locator('[data-action="add"]').click();const card=page.locator('.sm-entry').last();assert.equal(await card.locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');await card.locator('[data-entry-toggle]').click();
+      if(uuid){await dropSpecial(card.locator('[data-reference]'),uuid);await page.waitForFunction(()=>manager.draft.special.inhabitants.at(-1).title.length>0);await card.locator('[data-reference] a').click();await page.waitForFunction(uuid=>nativeClicks.includes(uuid),uuid);}else{await card.locator('[name$=".title"]').fill('The Factory Workers');await card.locator('textarea').fill('A group with no Actor\n\nCustom motivations');}
+    }
+    await page.locator('.sm-entry').first().locator('[name$=".title"]').fill('Manual actor name');await dropSpecial(page.locator('.sm-entry').first().locator('[data-reference]'),'Compendium.myz.actors.Actor.special');assert.equal(await page.locator('.sm-entry').first().locator('[name$=".title"]').inputValue(),'Manual actor name');
+    await page.locator('[data-action="add"]').click();await page.locator('.sm-entry').last().locator('[data-remove]').click();await page.waitForFunction(()=>manager.draft.special.inhabitants.length===3);
+    await page.locator('[data-tab="Gear & Artifacts"]').click();
+    for(const type of ['armor','artifact','chassis','gear','weapon','unknown']){
+      await page.locator('[data-action="add"]').click();const card=page.locator('.sm-entry').last();assert.equal(await card.locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');await card.locator('[data-entry-toggle]').click();
+      await dropSpecial(card.locator('[data-reference]'),'Compendium.myz.gear.Item.'+type);await page.waitForFunction(type=>manager.draft.special.gear.at(-1).type===(type==='unknown'?'scrap':type),type);
+      await card.locator('[name$=".quantity"]').fill('3');await card.locator('textarea').fill('Item notes\n\nPublished description');assert.match(await card.locator('[data-entry-title]').innerText(),new RegExp(' x 3 \\('+(type==='unknown'?'scrap':type)+'\\)'));
+    }
+    assert.equal(await page.locator('[name$=".collected"]').count(),0);const firstGear=page.locator('.sm-entry').first();await firstGear.locator('select').selectOption('artifact');await page.locator('[data-tab="Overview"]').click();await page.locator('[data-tab="Gear & Artifacts"]').click();assert.equal(await page.locator('.sm-entry').first().locator('select').inputValue(),'artifact');
+    await page.locator('[data-tab="Events"]').click();
+    for(const uuid of ['JournalEntry.special','JournalEntry.special.JournalEntryPage.page','Compendium.myz.events.JournalEntry.special.JournalEntryPage.page',null]){
+      await page.locator('[data-action="add"]').click();const card=page.locator('.sm-entry').last();assert.equal(await card.locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');await card.locator('[data-entry-toggle]').click();await card.locator('[name$=".title"]').fill('Published Event');await card.locator('textarea').fill('Event description\n\nSecond paragraph');
+      if(uuid){await dropSpecial(card.locator('[data-reference]'),uuid);await card.locator('[data-reference] a').click();await page.waitForFunction(uuid=>nativeClicks.includes(uuid),uuid);}
+    }
+    await page.locator('[data-tab="Find the Path"]').click();await page.locator('[name="pathStunts.safePath"]').check();await page.locator('[name="pathStunts.assessRot"]').check();await page.evaluate(()=>manager.stuntWrite);
+    await page.locator('[data-tab="History"]').click();await page.locator('[data-action="add"]').click();await page.locator('.sm-entry').last().locator('[data-entry-toggle]').click();await page.locator('.sm-entry').last().locator('[name$=".title"]').fill('Shared visit');await saveSpecial();
+    const authored=await page.evaluate(()=>structuredClone(manager.journal.getFlag('myz-sector-manager','sector')));
+    await page.evaluate(async()=>{await manager.navigate('sector1');});await page.evaluate(async id=>{await manager.navigate(id);},specialId);
+    assert.deepEqual(await page.evaluate(()=>manager.draft.special),authored.special);assert.equal(await page.locator('[name="special.overview"]').inputValue(),longSpecialText);
+    const specialBefore=await page.evaluate(()=>JSON.stringify(manager.draft));await page.evaluate(async()=>{await manager.randomizeSector();});assert.equal(await page.evaluate(()=>JSON.stringify(manager.draft)),specialBefore);
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>false;});await page.locator('[data-action="change-type"]').click();assert.equal(await page.evaluate(()=>manager.draft.sectorType),'special');
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>true;});await page.locator('[data-tab="Events"]').click();await page.locator('[data-action="change-type"]').click();await page.waitForFunction(()=>manager.draft.sectorType==='normal');
+    assert.deepEqual(await tabs(),['Overview','Locations','Encounters','Loot','Effects','Find the Path','History']);assert.equal(await page.evaluate(()=>manager.tab),'Overview');assert.equal(await page.locator(`[data-open="${specialId}"].sm-sector-special`).count(),0);
+    await page.evaluate(()=>{manager.draft.description='Preserved normal description';manager.draft.secrets=[{title:'Legacy secret'}];manager.draft.locations=[{title:'Normal ruin'}];manager.draft.encounters=[{title:'Normal encounter'}];manager.draft.loot=[{title:'Normal loot',quantity:2,type:'scrap'}];manager.draft.effects=[{title:'Normal effect'}];});await saveSpecial();
+    const normalContent=await page.evaluate(()=>Object.fromEntries(['description','secrets','locations','encounters','loot','effects'].map(key=>[key,structuredClone(manager.draft[key])])));
+    for(const type of ['special','normal','special']){await page.locator('[data-action="change-type"]').click();await page.waitForFunction(type=>manager.draft.sectorType===type,type);await saveSpecial();assert.deepEqual(await page.evaluate(()=>manager.draft.special),authored.special);assert.deepEqual(await page.evaluate(()=>Object.fromEntries(['description','secrets','locations','encounters','loot','effects'].map(key=>[key,structuredClone(manager.draft[key])]))),normalContent);}
+    assert.deepEqual(await page.evaluate(()=>manager.draft.history),authored.history);assert.deepEqual(await page.evaluate(()=>manager.draft.pathStunts),authored.pathStunts);assert.equal(await page.evaluate(()=>manager.draft.threatLevel),0);assert.equal(await page.evaluate(()=>manager.draft.code),'Z100');
+    // A full window close/reopen simulates rebuilding the draft rather than reusing it.
+    await page.evaluate(async()=>{await manager.close();});await page.evaluate(async id=>{globalThis.manager=await game.myzSectorManager.open(id);},specialId);assert.deepEqual(await page.evaluate(()=>manager.draft.special),authored.special);
+    await page.evaluate(async()=>{manager.draft.special.sceneUuid='Scene.missing';await manager.render();});assert.match(await page.locator('[data-reference-link]').innerText(),/Missing reference/);await page.locator('[data-reference-clear]').click();await saveSpecial();
+    await page.evaluate(()=>manager.element.style.width='600px');
+    assert(await page.locator('.sm-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+    await page.locator('[data-tab="The Situation"]').click();assert.equal(await page.locator('[name="special.situation"]').getAttribute('rows'),'12');
+    assert(await page.locator('.sm-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+    console.log('Special creation, full authoring, world/compendium references, manual item types, multiline persistence, shared stunts/history and repeated lossless conversion pass');
+
     assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>notifyErrors),[]);
     console.log('Zone dialog units/tokens/Actor links persist; origin picking respects zoom; confirmed map creation, overlay isolation, closed-window tracking and missing references pass');
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
