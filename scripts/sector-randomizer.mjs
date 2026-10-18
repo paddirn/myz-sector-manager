@@ -1,3 +1,4 @@
+import {normalizeLoot,itemLootType} from './loot.mjs';
 import {storedTravel} from './travel-time.mjs';
 import {sectorNaming,sectorName} from './journal-organization.mjs';
 import {CONSUMABLES} from './sector-content.mjs';
@@ -56,9 +57,9 @@ export async function rollTable(table,env=globalThis,stack=[],{resolveNested=tru
     const label=String(description).replace(/@UUID\[([^\]]+)\](?:\{([^}]+)\})?/g,(match,uuid,label)=>label||document?.name||uuid);
     const text=plainText(label||document?.name||(allowMissing?uuid:''),env);
     if(!text)throw new Error(`RollTable ${table.name} (${table.uuid}) returned an empty result.`);
-    mapped.push({text,referenceWarning,documentTitle:document?.name||'',uuid:document?.uuid||uuid,documentType:document?.documentName||null,sources:[source],mapping:result.flags?.['myz-sector-manager']?.randomization||{}});
+    mapped.push({text,referenceWarning,documentTitle:document?.name||'',uuid:document?.uuid||uuid,documentType:document?.documentName||null,itemType:itemLootType(document),sources:[source],mapping:result.flags?.['myz-sector-manager']?.randomization||{}});
   }
-  return {entries:mapped,text:mapped.map(result=>result.text).join('; '),uuid:mapped.length===1?mapped[0].uuid:'',documentType:mapped.length===1?mapped[0].documentType:null,sources:mapped.flatMap(result=>result.sources),mapping:mapped.length===1?mapped[0].mapping:{},documentTitle:mapped.length===1?mapped[0].documentTitle:''};
+  return {entries:mapped,text:mapped.map(result=>result.text).join('; '),uuid:mapped.length===1?mapped[0].uuid:'',documentType:mapped.length===1?mapped[0].documentType:null,sources:mapped.flatMap(result=>result.sources),mapping:mapped.length===1?mapped[0].mapping:{},documentTitle:mapped.length===1?mapped[0].documentTitle:'',itemType:mapped.length===1?mapped[0].itemType:null};
 }
 function classifiedText(result,label,keys){
   if(!result.text.includes(',')){
@@ -233,7 +234,7 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   const output=structuredClone(existing);
   for(const key of ['locations','encounters','effects','loot'])output[key]=(output[key]||[]).filter(entry=>entry.generated?.method!=='core'||(key==='loot'&&(Boolean(entry.resource)||entry.title==='COMPONENTS')));
   output.terrain=eligibility.name;output.rot=mapRot(rot);output.mood=mood.text;
-  const add=(key,result,quantity)=>{const entry=generatedEntry(result,key,quantity);output[key].push(entry);return entry;};
+  const add=(key,result,quantity,defaultType='scrap')=>{const raw=generatedEntry(result,key,quantity),entry=key==='loot'?normalizeLoot({...raw,type:result.itemType||defaultType,typeSource:result.itemType?'reference':'default'}):raw;output[key].push(entry);return entry;};
   if(eligibility.ruins){
     const ruins=await rollTable(tables[eligibility.ruins==='normal'?'ruinsA':'ruinsB'],env,[],{allowMissing:true});
     for(const result of ruins.entries){const resolved=await resolveRuinJournal(result,env);const entry=add('locations',resolved);if(resolved.referenceWarning)entry.referenceWarning=resolved.referenceWarning;}
@@ -251,7 +252,7 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
       }
     }
   }
-  for(let i=0;i<artifactCount;i++)add('loot',await take('artifact'));
+  for(let i=0;i<artifactCount;i++)add('loot',await take('artifact'),undefined,'artifact');
   output.supplies??={};
   for(const key of Object.keys(CONSUMABLES))output.supplies[key]={...output.supplies[key],quantity:0,collected:output.supplies[key]?.collected??false};
   for(const [clean,contaminated] of [['cleanGrub','rotGrub'],['cleanWater','rotWater']]){
@@ -264,12 +265,14 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   if(await chance(.25))output.supplies.components.quantity=await dice('1d3');
   if(await chance(.5))add('loot',await take('scrap'),await dice('1d6'));
   output.randomization={method:'core',threatLevel:threat.category,numericThreatLevel:threat.level,levelSelection:threat.selection,environment:eligibility,baseDice,rolledOnes:ones,rolledSixes:sixes,threatSeverity:severity,threatCount,artifactCount,threatMode:options.threatMode,sources:[...environment.sources,...rot.sources,...threatLevel.sources,...mood.sources]};
+  output.loot=output.loot.map(normalizeLoot);
   return output;
 }
 
 export async function saveGeneratedSector(journal,expected,next,env=globalThis){
   if(!env.game.user.isGM)throw new Error('Only a GM can randomize sectors.');
   if(JSON.stringify(journal.getFlag('myz-sector-manager','sector'))!==JSON.stringify(expected))throw new Error('This sector changed while generation was running. Nothing was saved; review it and try again.');
+  if(expected?.initialSavePending===true)throw new Error('Save this sector before randomizing.');
   // One Document flag update commits the complete generation; no preceding field writes.
   const stored=({...sectorNaming(expected,journal.name),...structuredClone(next)});delete stored.journalName;if(stored.travel)stored.travel=storedTravel(stored.travel);
   const name=sectorName(stored);

@@ -1,3 +1,4 @@
+import {lootCollected} from './loot.mjs';
 import {CONSUMABLES} from './sector-content.mjs';
 // Shared offline vector primitives, in a 24×24 view box, for SVG and PIXI alike.
 const line=(...points)=>({points});
@@ -37,7 +38,7 @@ export function drawSectorIcon(PIXI,icon,size){
 export function sectorIndicators(data={}){
   const encounters=Array.isArray(data.encounters)?data.encounters.length:0;
   const phenomena=Array.isArray(data.effects)?data.effects.filter(entry=>entry?.category==='Phenomenon'||(!entry?.category&&entry?.generated?.threatCategory==='phenomenon')).length:0;
-  const loot=(data.loot||[]).some(entry=>entry&&entry.status!=='Collected'&&entry.status!=='Depleted'&&!entry.collected&&(['title','details','uuid'].some(key=>String(entry[key]??'').trim())||Number(entry.quantity)>0)&&(entry.quantity===undefined||Number(entry.quantity)>0))||Object.keys(CONSUMABLES).some(key=>Number(data.supplies?.[key]?.quantity)>0&&!data.supplies[key].collected);
+  const loot=(data.loot||[]).some(entry=>entry&&!lootCollected(entry)&&(['title','details','uuid'].some(key=>String(entry[key]??'').trim())||Number(entry.quantity)>0)&&(entry.quantity===undefined||Number(entry.quantity)>0))||Object.keys(CONSUMABLES).some(key=>Number(data.supplies?.[key]?.quantity)>0&&!data.supplies[key].collected);
   const result={terrain:{icon:'terrain',title:`Terrain: ${data.terrain||'Not assigned'}`,value:data.terrain||'',visible:Boolean(data.terrain)},rot:{icon:'rot',title:`Rot Level: ${data.rot??'Not assigned'}`,value:data.rot,visible:data.rot!==undefined&&data.rot!==null&&data.rot!==''},encounters:{icon:'encounters',title:`${encounters} ${encounters===1?'Encounter':'Encounters'}`,value:encounters,visible:encounters>0},phenomena:{icon:'phenomena',title:`${phenomena} ${phenomena===1?'Phenomenon':'Phenomena'}`,value:phenomena,visible:phenomena>0},loot:{icon:'loot',title:loot?'Uncollected Loot Available':'No Uncollected Loot',value:'',visible:loot},status:{icon:STATUS_ICONS[data.status]||'unknown',title:`Exploration Status: ${data.status||'Not assigned'}`,value:'',visible:Boolean(data.status)}};
   return result;
 }
