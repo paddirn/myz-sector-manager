@@ -14,7 +14,7 @@ export function sectorNaming(data={}, title=''){
 }
 export function sectorName(data={}, title=''){
   const state=sectorNaming(data,title);
-  return state.nameOverride?String(state.customName??''):defaultSectorName(state);
+  return state.nameOverride&&String(state.customName??'').trim()?String(state.customName):defaultSectorName(state);
 }
 export const activeGM=env=>Boolean(env.game.user.isGM&&env.game.users?.activeGM?.id===env.game.user.id);
 const queues=new WeakMap();

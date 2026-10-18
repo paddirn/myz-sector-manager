@@ -236,3 +236,8 @@ test('full sector generation uses bounded artifact exclusion and preserves sourc
   const f=fixture();let attempts=0;f.tables.get(TABLE_UUIDS.artifact).roll=async()=>({results:[++attempts===1?{range:[643,666],documentUuid:'Item.missingExcluded'}:{range:[111,111],description:'Allowed artifact'}]});const next=await generateSector(f.existing,f.options);assert.equal(attempts,2);assert(next.loot.some(entry=>entry.title==='Allowed artifact'));
   const before=structuredClone(f.existing);f.tables.get(TABLE_UUIDS.artifact).roll=async()=>({results:[{range:[643,666],documentUuid:'Item.missingExcluded'}]});await assert.rejects(generateSector(f.existing,f.options),/30 attempts/);assert.deepEqual(f.existing,before);
 });
+
+test('Normal randomization preserves all inactive Special content and legacy Secrets',async()=>{
+  const f=fixture();f.existing.sectorType='normal';f.existing.special={sceneUuid:'Scene.missing',source:'Book',overview:'Special\n\nIntro',situation:'Keep',inhabitants:[{title:'Group'}],gear:[{title:'Weapon',quantity:2,type:'weapon'}],events:[{uuid:'JournalEntry.parent.JournalEntryPage.page'}],future:{keep:true}};f.existing.secrets=[{title:'Hidden legacy secret'}];
+  const before=structuredClone(f.existing);const next=await generateSector(f.existing,f.options);assert.deepEqual(next.special,before.special);assert.deepEqual(next.secrets,before.secrets);assert.equal(next.sectorType,'normal');assert.deepEqual(f.existing,before);
+});
