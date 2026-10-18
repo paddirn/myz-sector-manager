@@ -24,7 +24,7 @@ test('all supplied UUIDs must resolve before rolling, with clear errors for each
 test('core pool preserves manual data, replaces generated entries, and routes artifacts, mood, threats and resources',async()=>{
   const f=fixture(),before=structuredClone(f.existing);const output=await generateSector(f.existing,f.options);
   assert.deepEqual(f.existing,before);assert.equal(output.terrain,'Overgrown Ruins');assert.equal(output.rot,2);assert.equal(output.mood,'A distant howl');assert.equal(output.locations[0].title,'Manual location');assert.equal(output.locations[1].title,'Hospital');assert.equal(output.encounters[0].title,'Zone Ghouls');assert.equal(output.loot[0].title,'Manual treasure');
-  assert.deepEqual(output.loot.slice(1).map(entry=>entry.title),['Ancient Rifle','Copper wire']);assert.equal(output.supplies.cleanGrub.quantity,1);assert.equal(output.supplies.rotGrub.quantity,0);assert.equal(output.randomization.threatLevel,'fringe');assert.equal(output.randomization.numericThreatLevel,2);assert.equal(output.notes,'Keep manual notes');assert.equal(output.supplies.cleanGrub.collected,true);assert.deepEqual(output.custom,before.custom);assert.deepEqual(output.pathStunts,before.pathStunts);assert.equal(output.locations[1].generated.sources[0].tableUuid,TABLE_UUIDS.ruinsA);assert.deepEqual(f.pools,[2]);
+  assert.deepEqual(output.loot.slice(1).map(entry=>entry.title),['Ancient Rifle','Copper wire']);assert.equal(output.supplies.cleanGrub.quantity,1);assert.equal(output.supplies.rotGrub.quantity,0);assert.equal(output.randomization.threatLevel,'fringe');assert.equal(output.threatLevel,2);assert.equal(output.notes,'Keep manual notes');assert.equal(output.supplies.cleanGrub.collected,true);assert.deepEqual(output.custom,before.custom);assert.deepEqual(output.pathStunts,before.pathStunts);assert.equal(output.locations[1].generated.sources[0].tableUuid,TABLE_UUIDS.ruinsA);assert.deepEqual(f.pools,[2]);
 });
 test('all p.156 environments use independent eligibility columns; Settlement requires GM-authored details',async()=>{
   assert.equal(Object.keys(ENVIRONMENTS).length,13);
@@ -57,14 +57,14 @@ test('Thick Woods permits threats but suppresses artifacts; custom independent f
 });
 test('no relevant symbols, ineligible sixes, and numeric level zero generate neither corresponding threats nor artifacts',async()=>{
   const f=fixture({}, {},[2,4]);const output=await generateSector(f.existing,f.options);assert.equal(output.encounters.length,0);assert.equal(output.randomization.artifactCount,0);assert(!f.calls.includes('threatType'));assert(!f.calls.includes('artifact'));
-  const empty=fixture({threatLevel:'0'}, {},[]);const zero=await generateSector(empty.existing,empty.options);assert.deepEqual(empty.pools,[]);assert.equal(zero.randomization.numericThreatLevel,0);assert.deepEqual(zero.randomization.baseDice,[]);
+  const empty=fixture({threatLevel:'0'}, {},[]);const zero=await generateSector(empty.existing,empty.options);assert.deepEqual(empty.pools,[]);assert.equal(zero.threatLevel,0);assert.deepEqual(zero.randomization.baseDice,[]);
 });
 test('category-only tables select Fringe uniformly in 1–4 and Central in 5–8; 9+ uses configurable default9',async()=>{
   for(const [text,key,die,expected] of [['1–4 Fringe Zone Sectors','fringe',4,4],['Central Zone','central',3,7],['9+ Unusually Dangerous Areas','dangerous',1,9]]){
-    const f=fixture({threatLevel:text},{'1d4':[die]},Array(expected).fill(2));const output=await generateSector(f.existing,f.options);assert.equal(output.randomization.threatLevel,key);assert.equal(output.randomization.numericThreatLevel,expected);
+    const f=fixture({threatLevel:text},{'1d4':[die]},Array(expected).fill(2));const output=await generateSector(f.existing,f.options);assert.equal(output.randomization.threatLevel,key);assert.equal(output.threatLevel,expected);
   }
-  const danger=fixture({threatLevel:'Unusually Dangerous'},{},Array(12).fill(2));danger.options.options={dangerousLevel:12};assert.equal((await generateSector(danger.existing,danger.options)).randomization.numericThreatLevel,12);
-  const exact=fixture({threatLevel:'Threat Level: 10'},{},Array(10).fill(2));assert.equal((await generateSector(exact.existing,exact.options)).randomization.numericThreatLevel,10);
+  const danger=fixture({threatLevel:'Unusually Dangerous'},{},Array(12).fill(2));danger.options.options={dangerousLevel:12};assert.equal((await generateSector(danger.existing,danger.options)).threatLevel,12);
+  const exact=fixture({threatLevel:'Threat Level: 10'},{},Array(10).fill(2));assert.equal((await generateSector(exact.existing,exact.options)).threatLevel,10);
   assert.deepEqual(mapThreatLevel({text:'Translated',mapping:{threatLevel:7}}),{category:'central',level:7});
 });
 test('one, two and three identities occur only with explicit 1d3 house rule; severity remains the original ones count',async()=>{

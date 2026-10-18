@@ -1,3 +1,4 @@
+import {cleanThreatRecord,threatDeletion} from './sector-fields.mjs';
 import {normalizeLoot,itemLootType} from './loot.mjs';
 import {storedTravel} from './travel-time.mjs';
 import {sectorNaming,sectorName} from './journal-organization.mjs';
@@ -233,7 +234,7 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   const severity=eligibility.threats?ones:0,artifactCount=eligibility.artifacts?sixes:0;
   const output=structuredClone(existing);
   for(const key of ['locations','encounters','effects','loot'])output[key]=(output[key]||[]).filter(entry=>entry.generated?.method!=='core'||(key==='loot'&&(Boolean(entry.resource)||entry.title==='COMPONENTS')));
-  output.terrain=eligibility.name;output.rot=mapRot(rot);output.mood=mood.text;
+  output.threatLevel=threat.level;output.terrain=eligibility.name;output.rot=mapRot(rot);output.mood=mood.text;
   const add=(key,result,quantity,defaultType='scrap')=>{const raw=generatedEntry(result,key,quantity),entry=key==='loot'?normalizeLoot({...raw,type:result.itemType||defaultType,typeSource:result.itemType?'reference':'default'}):raw;output[key].push(entry);return entry;};
   if(eligibility.ruins){
     const ruins=await rollTable(tables[eligibility.ruins==='normal'?'ruinsA':'ruinsB'],env,[],{allowMissing:true});
@@ -264,7 +265,7 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   if(await chance(.25))output.supplies.booze.quantity=await dice('1d3');
   if(await chance(.25))output.supplies.components.quantity=await dice('1d3');
   if(await chance(.5))add('loot',await take('scrap'),await dice('1d6'));
-  output.randomization={method:'core',threatLevel:threat.category,numericThreatLevel:threat.level,levelSelection:threat.selection,environment:eligibility,baseDice,rolledOnes:ones,rolledSixes:sixes,threatSeverity:severity,threatCount,artifactCount,threatMode:options.threatMode,sources:[...environment.sources,...rot.sources,...threatLevel.sources,...mood.sources]};
+  output.randomization={method:'core',threatLevel:threat.category,levelSelection:threat.selection,environment:eligibility,baseDice,rolledOnes:ones,rolledSixes:sixes,threatSeverity:severity,threatCount,artifactCount,threatMode:options.threatMode,sources:[...environment.sources,...rot.sources,...threatLevel.sources,...mood.sources]};
   output.loot=output.loot.map(normalizeLoot);
   return output;
 }
@@ -274,8 +275,8 @@ export async function saveGeneratedSector(journal,expected,next,env=globalThis){
   if(JSON.stringify(journal.getFlag('myz-sector-manager','sector'))!==JSON.stringify(expected))throw new Error('This sector changed while generation was running. Nothing was saved; review it and try again.');
   if(expected?.initialSavePending===true)throw new Error('Save this sector before randomizing.');
   // One Document flag update commits the complete generation; no preceding field writes.
-  const stored=({...sectorNaming(expected,journal.name),...structuredClone(next)});delete stored.journalName;if(stored.travel)stored.travel=storedTravel(stored.travel);
+  const stored=({...sectorNaming(expected,journal.name),...cleanThreatRecord(next)});delete stored.journalName;if(stored.travel)stored.travel=storedTravel(stored.travel);
   const name=sectorName(stored);
-  if(name&&name!==journal.name)await journal.update({name,'flags.myz-sector-manager.sector':stored});
+  if((name&&name!==journal.name)||Object.keys(threatDeletion(expected)).length)await journal.update({...((name&&name!==journal.name)?{name}:{}),'flags.myz-sector-manager.sector':stored,...threatDeletion(expected)});
   else await journal.setFlag('myz-sector-manager','sector',stored);
 }
