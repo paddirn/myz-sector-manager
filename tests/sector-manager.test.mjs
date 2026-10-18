@@ -1,3 +1,4 @@
+import {generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES} from '../scripts/entry-generation.mjs';
 import {normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion} from '../scripts/sector-fields.mjs';
 import {LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected} from '../scripts/loot.mjs';
 import {canonicalCoordinate} from '../scripts/zone/grid.mjs';
@@ -17,7 +18,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -361,4 +362,26 @@ test('Threat Level persists independently of generation metadata and does not re
   const {app,context}=fixture();let stored={version:1,randomization:{numericThreatLevel:6,baseDice:[1,2,3,4,5,6]},loot:[{title:'Keep'}]};const j={id:'threat',name:'Sector',getFlag:()=>stored,update:async changes=>{stored=structuredClone(changes['flags.myz-sector-manager.sector']);}};context.game.journal.get=()=>j;context.ui.notifications.info=()=>{};app.sectorId='threat';app.draft=app.loadDraft(stored,j);assert.equal(app.draft.threatLevel,6);
   app.element.querySelectorAll=()=>[{name:'threatLevel',type:'number',value:'12'}];app.capture();await app.action('save');assert.equal(stored.threatLevel,12);assert.deepEqual(stored.randomization.baseDice,[1,2,3,4,5,6]);assert.equal(stored.loot[0].title,'Keep');
   const reopened=new context.Manager();await reopened.navigate('threat');assert.equal(reopened.draft.threatLevel,12);
+});
+
+test('context Add actions append collapsed entries across every collection without resetting existing expansion',async()=>{
+  const {app,context}=fixture();context.game.journal.get=()=>({id:'context',name:'Sector'});app.sectorId='context-add';app.capture=()=>{};context.generateEntry=async(key,sector,options)=>({title:options.event?'Event':'Generated',uuid:'JournalEntry.keep'});
+  for(const key of ['locations','encounters','loot','effects','secrets','history']){
+    app.draft={code:'A1',[key]:[{title:'Existing'}]};const existing=app.entryState(key).entries[0].id;await app.addContextEntry(key,{event:key==='history'});const state=app.entryState(key);assert.equal(app.draft[key].length,2);assert(!state.collapsed.has(existing));assert(state.collapsed.has(state.entries[1].id));assert.equal(app.draft[key][1].uuid,'JournalEntry.keep');state.collapsed.delete(state.entries[1].id);assert(!app.entryState(key).collapsed.has(state.entries[1].id));
+  }
+});
+test('pending entry generation rejects duplicate clicks and cannot append into changed sectors or edited drafts',async()=>{
+  const {app,context,notices}=fixture();context.console={error(){}};context.game.journal.get=()=>({id:'context'});app.sectorId='a';app.draft={encounters:[],notes:'Before'};app.capture=()=>{};let done,calls=0;context.generateEntry=()=>{calls++;return new Promise(resolve=>done=resolve);};
+  const first=app.action('add','encounters');await app.action('add','encounters');assert.equal(calls,1);done({title:'One'});await first;assert.equal(app.draft.encounters.length,1);
+  const changed=app.action('add','encounters');app.draft.notes='Edited';done({title:'Do not add'});await changed;assert.equal(app.draft.encounters.length,1);assert.match(notices.at(-1),/Nothing was added/);
+  const switched=app.action('add','encounters');app.sectorId='b';done({title:'Wrong sector'});await switched;assert.equal(app.draft.encounters.length,1);
+});
+test('Encounters expose exactly four statuses and three types, retaining legacy values visibly; History keeps both buttons',()=>{
+  const {app,context}=fixture();context.game.journal.get=()=>({id:'a',name:'Sector',getFlag:()=>({version:1})});app.draft=context.normalizeSector({...entries(),encounters:[{title:'Old',status:'Inactive',type:'Unrecognized'}]});app.tab='Encounters';let html=app.build();
+  const status=html.match(/name="encounters.0.status">([\s\S]*?)<\/select>/)[1];assert.equal((status.match(/<option/g)||[]).length,4);for(const value of ['Active','Resolved','Defeated','Hidden'])assert(status.includes(`value="${value}"`));assert.match(html,/Previous status: Inactive/);assert.match(html,/Previous type: Unrecognized/);
+  const type=html.match(/name="encounters.0.type">([\s\S]*?)<\/select>/)[1];assert.equal((type.match(/<option/g)||[]).length,3);app.tab='History';html=app.build();assert.match(html,/data-action="add"/);assert.match(html,/data-action="add-event"/);
+});
+test('closing during generation discards the pending entry and safely releases removed UI controls',async()=>{
+  const {app,context,notices}=fixture();context.console={error(){}};context.game.journal.get=()=>({id:'closed'});app.sectorId='closed';app.draft={effects:[]};app.capture=()=>{};let done;context.generateEntry=()=>new Promise(resolve=>done=resolve);
+  const pending=app.action('add','effects');app.rendered=false;app.element=null;done({title:'Do not append'});await pending;assert.equal(app.draft.effects.length,0);assert.equal(app.addingEntry,false);assert.match(notices.at(-1),/Nothing was added/);
 });

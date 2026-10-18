@@ -180,7 +180,7 @@ const path=require('node:path');
     await page.waitForFunction(()=>manager.draft.locations.length===19);
     assert.equal(await page.locator(`[data-entry="${firstId}"]`).count(),0);
     await page.locator('[data-action="add"]').click();await page.waitForFunction(()=>manager.draft.locations.length===20);
-    assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-toggle]').getAttribute('aria-expanded'),'true');
+    assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');
     console.log('Save/reopen retains data and session UI state; deletion cleans identity; new entries expand');
 
     await page.locator('[data-tab="Overview"]').click();
@@ -381,8 +381,9 @@ const path=require('node:path');
     await page.evaluate(async()=>{
       const {TABLE_UUIDS}=await import('/scripts/sector-randomizer.mjs');
       const texts={environment:'Overgrown Ruins, Ruin:Yes, Threat:Yes, Artifact:Yes',ruinsA:'Hospital',ruinsB:'Factory',rot:'Weak Rot',threatLevel:'2',threatType:'Phenomena',humanoid:'Humanoid fixture',encounter:'Wanderers',monster:'Monster fixture',phenomenon:'Fog fixture',artifact:'Artifact fixture',mood:'A distant howl',scrap:'Scrap fixture'};
-      for(const [key,uuid] of Object.entries(TABLE_UUIDS))docs.set(uuid,{uuid,name:key,documentName:'RollTable',roll:async()=>({results:[{description:texts[key]}]})});
+      for(const [key,uuid] of Object.entries(TABLE_UUIDS))docs.set(uuid,{uuid,name:key,documentName:'RollTable',roll:async()=>({results:[{range:key==='artifact'?[111,111]:undefined,description:texts[key]}]})});
       docs.get(TABLE_UUIDS.ruinsA).roll=async()=>({results:[{documentUuid:'JournalEntry.ruin',description:'Hospital'}]});
+      globalThis.artifactAttempts=0;docs.get(TABLE_UUIDS.artifact).roll=async()=>({results:[++artifactAttempts===1?{range:[643,666],documentUuid:'Item.excludedMissing'}:{range:[111,111],description:'Artifact fixture'}]});
       docs.get(TABLE_UUIDS.threatType).roll=async()=>({results:[{documentUuid:TABLE_UUIDS.phenomenon}]});
       docs.get(TABLE_UUIDS.phenomenon).roll=async()=>({results:[{documentUuid:'JournalEntry.wind',description:'Phenomenon label'}]});
       globalThis.Roll=class{constructor(formula){this.formula=formula;}async evaluate(){return {total:1,dice:[{results:this.formula==='2d6'?[{result:1,active:true},{result:6,active:true}]:[{result:1,active:true}]}]};}};
@@ -396,6 +397,7 @@ const path=require('node:path');
     await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>options.buttons.find(button=>button.action==='randomize').callback(null,null,{element:{querySelector:()=>({value:'core'})}});foundry.applications.api.DialogV2.confirm=async()=>false;});
     await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing);
     assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector1').flags)===JSON.stringify(beforeRandomization)),true);
+    assert.equal(await page.evaluate(()=>artifactAttempts),2);
     await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async options=>{if(options.window?.title==='Save Randomized Sector?'){globalThis.generationPreview=options.content;globalThis.previewDialogOptions=options;}return true;};});
     await page.locator('[data-action="randomize"]').click();await page.waitForFunction(()=>!manager.randomizing&&manager.draft.randomization?.method==='core');
     assert.match(await page.evaluate(()=>generationPreview),/Threat Level: 2/);assert.match(await page.evaluate(()=>generationPreview),/Threat severity \(1s\): 1/);assert.match(await page.evaluate(()=>generationPreview),/Artifacts \(eligible 6s\): 1/);
@@ -404,7 +406,7 @@ const path=require('node:path');
     assert.equal(await page.locator('[name="terrain"]').inputValue(),'Overgrown Ruins');assert.equal(await page.locator('[name="mood"]').inputValue(),'A distant howl');
     assert.equal(await page.evaluate(()=>records.get('sector1').flags.notes===beforeRandomization.notes),true);
     assert.equal(await page.evaluate(()=>manager.draft.locations.find(entry=>entry.generated).uuid),'JournalEntry.ruin');
-    await page.locator('[data-tab="Locations"]').click();await page.locator('[data-reference]:has(input[value="JournalEntry.ruin"]) a').click();await page.waitForFunction(()=>nativeClicks.includes('JournalEntry.ruin'));
+    await page.locator('[data-tab="Locations"]').click();await page.locator('.sm-entry:has(input[value="JournalEntry.ruin"]) [data-entry-toggle]').click();await page.locator('[data-reference]:has(input[value="JournalEntry.ruin"]) a').click();await page.waitForFunction(()=>nativeClicks.includes('JournalEntry.ruin'));
     assert.match(await page.evaluate(()=>generationPreview),/Components: 1/);
     await page.locator('[data-tab="Loot"]').click();
     assert.equal(await page.locator('[name="supplies.components.quantity"]').inputValue(),'1');
@@ -458,7 +460,7 @@ const path=require('node:path');
     await page.locator('[name="pathStunts.safePath"]').check();await page.locator('[name="pathStunts.bullets"]').check();await page.waitForFunction(()=>!document.querySelector('[data-tab="Find the Path"]').classList.contains('sm-tab-empty'));
     await page.locator('[data-tab="Effects"]').click();assert.equal(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);
     await page.evaluate(async()=>{manager.draft.effects=[];await manager.render();});assert(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
-    await page.locator('[data-action="add"]').click();assert(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')));
+    await page.locator('[data-action="add"]').click();await page.waitForFunction(()=>manager.draft.effects.length===1);assert.equal(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);await page.locator('.sm-entry [data-entry-toggle]').click();
     await page.locator('[name="effects.0.title"]').fill('Meaningful effect');assert.equal(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);
     await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
     await page.locator('[data-zone-coordinate]').first().click();await page.waitForFunction(()=>lastPan?.x===250&&lastPan?.y===600);
@@ -522,6 +524,44 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>game.folders.length),2);
     assert.equal(await page.evaluate(()=>records.get('sector1').folder),await page.evaluate(()=>game.folders.find(folder=>folder.name==='Sectors').id));
     console.log('Dialog threat mode reaches generator; artifacts remain fixed; migration folders and immediate standardized sidebar names pass');
+
+    // Context buttons generate actual document-backed entries, append only, and start collapsed.
+    await page.evaluate(async()=>{
+      const {TABLE_UUIDS}=await import('/scripts/sector-randomizer.mjs');const {EVENT_TABLES}=await import('/scripts/entry-generation.mjs');
+      for(const [uuid,documentName,name] of [['Actor.context','Actor','Context Actor'],['Compendium.myz.journal.JournalEntry.context','JournalEntry','Context Journal']])docs.set(uuid,{uuid,documentName,name,_onClickDocumentLink:async()=>nativeClicks.push(uuid)});
+      globalThis.manualCategories=['phenomenon','humanoid','monster','encounter'];globalThis.contextCalls={top:0,phenomenon:0,zone:0,ark:0};
+      docs.get(TABLE_UUIDS.threatType).roll=async()=>{contextCalls.top++;const category=manualCategories.shift()||'monster';return {results:[{documentUuid:TABLE_UUIDS[category],range:category==='phenomenon'?[6,6]:category==='humanoid'?[1,1]:category==='encounter'?[2,2]:[3,5]}]};};
+      for(const category of ['humanoid','monster','encounter','phenomenon','ruinsA','ruinsB'])docs.get(TABLE_UUIDS[category]).roll=async()=>{if(category==='phenomenon')contextCalls.phenomenon++;return {results:[{documentUuid:['humanoid','monster'].includes(category)?'Actor.context':'Compendium.myz.journal.JournalEntry.context'}]};};
+      docs.get(TABLE_UUIDS.scrap).roll=async()=>({results:[{description:'Context Scrap, Quantity:3'}]});
+      for(const key of ['zone','ark'])docs.set(EVENT_TABLES[key],{uuid:EVENT_TABLES[key],name:key,documentName:'RollTable',roll:async()=>{contextCalls[key]++;return {results:[{documentUuid:'Compendium.myz.journal.JournalEntry.context'}]};}});
+    });
+    await page.locator('[data-tab="Encounters"]').click();
+    for(const expected of ['Humanoid','Monster','Encounter']){
+      const before=await page.evaluate(()=>manager.draft.encounters.length);await page.locator('[data-action="add"]').click();await page.waitForFunction(before=>!manager.addingEntry&&manager.draft.encounters.length===before+1,before);
+      const card=page.locator('.sm-entry').last();assert.equal(await card.locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');await card.locator('[data-entry-toggle]').click();assert.equal(await card.locator('select[name$=".type"]').inputValue(),expected);assert.deepEqual(await card.locator('select[name$=".status"] option').allTextContents(),['Active','Resolved','Defeated','Hidden']);
+    }
+    assert.equal(await page.evaluate(()=>contextCalls.top),4);assert.equal(await page.evaluate(()=>contextCalls.phenomenon),0);
+    await page.locator('.sm-entry').last().locator('select[name$=".type"]').selectOption('Humanoid');await page.locator('.sm-entry').last().locator('select[name$=".status"]').selectOption('Defeated');
+    await page.locator('[data-tab="Loot"]').click();const lootBefore=await page.evaluate(()=>manager.draft.loot.length);await page.locator('[data-action="add"]').click();await page.waitForFunction(n=>manager.draft.loot.length===n+1,lootBefore);
+    assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-title]').innerText(),'Context Scrap x 3 (scrap)');assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');
+    await page.locator('[data-tab="Effects"]').click();const effectsBefore=await page.evaluate(()=>manager.draft.effects.length);await page.locator('[data-action="add"]').click();await page.waitForFunction(n=>manager.draft.effects.length===n+1,effectsBefore);assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-title]').innerText(),'Context Journal');assert.equal(await page.evaluate(()=>contextCalls.phenomenon),1);
+    await page.locator('[data-tab="History"]').click();const eventsBefore=await page.evaluate(()=>manager.draft.history.length);await page.locator('[data-action="add-event"]').click();await page.waitForFunction(n=>manager.draft.history.length===n+1,eventsBefore);assert.equal(await page.evaluate(()=>contextCalls.zone),1);assert.equal(await page.evaluate(()=>contextCalls.ark),0);
+    await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector0');manager.tab='History';await manager.render();});
+    const arkBefore=await page.evaluate(()=>manager.draft.history.length);await page.locator('[data-action="add-event"]').click();await page.waitForFunction(n=>manager.draft.history.length===n+1,arkBefore);assert.equal(await page.evaluate(()=>contextCalls.ark),1);
+    await page.locator('[data-action="add"]').click();await page.waitForFunction(n=>manager.draft.history.length===n+2,arkBefore);assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');
+    // Save the Ark record before returning; the selected record stays stable.
+    await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');});
+    assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).type),'Humanoid');assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).status),'Defeated');assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).uuid),'Compendium.myz.journal.JournalEntry.context');
+    // Confirm a newly generated Actor also persists through the normal save mechanism.
+    // Re-add one Encounter and save it, then reopen to verify classification and UUID.
+    await page.locator('[data-tab="Encounters"]').click();await page.locator('[data-action="add"]').click();await page.waitForFunction(()=>!manager.addingEntry);await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');manager.tab='Encounters';await manager.render();});
+    assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).uuid),'Actor.context');assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).type),'Monster');
+    await page.locator('[data-tab="Overview"]').click();await page.locator('[name="terrain"]').fill('Derelict Industries');await page.locator('[data-tab="Locations"]').click();const locationsBefore=await page.evaluate(()=>manager.draft.locations.length);await page.locator('[data-action="add"]').click();await page.waitForFunction(n=>manager.draft.locations.length===n+1,locationsBefore);assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-title]').innerText(),'Context Journal');assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');
+    await page.locator('[data-tab="Overview"]').click();await page.locator('[name="terrain"]').fill('Overgrown Ruins');await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    console.log('Context Encounter categories, exact Status/Type controls, Scrap quantities, Effects, Ark/Zone events, collapsed entries and saved references pass');
 
     // Three clicks preview in Scene coordinates under zoom without saving.
     await page.evaluate(()=>{canvas.stage.zoom=2;canvas.stage.pan={x:100,y:100};});
