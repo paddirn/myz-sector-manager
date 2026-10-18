@@ -12,7 +12,7 @@ const MOD = 'myz-sector-manager';
 const KEY = 'sector';
 const TABS = ['Overview', 'Find the Path', 'Locations', 'Encounters', 'Loot', 'Effects', 'Secrets', 'History'];
 const COLLECTIONS = {Locations:'locations', Encounters:'encounters', Loot:'loot', Effects:'effects', Secrets:'secrets', History:'history'};
-const REFERENCES = {locations:'Scene|JournalEntry|JournalEntryPage', encounters:'Actor|JournalEntry', loot:'Item', effects:'Actor|JournalEntry'};
+const REFERENCES = {locations:'Scene|JournalEntry|JournalEntryPage', encounters:'Actor|JournalEntry|JournalEntryPage', loot:'Item', effects:'Actor|JournalEntry|JournalEntryPage'};
 // Session-only UI identities: never written to Journal flags.
 const ENTRY_UI = new Map();
 const CONSUMABLE_UI = new Map();

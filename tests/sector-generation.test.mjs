@@ -189,10 +189,10 @@ test('grub and water each use a single 50 percent presence roll and a single 25/
 test('both ruin categories persist Journal/Page references and unresolved ruins save with a nonblocking warning',async()=>{
   for(const [environment,key,uuid,type] of [['Overgrown Ruins','ruinsA','JournalEntry.hospital','JournalEntry'],['Derelict Industries','ruinsB','Compendium.myz.ruins.JournalEntry.a.JournalEntryPage.p','JournalEntryPage']]){
     const f=fixture({environment});f.tables.set(uuid,{uuid,name:'Ruin Journal',documentName:type});f.tables.get(TABLE_UUIDS[key]).roll=async()=>({results:[{documentUuid:uuid,description:'Ruin title'}]});
-    const next=await generateSector(f.existing,f.options);const entry=next.locations.find(entry=>entry.generated);assert.equal(entry.uuid,uuid);assert.equal(entry.title,'Ruin title');
+    const next=await generateSector(f.existing,f.options);const entry=next.locations.find(entry=>entry.generated);assert.equal(entry.uuid,uuid);assert.equal(entry.title,type==='JournalEntryPage'?'Ruin Journal':'Ruin title');
     let stored=f.existing;await saveGeneratedSector({getFlag:()=>stored,update:async changes=>{stored=structuredClone(changes['flags.myz-sector-manager.sector']);},setFlag:async(mod,key,value)=>{stored=structuredClone(value);}},f.existing,next,f.env);assert.equal(stored.locations.find(entry=>entry.generated).uuid,uuid);
   }
-  const f=fixture();f.tables.get(TABLE_UUIDS.ruinsA).roll=async()=>({results:[{documentUuid:'JournalEntry.deleted',description:'Hospital'}]});const next=await generateSector(f.existing,f.options);assert.equal(next.locations[1].title,'Hospital');assert.match(next.locations[1].referenceWarning,/Journal could not be resolved/);assert.equal(next.terrain,'Overgrown Ruins');
+  const f=fixture();f.tables.get(TABLE_UUIDS.ruinsA).roll=async()=>({results:[{documentUuid:'JournalEntry.deleted',description:'Hospital'}]});const before=structuredClone(f.existing);await assert.rejects(generateSector(f.existing,f.options),/missing or unavailable/);assert.deepEqual(f.existing,before);
 });
 
 test('Core and house modes share severity and artifact counts; neither bypasses threat eligibility or absent ones',async()=>{

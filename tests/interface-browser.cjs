@@ -224,6 +224,13 @@ const path=require('node:path');
     assert.equal(await effect.locator('select[name$=".category"]').inputValue(),'Weather');
     await effect.locator('[data-entry-toggle]').click();assert(await effect.locator('.sm-entry-body').isHidden());await effect.locator('[data-entry-toggle]').click();
     console.log('Sidebar search restores after rerenders; New Sector is beside Delete; Effects accepts native Actor references');
+    await page.evaluate(()=>{for(const uuid of ['JournalEntry.world.JournalEntryPage.page','Compendium.myz.pages.JournalEntry.parent.JournalEntryPage.page'])docs.set(uuid,{uuid,name:'ACID RAIN',documentName:'JournalEntryPage',_onClickDocumentLink:async()=>nativeClicks.push(uuid)});});
+    for(const tab of ['Encounters','Effects'])for(const uuid of ['JournalEntry.world.JournalEntryPage.page','Compendium.myz.pages.JournalEntry.parent.JournalEntryPage.page']){
+      await page.locator('[data-tab="'+tab+'"]').click();
+      await page.locator('.sm-entry [data-reference]').first().evaluate((el,uuid)=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({type:'JournalEntryPage',uuid}));el.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));},uuid);
+      await page.waitForFunction(uuid=>document.querySelector('.sm-entry input[name$=".uuid"]').value===uuid,uuid);
+      await page.locator('.sm-entry a.content-link').first().click();await page.waitForFunction(uuid=>nativeClicks.includes(uuid),uuid);
+    }
     for(const tab of ['Encounters','Effects']){
       await page.locator('[data-tab="'+tab+'"]').click();
       await page.locator('.sm-entry [data-reference]').first().evaluate(el=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({type:'JournalEntry',uuid:'JournalEntry.wind'}));el.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));});
@@ -528,12 +535,12 @@ const path=require('node:path');
     // Context buttons generate actual document-backed entries, append only, and start collapsed.
     await page.evaluate(async()=>{
       const {TABLE_UUIDS}=await import('/scripts/sector-randomizer.mjs');const {EVENT_TABLES}=await import('/scripts/entry-generation.mjs');
-      for(const [uuid,documentName,name] of [['Actor.context','Actor','Context Actor'],['Compendium.myz.journal.JournalEntry.context','JournalEntry','Context Journal']])docs.set(uuid,{uuid,documentName,name,_onClickDocumentLink:async()=>nativeClicks.push(uuid)});
+      for(const [uuid,documentName,name] of [['Actor.context','Actor','Context Actor'],['Compendium.myz.journal.JournalEntry.context.JournalEntryPage.page','JournalEntryPage','Context Journal']])docs.set(uuid,{uuid,documentName,name,_onClickDocumentLink:async()=>nativeClicks.push(uuid)});
       globalThis.manualCategories=['phenomenon','humanoid','monster','encounter'];globalThis.contextCalls={top:0,phenomenon:0,zone:0,ark:0};
       docs.get(TABLE_UUIDS.threatType).roll=async()=>{contextCalls.top++;const category=manualCategories.shift()||'monster';return {results:[{documentUuid:TABLE_UUIDS[category],range:category==='phenomenon'?[6,6]:category==='humanoid'?[1,1]:category==='encounter'?[2,2]:[3,5]}]};};
-      for(const category of ['humanoid','monster','encounter','phenomenon','ruinsA','ruinsB'])docs.get(TABLE_UUIDS[category]).roll=async()=>{if(category==='phenomenon')contextCalls.phenomenon++;return {results:[{documentUuid:['humanoid','monster'].includes(category)?'Actor.context':'Compendium.myz.journal.JournalEntry.context'}]};};
+      for(const category of ['humanoid','monster','encounter','phenomenon','ruinsA','ruinsB'])docs.get(TABLE_UUIDS[category]).roll=async()=>{if(category==='phenomenon')contextCalls.phenomenon++;return {results:[{documentUuid:['humanoid','monster'].includes(category)?'Actor.context':'Compendium.myz.journal.JournalEntry.context.JournalEntryPage.page'}]};};
       docs.get(TABLE_UUIDS.scrap).roll=async()=>({results:[{description:'Context Scrap, Quantity:3'}]});
-      for(const key of ['zone','ark'])docs.set(EVENT_TABLES[key],{uuid:EVENT_TABLES[key],name:key,documentName:'RollTable',roll:async()=>{contextCalls[key]++;return {results:[{documentUuid:'Compendium.myz.journal.JournalEntry.context'}]};}});
+      for(const key of ['zone','ark'])docs.set(EVENT_TABLES[key],{uuid:EVENT_TABLES[key],name:key,documentName:'RollTable',roll:async()=>{contextCalls[key]++;return {results:[{documentUuid:'Compendium.myz.journal.JournalEntry.context.JournalEntryPage.page'}]};}});
     });
     await page.locator('[data-tab="Encounters"]').click();
     for(const expected of ['Humanoid','Monster','Encounter']){
@@ -553,7 +560,7 @@ const path=require('node:path');
     // Save the Ark record before returning; the selected record stays stable.
     await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
     await page.evaluate(async()=>{await manager.close();globalThis.manager=await game.myzSectorManager.open('sector1');});
-    assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).type),'Humanoid');assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).status),'Defeated');assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).uuid),'Compendium.myz.journal.JournalEntry.context');
+    assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).type),'Humanoid');assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).status),'Defeated');assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).uuid),'Compendium.myz.journal.JournalEntry.context.JournalEntryPage.page');
     // Confirm a newly generated Actor also persists through the normal save mechanism.
     // Re-add one Encounter and save it, then reopen to verify classification and UUID.
     await page.locator('[data-tab="Encounters"]').click();await page.locator('[data-action="add"]').click();await page.waitForFunction(()=>!manager.addingEntry);await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
@@ -561,6 +568,11 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).uuid),'Actor.context');assert.equal(await page.evaluate(()=>manager.draft.encounters.at(-1).type),'Monster');
     await page.locator('[data-tab="Overview"]').click();await page.locator('[name="terrain"]').fill('Derelict Industries');await page.locator('[data-tab="Locations"]').click();const locationsBefore=await page.evaluate(()=>manager.draft.locations.length);await page.locator('[data-action="add"]').click();await page.waitForFunction(n=>manager.draft.locations.length===n+1,locationsBefore);assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-title]').innerText(),'Context Journal');assert.equal(await page.locator('.sm-entry').last().locator('[data-entry-toggle]').getAttribute('aria-expanded'),'false');
     await page.locator('[data-tab="Overview"]').click();await page.locator('[name="terrain"]').fill('Overgrown Ruins');await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
+    await page.locator('[data-tab="Effects"]').click();
+    const pageEffect=page.locator('.sm-entry').last();await pageEffect.locator('[data-entry-toggle]').click();
+    await pageEffect.locator('[data-reference] a').click();
+    await page.waitForFunction(()=>nativeClicks.includes('Compendium.myz.journal.JournalEntry.context.JournalEntryPage.page'));
+    assert.equal(await page.evaluate(()=>manager.draft.effects.at(-1).uuid),'Compendium.myz.journal.JournalEntry.context.JournalEntryPage.page');
     console.log('Context Encounter categories, exact Status/Type controls, Scrap quantities, Effects, Ark/Zone events, collapsed entries and saved references pass');
 
     // Three clicks preview in Scene coordinates under zoom without saving.
