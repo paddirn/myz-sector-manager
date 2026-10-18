@@ -52,7 +52,7 @@ test('Locations share explicit eligibility and normal/industrial mapping; unknow
 test('missing, wrong-type, inaccessible and ambiguous final documents fail without modifying sector input',async()=>{
   const sector={terrain:'Overgrown Ruins',effects:[{title:'Keep'}]},before=structuredClone(sector);const f=fixture();f.table('phenomenon',[{documentUuid:'JournalEntry.missing'}]);await assert.rejects(generateEntry('effects',sector,f),/missing/i);assert.deepEqual(sector,before);
   f.document('Actor','Actor.a','Wrong');f.table('phenomenon',[{documentUuid:'Actor.a'}]);await assert.rejects(generateEntry('effects',sector,f),/JournalEntry/);
-  f.table('phenomenon',[{description:'Duplicate'}]);f.env.game.journal=[{name:'Duplicate',uuid:'JournalEntry.a'},{name:'Duplicate',uuid:'JournalEntry.b'}];await assert.rejects(generateEntry('effects',sector,f),/multiple exact matches/);
+  f.table('phenomenon',[{description:'Duplicate'}]);f.env.game.journal=[{name:'Duplicate',uuid:'JournalEntry.a'},{name:'Duplicate',uuid:'JournalEntry.b'}];await assert.rejects(generateEntry('effects',sector,f),/missing document metadata/);
   f.env.game.user.isGM=false;await assert.rejects(generateEntry('effects',sector,f),/GM access/);
 });
 test('artifact D666 exclusion covers all 643–666 values, rerolls normally and never interprets names',async()=>{
@@ -73,4 +73,25 @@ test('a pre-recursed Monster leaf numbered six is not mistaken for the top-level
 test('Scrap preserves supported structured fields and rejects malformed quantity/mapping data',async()=>{
   const f=fixture();f.table('scrap',[{description:'Base',flags:{'myz-sector-manager':{randomization:{loot:{title:'Structured name',quantity:2,type:'gear',details:'Useful details'}}}}}]);const entry=await generateEntry('loot',{},f);assert.equal(entry.title,'Structured name');assert.equal(entry.quantity,2);assert.equal(entry.type,'gear');assert.equal(entry.details,'Useful details');
   for(const mapping of [{quantity:'bad'},{loot:{details:{invalid:true}}},{loot:'invalid'}]){f.table('scrap',[{description:'Base',flags:{'myz-sector-manager':{randomization:mapping}}}]);await assert.rejects(generateEntry('loot',{},f),/Scrap/);}
+});
+test('world and compendium pages preserve exact UUIDs and page names across all journal generation actions',async()=>{
+  for(const prefix of ['JournalEntry.parent','Compendium.myz.journals.JournalEntry.parent'])for(const name of ['MAGNETIC FIELD','ACID RAIN','A HARD CHOICE']){
+    const f=fixture(),uuid=prefix+'.JournalEntryPage.page';f.document('JournalEntryPage',uuid,name);
+    for(const key of ['phenomenon','zone','ark','ruinsA','encounter'])f.table(key,[{documentUuid:uuid,description:'Different table label'}]);
+    f.table('threatType',[{documentUuid:TABLE_UUIDS.encounter}]);
+    for(const [kind,options] of [['effects',{}],['history',{event:true}],['history',{event:true,arkCoordinate:'A1'}],['locations',{}],['encounters',{}]]){
+      const result=await generateEntry(kind,{code:'A1',terrain:'Overgrown Ruins'},{...f,...options});
+      assert.equal(result.title,name);assert.equal(result.uuid,uuid);assert.equal(structuredClone(result).uuid,uuid);assert.equal(result.status,'Active');
+      if(kind==='effects'){assert.equal(result.category,'Phenomenon');assert.equal(result.duration,'');}
+    }
+  }
+});
+test('native TableResult getDocument resolves embedded page metadata without guessing a parent UUID',async()=>{
+  const f=fixture(),uuid='JournalEntry.parent.JournalEntryPage.page',doc=f.document('JournalEntryPage',uuid,'MAGNETIC FIELD');
+  f.table('phenomenon',[{documentCollection:'JournalEntryPage',documentId:'page',getDocument:async()=>doc}]);
+  assert.equal((await generateEntry('effects',{},f)).uuid,uuid);
+});
+test('plain text journal generation fails clearly without guessing matching names',async()=>{
+  const f=fixture();f.env.console={warn:()=>{}};f.env.game.journal=[{name:'ACID RAIN',uuid:'JournalEntry.wrong'}];f.table('phenomenon',[{description:'ACID RAIN'}]);
+  await assert.rejects(generateEntry('effects',{},f),/missing document metadata/);
 });

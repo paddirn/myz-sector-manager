@@ -18,9 +18,9 @@ export function locationRuinKind(sector){
   return known?mapEnvironment({text:known,mapping:{}}).ruins:null;
 }
 const empty=()=>({title:'',status:'Active',details:'',uuid:''});
-async function requireDocument(result,expected,env,{allowPage=false}={}){
+async function requireDocument(result,expected,env){
   const resolved=await resolveNamedDocument(result,expected,env);
-  if(!resolved.uuid||resolved.referenceWarning||!(resolved.documentType===expected||(allowPage&&resolved.documentType==='JournalEntryPage')))throw new Error(`Generation needs a resolvable ${expected}: ${resolved.referenceWarning||result.text}`);
+  if(!resolved.uuid||resolved.referenceWarning||!(resolved.documentType===expected||(expected==='JournalEntry'&&resolved.documentType==='JournalEntryPage')))throw new Error(`Generation needs a resolvable ${expected}: ${resolved.referenceWarning||result.text}`);
   return resolved;
 }
 const one=result=>{if(result.entries.length!==1)throw new Error('Entry generation requires exactly one final table result.');return result.entries[0];};
@@ -49,7 +49,7 @@ export async function generateEntry(kind,sector,{env=globalThis,arkCoordinate=nu
   }
   if(kind==='locations'){
     const ruins=locationRuinKind(sector);if(!ruins)return empty();
-    return entry(await requireDocument(one(await rollTable(await table(ruins==='industrial'?'ruinsB':'ruinsA'),env)),'JournalEntry',env,{allowPage:true}));
+    return entry(await requireDocument(one(await rollTable(await table(ruins==='industrial'?'ruinsB':'ruinsA'),env)),'JournalEntry',env));
   }
   return empty();
 }

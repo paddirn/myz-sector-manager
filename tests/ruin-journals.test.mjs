@@ -12,14 +12,9 @@ test('normal/industrial ruin documents preserve world, compendium and Journal Pa
     }
   }
 });
-test('text-only ruins resolve only exact unique world or compendium matches',async()=>{
-  const doc={uuid:'JournalEntry.a',name:'Hospital'};
-  assert.equal((await resolveRuinJournal(result('Hospital'),{game:{journal:[doc]}})).uuid,doc.uuid);
-  const pack={documentName:'JournalEntry',getIndex:async()=>[{_id:'b',name:'Hospital'}],getDocument:async id=>({uuid:'Compendium.myz.ruins.JournalEntry.'+id,name:'Hospital'})};
-  assert.equal((await resolveRuinJournal(result('Hospital'),{game:{journal:[],packs:[pack]}})).uuid,'Compendium.myz.ruins.JournalEntry.b');
-  for(const env of [{game:{journal:[]}},{game:{journal:[doc,{...doc,uuid:'JournalEntry.other'}]}},{game:{journal:[{...doc,name:'hospital'}]}}]){
-    const unresolved=await resolveRuinJournal(result('Hospital'),env);assert.equal(unresolved.uuid,'');assert.match(unresolved.referenceWarning,/Journal could not be resolved/);
-  }
+test('text-only ruins never guess a same-name journal or search packs',async()=>{
+  const env={game:{journal:[{uuid:'JournalEntry.a',name:'Hospital'}],packs:[{getIndex(){throw new Error('Must not search');}}]},console:{warn(){}}};
+  const unresolved=await resolveRuinJournal(result('Hospital'),env);assert.equal(unresolved.uuid,'');assert.match(unresolved.referenceWarning,/missing document metadata/);
 });
 test('missing explicit ruin references remain nonblocking and never link a same-name unrelated journal',async()=>{
   const env={game:{journal:[{name:'Hospital',uuid:'JournalEntry.unrelated'}]},fromUuid:async()=>null};

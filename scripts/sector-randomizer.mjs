@@ -51,7 +51,7 @@ export async function rollTable(table,env=globalThis,stack=[],{resolveNested=tru
     const description=result.description||result.text||'';
     const inline=[...String(description).matchAll(/@UUID\[([^\]]+)\](?:\{([^}]+)\})?/g)];
     let uuid=result.documentUuid||(inline.length===1?inline[0][1]:'');
-    if(!uuid&&result.documentCollection&&result.documentId)uuid=result.documentCollection.includes('.')?`Compendium.${result.documentCollection}.${result.documentId}`:`${result.documentCollection}.${result.documentId}`;
+    if(!uuid&&typeof result.getDocument!=='function'&&result.documentCollection&&result.documentId)uuid=result.documentCollection.includes('.')?`Compendium.${result.documentCollection}.${result.documentId}`:`${result.documentCollection}.${result.documentId}`;
     let document,referenceWarning;
     try{
       if(uuid){document=await env.fromUuid(uuid);if(!document)throw new Error(`Reference ${uuid} is missing.`);}
@@ -166,7 +166,7 @@ export function mapThreatType(result){
   if(matches.length!==1)throw new Error(`Unrecognized Threat Type result: ${result.text}. Expected Humanoid, D66 Encounters, Monster, or Phenomena.`);
   return matches[0][0];
 }
-const generatedEntry=(result,kind,quantity)=>({title:result.text,status:'Active',details:result.text,uuid:({locations:['Scene','JournalEntry','JournalEntryPage'],encounters:['Actor','JournalEntry'],effects:['Actor','JournalEntry'],loot:['Item']}[kind]||[]).includes(result.documentType)?result.uuid:'',...(quantity===undefined?{}:{quantity}),...(kind==='effects'?{category:'Phenomenon',duration:''}:{}),generated:{method:'core',sources:result.sources}});
+const generatedEntry=(result,kind,quantity)=>({title:result.documentType==='JournalEntryPage'?(result.documentTitle||result.text):result.text,status:'Active',details:result.text,uuid:({locations:['Scene','JournalEntry','JournalEntryPage'],encounters:['Actor','JournalEntry','JournalEntryPage'],effects:['Actor','JournalEntry','JournalEntryPage'],loot:['Item']}[kind]||[]).includes(result.documentType)?result.uuid:'',...(quantity===undefined?{}:{quantity}),...(kind==='effects'?{category:'Phenomenon',duration:''}:{}),generated:{method:'core',sources:result.sources}});
 // Preserve category before resolving its nested table; final names never classify threats.
 export async function rollThreat(tables,env=globalThis,{excludePhenomena=false}={}){
   const selection=await rollTable(tables.threatType,env,[],{resolveNested:false,acceptDraw:excludePhenomena?draw=>{if(draw.results.length!==1)throw new Error('Manual Threat Type requires one result.');const raw=draw.results[0],origin=raw.parent?.uuid,category=['humanoid','encounter','monster','phenomenon'].find(key=>TABLE_UUIDS[key]===origin);if(category)return category!=='phenomenon';if(raw.documentUuid===TABLE_UUIDS.phenomenon)return false;const range=raw.range;return !((draw.roll?.total===6&&(!range||(range[0]<=6&&range[1]>=6)))||(range?.[0]===6&&range?.[1]===6));}:null});
@@ -194,7 +194,8 @@ export async function rollThreat(tables,env=globalThis,{excludePhenomena=false}=
     if(excludePhenomena&&category==='phenomenon')return [];
     for(const leaf of result.entries){
       const expected=['humanoid','monster'].includes(category)?'Actor':'JournalEntry';
-      if(leaf.documentType&&leaf.documentType!==expected)throw new Error(`${category} threat result must reference ${expected}, received ${leaf.documentType} (${leaf.uuid}).`);
+      if(expected==='JournalEntry'&&!leaf.uuid)(env.console||console).warn(`Journal result has no document metadata: ${leaf.text}; preserving text without a reference.`);
+      if(leaf.documentType&&leaf.documentType!==expected&&!(expected==='JournalEntry'&&leaf.documentType==='JournalEntryPage'))throw new Error(`${category} threat result must reference ${expected}, received ${leaf.documentType} (${leaf.uuid}).`);
       threats.push({category,result:{...leaf,sources:leaf===selected?leaf.sources:[...selected.sources,...leaf.sources]}});
     }
   }
@@ -207,6 +208,11 @@ export async function resolveNamedDocument(result,documentName,env=globalThis){
   if((result.documentType===documentName||(documentName==='JournalEntry'&&result.documentType==='JournalEntryPage'))&&result.uuid)return result;
   if(result.referenceWarning)return result; // Never replace a broken explicit reference with a guessed match.
   if(result.uuid)return {...result,referenceWarning:`${label} could not be resolved for ${result.text}: result references ${result.documentType||'an unsupported document'}.`};
+  if(documentName==='JournalEntry'){
+    const referenceWarning=`Journal could not be resolved for ${result.text}: missing document metadata; name lookup is disabled.`;
+    (env.console||console).warn(referenceWarning);
+    return {...result,referenceWarning};
+  }
   const matches=new Map();let incomplete=false;
   for(const document of collectionValues(documentName==='Actor'?env.game.actors:env.game.journal))if(document.name===result.text.trim()&&document.uuid&&document.visible!==false)matches.set(document.uuid,document);
   for(const pack of env.game.packs?.values?env.game.packs.values():env.game.packs||[]){
@@ -268,7 +274,7 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   output.threatLevel=threat.level;output.terrain=eligibility.name;output.rot=mapRot(rot);output.mood=mood.text;
   const add=(key,result,quantity,defaultType='scrap')=>{const raw=generatedEntry(result,key,quantity),entry=key==='loot'?normalizeLoot({...raw,type:result.itemType||defaultType,typeSource:result.itemType?'reference':'default'}):raw;output[key].push(entry);return entry;};
   if(eligibility.ruins){
-    const ruins=await rollTable(tables[eligibility.ruins==='normal'?'ruinsA':'ruinsB'],env,[],{allowMissing:true});
+    const ruins=await rollTable(tables[eligibility.ruins==='normal'?'ruinsA':'ruinsB'],env);
     for(const result of ruins.entries){const resolved=await resolveRuinJournal(result,env);const entry=add('locations',resolved);if(resolved.referenceWarning)entry.referenceWarning=resolved.referenceWarning;}
   }
   let threatCount=0;

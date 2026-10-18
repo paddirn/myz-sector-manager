@@ -191,7 +191,7 @@ test('all repeatable tabs have accessible entry toggles; Overview remains a form
 test('Effects exposes an Actor drop reference without changing older record category or custom data',()=>{
   const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='sector';app.draft=entries();app.tab='Effects';
   app.draft.effects=[{title:'Zone anomaly',category:'Phenomenon',duration:'One day',custom:{preserve:true}}];
-  const before=JSON.stringify(app.draft);const html=app.build();assert.match(html,/data-reference data-type="Actor\|JournalEntry"/);assert.match(html,/name="effects.0.uuid"/);assert.match(html,/value="Phenomenon" selected/);assert.equal(JSON.stringify(app.draft),before);
+  const before=JSON.stringify(app.draft);const html=app.build();assert.match(html,/data-reference data-type="Actor\|JournalEntry\|JournalEntryPage"/);assert.match(html,/name="effects.0.uuid"/);assert.match(html,/value="Phenomenon" selected/);assert.equal(JSON.stringify(app.draft),before);
 });
 
 test('Find the Path defaults are additive, independent and include eight core benefits plus talent metadata',()=>{
