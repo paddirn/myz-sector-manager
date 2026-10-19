@@ -73,14 +73,22 @@ test('real encounter resolver reuses configured type/subtype tables, preserves n
  make('encounter','Compendium.test.journals.JournalEntry.travel.JournalEntryPage.neutral','Friendly Traders','JournalEntryPage');Object.assign(f.docs.get('Compendium.test.journals.JournalEntry.travel.JournalEntryPage.neutral'),{type:'text',text:{content:'<p>They offer safe passage.</p><p>Second paragraph.</p>'}});f.probabilities.push(1);await f.service.onEntry(f.context());assert.equal(f.reports[0].encounter.title,'Friendly Traders');assert.equal(f.reports[0].encounter.details,'They offer safe passage.\n\nSecond paragraph.');assert.equal(f.reports[0].encounter.uuid,'Compendium.test.journals.JournalEntry.travel.JournalEntryPage.neutral');assert.equal(f.reports[0].detection.highest,null);
  type='Monster';make('monster','Actor.hostile','Territorial Beast','Actor');f.probabilities.push(12,1);await f.service.onEntry(f.context());assert.equal(f.reports[1].encounter.title,'Territorial Beast');f.docs.delete(LEGACY_GENERATION_UUIDS.threatType);f.probabilities.push(12,1);await f.service.onEntry(f.context());assert.equal(f.reports.length,2);assert(f.state().diagnostics.some(item=>/Threat Type/.test(item.message)));
 });
-test('GM report close/timeout does not hang processing; only authoritative client receives the dialog',async()=>{
- const f=travelFixture(),event={code:'A1',sectorName:'Private <script>',terrain:'Woods',expeditionName:'Alpha',weatherChange:{previous:'Clear',condition:'Fog'},encounter:null,errors:[]};let calls=0,timer,closed=0,resolveWait;
- f.env.setTimeout=callback=>{timer=callback;return 1;};f.env.clearTimeout=()=>{};f.env.foundry.applications.api.DialogV2.wait=options=>{calls++;assert(!options.content.includes('<script>'));const instance={close:async()=>{closed++;resolveWait(options.close());}};options.render(null,instance);return new Promise(resolve=>{resolveWait=resolve;});};
- const showing=showTravelReport(event,f.service,f.env);timer();assert.equal(await showing,false);assert.equal(closed,1);assert.equal(calls,1);f.env.game.users.activeGM={id:'other'};assert.equal(await showTravelReport(event,f.service,f.env),false);assert.equal(calls,1);
+test('GM reports persist without timers and Close / X resolve; players and empty events get no dialog',async()=>{
+ for(const closeWith of ['button','x']){
+  const f=travelFixture(),event={code:'A1',sectorName:'Private <script>',terrain:'Woods',expeditionName:'Alpha',weatherChange:{previous:'Clear',condition:'Fog'},encounter:null,errors:[]};let calls=0,options,resolveWait,settled=false;
+  f.env.setTimeout=()=>assert.fail('Reports must never schedule dismissal');
+  f.env.foundry.applications.api.DialogV2.wait=config=>{calls++;options=config;assert(!config.content.includes('<script>'));config.render(null,{});return new Promise(resolve=>{resolveWait=resolve;});};
+  const showing=showTravelReport(event,f.service,f.env).then(value=>{settled=true;return value;});
+  await Promise.resolve();assert.equal(settled,false);assert(f.service.activeDialog);
+  resolveWait(closeWith==='button'?options.buttons[0].callback():options.close());assert.equal(await showing,true);assert.equal(f.service.activeDialog,null);
+  f.env.game.users.activeGM={id:'other'};assert.equal(await showTravelReport(event,f.service,f.env),false);assert.equal(calls,1);
+  f.env.game.user.isGM=false;assert.equal(await showTravelReport(event,f.service,f.env),false);
+ }
+ const f=travelFixture();assert.equal(await showTravelReport({code:'A1'},f.service,f.env),false);
 });
 test('dialog/history options, normal-entry toggle and corrupt future state never overwrite data',async()=>{
  const f=travelFixture();f.settings.set(TRAVEL_SETTING,{...travelDefaults(),showDialog:false});f.probabilities.push(1);await f.service.onEntry(f.context());assert.equal(f.reports.length,0);assert.equal(f.state().history.length,1);assert.equal(f.state().history[0].pending,false);
- f.settings.set(TRAVEL_SETTING,{...travelDefaults(),recordHistory:false});f.probabilities.push(12,1);await f.service.onEntry(f.context());assert.equal(f.reports.length,1);assert.equal(f.state().history.length,1);
+ f.settings.set(TRAVEL_SETTING,{...travelDefaults(),recordHistory:false});f.probabilities.push(12,1);await f.service.onEntry(f.context());assert.equal(f.reports.length,1);assert.equal(f.state().history.length,2);
  f.settings.set(TRAVEL_SETTING,{...travelDefaults(),normalEntry:false});const rolls=f.rolls.length;await f.service.onEntry(f.context());assert.equal(f.rolls.length,rolls);const writes=f.stateWrites();f.setState({version:2,secret:'Keep future state'});await assert.rejects(f.service.setWeather('Fog'),/Unsupported saved/);assert.equal(f.stateWrites(),writes);
 });
 test('results completed during GM handover use a private isolated outbox and survive for the next GM',async()=>{
@@ -93,4 +101,13 @@ test('automatic travel repeats independently of a consumed once-only Macro and w
  f.probabilities.push(1);f.token.x=0;await dispatcher.updated(f.token,{x:0});assert.equal(executions,1);assert.equal(f.reports.length,1);
  f.token.x=500;await dispatcher.updated(f.token,{x:500});f.probabilities.push(12,1);f.token.x=0;await dispatcher.updated(f.token,{x:0});assert.equal(executions,1);assert.equal(f.reports.length,2);
  f.sector.effects=[];f.token.x=500;await dispatcher.updated(f.token,{x:500});f.probabilities.push(12,1);f.token.x=0;await dispatcher.updated(f.token,{x:0});assert.equal(executions,1);assert.equal(f.reports.length,3);
+});
+
+test('native reports queue weather-only then encounter-only; Close and X release processing and retain both history records',async()=>{
+ const f=travelFixture(),dialogs=[];await f.service.setWeather('Clear');f.weatherResults[0]='Fog';f.probabilities.push(1,12,12,1);
+ f.env.foundry.applications.api.DialogV2.wait=options=>new Promise(resolve=>{dialogs.push({options,resolve});options.render(null,{});});f.service.report=event=>showTravelReport(event,f.service,f.env);
+ let completed=0;const first=f.service.onEntry(f.context()).then(()=>completed++),second=f.service.onEntry(f.context()).then(()=>completed++);
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(dialogs.length,1);assert.equal(completed,0);assert.match(dialogs[0].options.content,/Weather Change/);assert(!dialogs[0].options.content.includes('Random Encounter'));assert.equal(f.state().history[0].pending,true);assert.equal(f.state().processed.length,1);
+ dialogs[0].resolve(dialogs[0].options.buttons[0].callback());await first;await new Promise(resolve=>setImmediate(resolve));assert.equal(dialogs.length,2);assert.equal(completed,1);assert.match(dialogs[1].options.content,/Random Encounter/);assert(!dialogs[1].options.content.includes('Weather Change'));assert.equal(f.state().history[0].pending,false);
+ dialogs[1].resolve(dialogs[1].options.close());await second;assert.equal(completed,2);assert.equal(f.state().history.length,2);assert(f.state().history.every(event=>!event.pending));assert.equal(f.service.activeDialog,null);
 });

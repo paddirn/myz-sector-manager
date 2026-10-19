@@ -529,3 +529,10 @@ Automatic Find the Path uses verified official MYZ **14.0.4** embedded `FINDTHEP
 Travel reports finish before existing sector Macros run. Macro Run Once/repeat/disabled behavior remains independent. Reports close normally or time out after five minutes and remain available for later review. Travel Event History, dice and weather are stored in the existing GM-owned configuration Journal, separate from sector History and Macro history. Delivered history defaults to 200 events; pending reports are retained with a 1000-report processing limit. The GM can inspect/refresh history, set/reroll/reset weather, and run clearly labeled tests with persistence off by default.
 
 See the [complete setup, verified system-source references, private storage/recovery limits and backup-world checklist](https://github.com/paddirn/myz-sector-manager/blob/main/docs/travel-events.md). No licensed Foundry world was available for live testing. Offline recovery uses a bounded Token-owner flag buffer and native permissions; denied writes or unsaved disconnected-client results cannot be guaranteed recoverable.
+
+
+### Travel Events compatibility fixes (v0.1.26)
+
+Weather and encounter RollTables now accept Name-only results and retain optional multiline Descriptions. Weather shares nested world/compendium table resolution with sector generation, with cycle/depth checks and contextual errors. V14 results use `documentUuid` for linked targets without reading deprecated TableResult properties. The browser environment wrapper that caused “Illegal invocation” has been removed.
+
+Successful Travel Events use a persistent GM-only dialog. Close or X releases the next queued report and sector Macros; there is no automatic dismissal. Weather and encounters combine into one scrollable report, no-event checks stay silent, and closed reports remain in private Travel Event History. Use Name for a short weather identity and Description for narrative text. See [Travel Events setup and result formats](docs/travel-events.md) for linked-weather policy, diagnostics and backup-world checks.

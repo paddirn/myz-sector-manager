@@ -1,3 +1,4 @@
+import {resultFields,resultReference} from './rolltable-results.mjs';
 export const MODULE='myz-sector-manager',REFERENCE_SETTING='documentReferences',FORMAT_VERSION=1;
 const generation=[
  ['environment','Sector Environment','Environment Generation','UEm95WiZocwvFGSU',['Environment']],
@@ -110,9 +111,9 @@ export function legacyIdentity(def,doc){
  if(!def.aliases.some(alias=>normalizeName(alias)===normalizeName(doc.name)))return false;
  const results=Array.from(doc.results?.values?.()||doc.results||[]).sort((a,b)=>(a.range?.[0]||0)-(b.range?.[0]||0));
  if(!results.length)return false;
- if(def.terrain)return doc.formula==='1d6'&&results.length===6&&results.every((row,i)=>row.weight===1&&row.range?.[0]===i+1&&row.range?.[1]===i+1&&String(row.description||row.text||'').trim());
+ if(def.terrain)return doc.formula==='1d6'&&results.length===6&&results.every((row,i)=>row.weight===1&&row.range?.[0]===i+1&&row.range?.[1]===i+1&&String(resultFields(row).name||resultFields(row).description).trim());
  // Recognizable name + usable table rows; ambiguity is left for explicit GM review.
- return Boolean(doc.formula)&&results.every(row=>Array.isArray(row.range)&&row.range.length===2&&row.range.every(Number.isFinite)&&(String(row.description||row.text||'').trim()||row.documentUuid||row.documentId));
+ return Boolean(doc.formula)&&results.every(row=>Array.isArray(row.range)&&row.range.length===2&&row.range.every(Number.isFinite)&&(String(resultFields(row).name||resultFields(row).description).trim()||resultReference(row)));
 }
 const migrationPromises=new WeakMap();
 export async function migrateReferenceConfiguration(env=globalThis){
