@@ -1,9 +1,10 @@
+import {withLegacyReferences} from './helpers/reference-fixture.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {generateEntry,normalizeEncounter,locationRuinKind,EVENT_TABLES} from '../scripts/entry-generation.mjs';
 import {TABLE_UUIDS,rollArtifact,artifactAllowed,generateSector} from '../scripts/sector-randomizer.mjs';
 function fixture(){
-  const docs=new Map(),calls=[];const env={game:{user:{isGM:true},journal:[],actors:[],packs:[]},fromUuid:async uuid=>docs.get(uuid)};
+  const docs=new Map(),calls=[];const env={game:{user:{isGM:true},journal:[],actors:[],packs:[]},fromUuid:async uuid=>docs.get(uuid)};withLegacyReferences(env);
   const table=(key,results)=>{const uuid=TABLE_UUIDS[key]||EVENT_TABLES[key]||key;let index=0;const value={uuid,name:key,documentName:'RollTable',async roll(options){assert.deepEqual(options,{recursive:false});calls.push(key);const raw=typeof results==='function'?results(index++):results;return Array.isArray(raw)?{results:raw}:raw;}};docs.set(uuid,value);return value;};
   const document=(type,uuid,name)=>{const doc={documentName:type,uuid,name};docs.set(uuid,doc);return doc;};
   return {env,docs,calls,table,document};

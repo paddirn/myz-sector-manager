@@ -1,3 +1,6 @@
+import {registerDocumentReferences} from './document-reference-settings.mjs';
+import {ensureReferenceMigration} from './document-references.mjs';
+import {macroRunOnce} from './zone/entry-triggers.mjs';
 import {safeImageSource} from './zone/presentation.mjs';
 import {imagePath,journalImageSource} from './sector-images.mjs';
 import {isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel} from './sector-types.mjs';
@@ -548,7 +551,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const history=this.journal?.getFlag?.(MOD,'entryTriggers')||{};
     const outcomes=(history.records||[]).filter(record=>record.triggerId===item.triggerId);
     const summary=outcomes.map(record=>`${record.tokenUuid}: ${record.status}${record.error?' — '+record.error:''}`).join('; ')||'Not fired';
-    return `<fieldset><legend>Sector-entry Macro (optional)</legend>${reference('effectMacro',i,item.macroUuid||'',`effects.${i}.macroUuid`).replace('Reference','Macro Reference')}<label><input type="checkbox" name="effects.${i}.macroEnabled" ${item.macroEnabled?'checked':''}> Enabled on first entry</label><p>${escapeHTML(summary)}</p><button type="button" data-reset-trigger="${attr(item.triggerId||'')}" ${item.triggerId?'':'disabled'}>Reset this trigger</button></fieldset>`;
+    return `<fieldset><legend>Sector-entry Macro (optional)</legend>${reference('effectMacro',i,item.macroUuid||'',`effects.${i}.macroUuid`).replace('Reference','Macro Reference')}<label><input type="checkbox" name="effects.${i}.macroRunOnce" ${macroRunOnce(item)?'checked':''}> Run Once (First Entry Only)</label><label><input type="checkbox" name="effects.${i}.macroDisabled" ${item.macroDisabled?'checked':''}> Disable automatic trigger</label><small>Unchecked Run Once: run on every entry. Switching back uses existing history; reset to allow another first entry.</small><p>${escapeHTML(summary)}</p><button type="button" data-reset-trigger="${attr(item.triggerId||'')}" ${item.triggerId?'':'disabled'}>Reset this trigger</button></fieldset>`;
   }
   collectionKey(){return this.tab==='Locations'&&isSpecial(this.data)?'special.locations':COLLECTIONS[this.tab];}
   entryState(key){
@@ -791,16 +794,18 @@ const zone=new ZoneRuntime({
   createSector:async(code,valid)=>{const manager=await game.myzSectorManager.open();if(manager)await manager.promptNewSector(code,valid);}
 });
 Hooks.once('init',()=>{
-  zone.register();
+  zone.register();registerDocumentReferences();
   game.settings.register(MOD,'threatGenerationMode',{name:'Sector generation: threat identities',hint:'Core uses one threat identity with severity equal to the number of Base Dice showing 1. The 1d3 option is a house rule and does not change the severity roll.',scope:'world',config:true,type:String,choices:{core:'Core Rulebook: one threat with severity','individual-d3':'House rule: 1d3 individual threats'},default:'core',restricted:true});
   game.settings.register(MOD,'dangerousThreatLevel',{name:'Sector generation: Unusually Dangerous level',hint:'Numeric Threat Level when the table returns the open-ended 9+ category. Default 9. Explicit numeric table results take precedence.',scope:'world',config:true,type:Number,default:9,restricted:true});
 });
-Hooks.once('ready',()=>{
+Hooks.once('ready',async()=>{
+  const referencesReady=ensureReferenceMigration().catch(error=>{console.error(`${MOD} | Document References migration`,error);ui.notifications.error(`Document References migration: ${error.message}. Open Module Settings → Document References to review/retry.`);});
   game.myzSectorManager={
     zone:zone.api(),
     migrateJournals:()=>organization.run(),
     open:async(id=null)=>{
       if(!game.user.isGM){ui.notifications.warn('GM access only.');return;}
+      await referencesReady;
       if(app?.rendered){if(id && id!==app.sectorId)await app.navigate(id);app.bringToFront();return app;}
       app=new SectorManager({sectorId:id});
       if(id && app.journal)app.draft=app.loadDraft(app.journal.getFlag(MOD,KEY),app.journal);
@@ -808,6 +813,6 @@ Hooks.once('ready',()=>{
     },
     getSector:(journalId)=>{if(!game.user.isGM)return null;const j=game.journal.get(journalId);return j?.getFlag(MOD,KEY)??null;}
   };
-  organization.start();zone.start();
+  await referencesReady;organization.start();zone.start();
   console.info(`${MOD} | Ready. Run game.myzSectorManager.open() from a Script Macro.`);
 });

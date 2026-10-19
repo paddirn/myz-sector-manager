@@ -1,10 +1,11 @@
+import {withLegacyReferences} from './helpers/reference-fixture.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {TABLE_UUIDS,resolveTables,rollThreat,rollTable,generateSector,saveGeneratedSector,mapThreatType} from '../scripts/sector-randomizer.mjs';
 function fixture(){
   const calls=new Map(),documents=new Map();
   for(const [key,uuid] of Object.entries(TABLE_UUIDS))documents.set(uuid,{uuid,name:key,documentName:'RollTable',async roll(options){assert.equal(options.recursive,false);calls.set(key,(calls.get(key)||0)+1);return {results:[{description:key}]};}});
-  const env={game:{user:{isGM:true}},fromUuid:async uuid=>documents.get(uuid)};
+  const env={game:{user:{isGM:true}},fromUuid:async uuid=>documents.get(uuid)};withLegacyReferences(env);
   const set=(key,results)=>{documents.get(TABLE_UUIDS[key]).roll=async options=>{assert.equal(options.recursive,false);calls.set(key,(calls.get(key)||0)+1);return {results:typeof results==='function'?results():results};};};
   const doc=(type,name,uuid)=>{const document={documentName:type,name,uuid};documents.set(uuid,document);return document;};
   const ref=key=>({documentUuid:TABLE_UUIDS[key],description:'Category display alias'});

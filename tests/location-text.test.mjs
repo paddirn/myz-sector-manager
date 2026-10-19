@@ -1,3 +1,4 @@
+import {withLegacyReferences} from './helpers/reference-fixture.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {journalBodyText,locationDescription} from '../scripts/location-text.mjs';
@@ -24,7 +25,7 @@ test('missing/empty journals preserve references and produce empty descriptions 
 });
 test('manual Location generation snapshots page body without modifying the source sector or the document',async()=>{
   const page={uuid:'JournalEntry.ruin.JournalEntryPage.p',documentName:'JournalEntryPage',name:'Hospital',type:'text',text:{content:'<p>Descriptive room.</p><p>More detail.</p>'}},table={uuid:TABLE_UUIDS.ruinsA,name:'Ruins',documentName:'RollTable',roll:async()=>({results:[{documentUuid:page.uuid}]})};
-  const env={game:{user:{isGM:true}},fromUuid:async uuid=>uuid===page.uuid?page:uuid===table.uuid?table:null};const sector={terrain:'Overgrown Ruins',locations:[{title:'Manual',details:'Keep edits'}]},before=structuredClone(sector);const entry=await generateEntry('locations',sector,{env});assert.equal(entry.title,'Hospital');assert.equal(entry.uuid,page.uuid);assert.equal(entry.details,'Descriptive room.\n\nMore detail.');assert.deepEqual(sector,before);
+  const env={game:{user:{isGM:true}},fromUuid:async uuid=>uuid===page.uuid?page:uuid===table.uuid?table:null};withLegacyReferences(env);const sector={terrain:'Overgrown Ruins',locations:[{title:'Manual',details:'Keep edits'}]},before=structuredClone(sector);const entry=await generateEntry('locations',sector,{env});assert.equal(entry.title,'Hospital');assert.equal(entry.uuid,page.uuid);assert.equal(entry.details,'Descriptive room.\n\nMore detail.');assert.deepEqual(sector,before);
 });
 test('preformatted lines remain separated and markdown fallback cannot introduce embedded media or scripts',async()=>{
   assert.equal(journalBodyText('<pre>First line\nSecond line</pre>',{}),'First line\nSecond line');
