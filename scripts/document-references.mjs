@@ -22,6 +22,7 @@ export const REFERENCE_DEFINITIONS=Object.freeze([
  ...generation.map(([key,label,category,id,aliases])=>definition(`generation.${key}`,label,category,id,true,aliases)),
  definition('events.zone','Zone Events','Events & History','24wtBybpf1ObKbcG',false,['Zone Event','Zone']),
  definition('events.ark','Ark Events','Events & History','c5Saikp36mQWGqL1',false,['Ark Event','Ark']),
+ Object.freeze({key:'travelEvents.weatherTable',label:'Weather Conditions',category:'Travel Events',documentType:'RollTable',defaultUuid:null,legacyUuid:null,required:false,description:'Optional global Zone weather table; text results. Configure your own world or compendium table.',aliases:[]}),
  ...terrains.map(([name,id])=>definition(`terrainDescriptions.${slug(name)}`,name,'Terrain Descriptions',id,false,[`${name} Description`,`${name} Descriptions`],{terrain:name}))
 ]);
 export const REFERENCE_BY_KEY=new Map(REFERENCE_DEFINITIONS.map(def=>[def.key,def]));
@@ -120,6 +121,7 @@ export async function migrateReferenceConfiguration(env=globalThis){
  const next=structuredClone(original),outcomes=[];next.references??={};
  for(const def of REFERENCE_DEFINITIONS){
   if(Object.hasOwn(next.references,def.key)){outcomes.push({key:def.key,status:'Preserved override'});continue;}
+  if(!def.legacyUuid){outcomes.push({key:def.key,status:'Unconfigured',uuid:null,error:'No legacy or bundled resource is available.'});continue;}
   const probe={references:{[def.key]:{mode:'custom',uuid:def.legacyUuid}}};
   const result=await validateReference(def.key,env,probe);
   if(result.document&&legacyIdentity(def,result.document)){next.references[def.key]={mode:'custom',uuid:def.legacyUuid};outcomes.push({key:def.key,status:'Migrated',uuid:def.legacyUuid,name:result.name});}

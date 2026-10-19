@@ -1,6 +1,6 @@
-# Document reference audit and migration design — v0.1.24
+# Document reference audit and migration design — v0.1.25
 
-Audited runtime scripts, module.json, repository assets/data, documentation and tests for UUID literals, directory lookups, fromUuid/fromUuidSync, names/constants and indirect ID mappings. Found **28 unique module-level RollTable dependencies**: 13 generation, 2 events, 13 terrain descriptions. All are configurable registry entries. There are **0 bundled defaults**: no source table exports, authored descriptions or redistribution authorization are present. No fixed module-level Actor, Item, Scene, Macro, Journal or compendium dependency was found.
+Audited runtime scripts, module.json, repository assets/data, documentation and tests for UUID literals, directory lookups, fromUuid/fromUuidSync, names/constants and indirect ID mappings. Found **28 legacy module-level RollTable dependencies**: 13 generation, 2 events, 13 terrain descriptions. Version 0.1.25 adds a UUID-free optional Weather Conditions slot, making **29 registry entries**. All are configurable registry entries. There are **0 bundled defaults**: no source table exports, authored descriptions or redistribution authorization are present. No fixed module-level Actor, Item, Scene, Macro, Journal or compendium dependency was found. Party Roster Actor UUIDs remain world-specific assignments; weather/history/dice state uses the private configuration Journal.
 
 ## Complete resource inventory
 
@@ -36,6 +36,8 @@ All fixed world UUIDs now live exclusively in `scripts/document-references.mjs` 
 | `terrainDescriptions.settlement` | `RollTable.QmXrOSRquBrSMKgo` | Settlement | terrain-descriptions.mjs | RollTable | Optional |
 | `terrainDescriptions.thickWoods` | `RollTable.5esCJTuBkL01hsE4` | Thick Woods | terrain-descriptions.mjs | RollTable | Optional |
 | `terrainDescriptions.unscathedRuins` | `RollTable.bf0HSWkE02OfTqK9` | Unscathed Ruins | terrain-descriptions.mjs | RollTable | Optional |
+
+| `travelEvents.weatherTable` | None (no world-specific ID) | Weather Conditions | travel/service.mjs | RollTable | Optional |
 
 ## Registry and resolution contract
 
