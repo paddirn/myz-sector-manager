@@ -248,3 +248,12 @@ test('full normal/industrial generation snapshots journal bodies and preserves m
     const next=await generateSector(f.existing,f.options);assert.equal(next.locations[0].details,'Manual edits stay');assert.equal(next.locations.at(-1).details,'First room.\n\nSecond room.');assert.equal(next.locations.at(-1).uuid,uuid);assert.equal(f.existing.locations[0].details,'Manual edits stay');
   }
 });
+
+test('terrain Description is a single editable snapshot, does not change names/eligibility/Location details, and falls back safely',async()=>{
+ const {TERRAIN_DESCRIPTION_TABLES}=await import('../scripts/terrain-descriptions.mjs');const f=fixture();let rolls=0;
+ f.existing.customName='My custom name';f.existing.nameOverride=true;
+ f.tables.set(TERRAIN_DESCRIPTION_TABLES['Overgrown Ruins'],{documentName:'RollTable',roll:async()=>{rolls++;return {results:[{description:'<p>Terrain paragraph one.</p><p>Paragraph two.</p>'}]};}});
+ const next=await generateSector(f.existing,f.options);assert.equal(rolls,1);assert.equal(next.description,'Terrain paragraph one.\n\nParagraph two.');assert.equal(next.customName,'My custom name');assert.equal(next.nameOverride,true);assert.notEqual(next.locations.at(-1).details,next.description);assert.equal(f.existing.description,'Handwritten');assert.equal(next.randomization.environment.ruins,'normal');assert.equal(next.randomization.threatSeverity,1);
+ f.tables.get(TERRAIN_DESCRIPTION_TABLES['Overgrown Ruins']).roll=async()=>{throw Error('Unavailable');};assert.equal((await generateSector(f.existing,f.options)).description,'Handwritten');
+ await assert.rejects(generateSector({...f.existing,sectorType:'special'},f.options),/manually authored/);assert.equal(rolls,1);
+});

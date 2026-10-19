@@ -391,16 +391,16 @@ test('closing during generation discards the pending entry and safely releases r
 
 test('Special UI uses ordered tabs, shared fields and Scene references without Normal tabs or Randomize',()=>{
   const {app,context}=fixture();const record={version:1,sectorType:'special',code:'B7',customName:'Doom Sphere',nameOverride:true};const j={id:'special',name:'Doom Sphere',getFlag:()=>record};context.game.journal=[j];context.game.journal.get=()=>j;app.sectorId=j.id;app.draft=context.normalizeSector(record);
-  let html=app.build();assert.match(html,/sm-sector-special/);assert.match(html,/B7 - Doom Sphere/);assert.match(html,/name="special.sceneUuid"/);assert.match(html,/data-type="Scene"/);assert.match(html,/name="special.source"/);assert.match(html,/name="special.overview"/);assert.doesNotMatch(html,/data-action="randomize"|data-tab="Locations"|data-tab="Secrets"/);
+  let html=app.build();assert.match(html,/sm-sector-special/);assert.match(html,/B7 - Doom Sphere/);assert.match(html,/name="special.sceneUuid"/);assert.match(html,/data-type="Scene"/);assert.match(html,/name="special.source"/);assert.match(html,/name="special.overview"/);assert.doesNotMatch(html,/data-action="randomize"|data-tab="Secrets"/);
   for(const tab of sectorTabs(record))assert(html.includes(`data-tab="${tab}"`));
   for(const [tab,key] of [['Inhabitants','inhabitants'],['Gear & Artifacts','gear'],['Events','events']]){app.tab=tab;app.draft.special[key]=[{title:'Keep',quantity:1,type:'scrap'}];html=app.build();assert.match(html,/aria-expanded="false"/);assert.doesNotMatch(html,/name="special\..*\.collected"/);}
-  app.tab='Locations';app.build();assert.equal(app.tab,'Overview');assert.equal(app.canRandomize,false);
+  app.tab='Locations';app.build();assert.equal(app.tab,'Locations');assert.equal(app.canRandomize,false);
 });
 test('confirmed conversions preserve both content sets, cancel safely and fall back from incompatible tabs',async()=>{
   const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='conversion';app.draft=context.normalizeSector({version:1,code:'A1',description:'Normal',secrets:[{title:'Keep'}],locations:[{title:'Ruin'}],special:{overview:'Special\n\nMore',inhabitants:[{title:'Group'}]},history:[{title:'Visit'}],pathStunts:{safePath:true}});app.capture=()=>{};
   const before=structuredClone(app.draft);let confirm=false,options;context.foundry.applications.api.DialogV2={confirm:async value=>{options=value;return confirm;}};
   app.tab='Locations';await app.changeSectorType();assert.deepEqual(structuredClone(app.draft),before);assert.match(options.content,/Special Zone Sector/);confirm=true;
-  for(const type of ['special','normal','special']){await app.changeSectorType();assert.equal(app.draft.sectorType,type);assert.deepEqual({...structuredClone(app.draft),sectorType:'normal'},before);assert.equal(app.tab,'Overview');}
+  for(const type of ['special','normal','special']){await app.changeSectorType();assert.equal(app.draft.sectorType,type);assert.deepEqual({...structuredClone(app.draft),sectorType:'normal'},before);assert.equal(app.tab,'Locations');}
   app.tab='History';await app.changeSectorType();assert.equal(app.tab,'History');assert.equal(app.dirty,true);
 });
 test('Special add/delete uses independent nested arrays, no rolls, collapsed new rows and stable expansion',async()=>{
@@ -498,4 +498,22 @@ test('Normal tab display labels change while IDs, storage, controls and descript
   const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='normal-labels';app.draft=context.normalizeSector({version:1,encounters:[{title:'Mutant',type:'Humanoid',status:'Defeated',uuid:'Actor.keep'}],loot:[{title:'Rifle',quantity:3,type:'weapon',uuid:'Item.keep'}],locations:[{title:'Manual',details:'Do not replace'}],history:[{title:'Visit'}]});
   const before=JSON.stringify(app.draft);for(const [tab,label,key] of [['Encounters','Inhabitants','encounters'],['Loot','Gear & Artifacts','loot']]){app.tab=tab;const html=app.build();assert(html.includes(`data-tab="${tab}"`));assert(html.includes(`>${label.replaceAll('&','&amp;')}</button>`));assert(html.includes(`name="${key}.0.title"`));assert.match(html,/sm-entry-toggle sm-special-toggle/);const heading=html.slice(html.indexOf('data-entry-header'),html.indexOf('class="sm-entry-body"'));assert(heading.indexOf('data-entry-title')<heading.indexOf('data-chevron'));}
   assert.equal(JSON.stringify(app.draft),before);assert.equal(app.draft.locations[0].details,'Do not replace');
+});
+
+test('Special Locations creates blank nested records without Ruins rolls and preserves hidden Normal Locations through conversion',async()=>{
+ const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='special-locations';app.draft=context.normalizeSector({sectorType:'special',locations:[{title:'Hidden normal ruin',details:'Keep'}],special:{situation:'Old situation'}});app.capture=()=>{};context.generateEntry=()=>assert.fail('Special Locations must not roll');app.tab='Locations';
+ await app.addContextEntry('special.locations');assert.equal(app.draft.special.locations.length,1);assert.equal(app.draft.special.locations[0].details,'');assert.equal(app.draft.locations[0].details,'Keep');assert.equal(app.entryState('special.locations').collapsed.size,1);
+ const html=app.build();assert.match(html,/name="special.locations.0.title"/);assert.match(html,/data-type="Scene\|JournalEntry\|JournalEntryPage"/);assert.match(html,/Details \/ Rules \/ Notes/);
+ context.foundry.applications.api.DialogV2={confirm:async()=>true};await app.changeSectorType();assert.equal(app.draft.locations[0].details,'Keep');await app.changeSectorType();assert.equal(app.draft.special.locations.length,1);
+});
+test('Special Overview retains existing Situation field, independent expanded sections and correct order',()=>{
+ const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='special-overview-collapse';app.draft=context.normalizeSector({sectorType:'special',special:{overview:'Overview text',situation:'Existing\n\nSituation'}});const original=JSON.stringify(app.draft);let html=app.build();
+ assert.doesNotMatch(html,/data-tab="The Situation"/);assert.match(html,/data-overview-section="special.overview" open/);assert.match(html,/data-overview-section="special.situation" open/);assert.match(html,/rows="7" data-autosize/);assert(html.indexOf('name="special.overview"')<html.indexOf('name="special.situation"'));assert(html.indexOf('name="special.situation"')<html.indexOf('name="notes"'));
+ app.overviewState()['special.overview']=true;html=app.build();assert.match(html,/data-overview-section="special.overview" >/);assert.match(html,/data-overview-section="special.situation" open/);assert.equal(JSON.stringify(app.draft),original);
+});
+test('Effects Macro control preserves original Journal reference, independent optional Macro and visible execution outcomes',()=>{
+ const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector',getFlag:(m,key)=>key==='entryTriggers'?{records:[{triggerId:'stable',tokenUuid:'Scene.zone.Token.party',status:'failed',error:'Denied'}]}:null});app.sectorId='macro-ui';app.draft=context.normalizeSector({effects:[{title:'Storm',uuid:'JournalEntry.weather',details:'Keep weather notes',triggerId:'stable',macroUuid:'Macro.weather',macroEnabled:true}]});app.tab='Effects';const original=JSON.stringify(app.draft),html=app.build();assert.match(html,/name="effects.0.uuid" value="JournalEntry.weather"/);assert.match(html,/name="effects.0.macroUuid" value="Macro.weather"/);assert.match(html,/data-type="Macro"/);assert.match(html,/name="effects.0.macroEnabled" checked/);assert.match(html,/failed — Denied/);assert.match(html,/data-reset-all-triggers/);assert.equal(JSON.stringify(app.draft),original);
+});
+test('Macro reference opens its editor without invoking executable native document links',async()=>{
+ const {app,documents}=fixture();let opened=0;documents.set('Macro.one',{documentName:'Macro',sheet:{render:async force=>{assert.equal(force,true);opened++;}},_onClickDocumentLink:()=>assert.fail('Macro link would execute')});await app.openReference({querySelector:()=>({value:'Macro.one'})});assert.equal(opened,1);
 });

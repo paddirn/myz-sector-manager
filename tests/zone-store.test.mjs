@@ -79,3 +79,12 @@ test('viewing or resizing other Scenes never modifies saved grid calibration',as
   f.combat.width=9000;f.env.canvas.scene=f.combat;f.env.Hooks.call('updateScene',f.combat,{width:9000});f.env.Hooks.call('canvasReady');await runtime.store.queue;
   assert.deepEqual(runtime.store.config.grid,grid);runtime.stop();
 });
+
+test('runtime movement hooks execute entry Macros after v14 stop, not startup/canvas refresh or intermediate updates',async()=>{
+ const f=fixture();let fired=0,state={records:[]};const sector={version:1,code:'A1',effects:[{macroUuid:'Macro.one',macroEnabled:true,triggerId:'stable'}]};f.env.game.journal[1]={id:'sector',getFlag:(module,key)=>key==='sector'?sector:state,setFlag:async(module,key,value)=>{assert.equal(key,'entryTriggers');state=structuredClone(value);}};
+ f.env.fromUuid=async()=>({documentName:'Macro',canExecute:true,execute:async()=>{fired++;}});
+ const runtime=new ZoneRuntime({},f.env);runtime.overlay.draw=()=>{};runtime.overlay.stop=()=>{};runtime.start();await runtime.store.queue;assert.equal(fired,0);
+ const token=f.zone.tokens.get('party');token.movement={state:'pending'};token.x=0;f.env.Hooks.call('moveToken',token);f.env.Hooks.call('updateToken',token,{x:0});await runtime.triggers.queue;assert.equal(fired,0);
+ token.movement.state='completed';f.env.Hooks.call('stopToken',token);await runtime.triggers.queue;assert.equal(fired,1);assert.equal(state.records[0].status,'completed');
+ f.env.Hooks.call('canvasReady');f.env.Hooks.call('stopToken',token);await runtime.triggers.queue;assert.equal(fired,1);runtime.stop();
+});

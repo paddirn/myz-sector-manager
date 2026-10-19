@@ -5,9 +5,10 @@ const entryContent=entry=>['title','details','uuid','duration'].some(key=>text(e
 export function tabHasContent(data,tab){
   if(tab==='The Situation')return text(data.special?.situation);
   const specialKey={Inhabitants:'inhabitants','Gear & Artifacts':'gear',Events:'events',Images:'images'}[tab];if(specialKey)return Boolean(data.special?.[specialKey]?.some(entryContent));
-  if(tab==='Overview'&&data.sectorType==='special'&&['sceneUuid','source','overview','overlayImage'].some(key=>text(data.special?.[key])))return true;
+  if(tab==='Overview'&&data.sectorType==='special'&&['sceneUuid','source','overview','situation','overlayImage'].some(key=>text(data.special?.[key])))return true;
   if(tab==='Overview')return ['terrain','description','notes','mood'].some(key=>text(data[key]))||Number(data.rot)>0||Boolean(data.rot&&Number.isNaN(Number(data.rot)))||Boolean(data.status&&data.status!=='Unexplored')||Boolean(data.randomization?.threatLevel);
   if(tab==='Find the Path')return Object.values(data.pathStunts||{}).some(value=>value===true);
+  if(tab==='Locations'&&data.sectorType==='special')return Boolean(data.special?.locations?.some(entryContent));
   const key={Locations:'locations',Encounters:'encounters',Loot:'loot',Effects:'effects',Secrets:'secrets',History:'history'}[tab];
   return Boolean(data[key]?.some(entryContent))||(tab==='Loot'&&Object.values(data.supplies||{}).some(supply=>Number(supply?.quantity)>0));
 }

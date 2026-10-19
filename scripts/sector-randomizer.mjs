@@ -1,3 +1,4 @@
+import {terrainDescription} from './terrain-descriptions.mjs';
 import {locationDescription} from './location-text.mjs';
 import {cleanThreatRecord,threatDeletion} from './sector-fields.mjs';
 import {normalizeLoot,itemLootType} from './loot.mjs';
@@ -264,6 +265,7 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   const take=key=>rollTable(tables[key],env);
   const environment=await take('environment'),eligibility=mapEnvironment(environment);
   if(eligibility.manual)throw new Error('Settlement requires GM-authored details, not normal random sector generation (Core Rulebook p. 156). No changes were saved.');
+  const description=await terrainDescription(eligibility.name,env);
   const rot=await take('rot'),threatLevel=await take('threatLevel'),mood=await take('mood');
   const threat=await selectThreatLevel(threatLevel,dice,options);
   // One pool, one per-face result for each Base Die. Never reroll it for artifacts.
@@ -274,6 +276,7 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   const output=structuredClone(existing);
   for(const key of ['locations','encounters','effects','loot'])output[key]=(output[key]||[]).filter(entry=>entry.generated?.method!=='core'||(key==='loot'&&(Boolean(entry.resource)||entry.title==='COMPONENTS')));
   output.threatLevel=threat.level;output.terrain=eligibility.name;output.rot=mapRot(rot);output.mood=mood.text;
+  if(description!==null)output.description=description;
   const add=(key,result,quantity,defaultType='scrap')=>{const raw=generatedEntry(result,key,quantity),entry=key==='loot'?normalizeLoot({...raw,type:result.itemType||defaultType,typeSource:result.itemType?'reference':'default'}):raw;output[key].push(entry);return entry;};
   if(eligibility.ruins){
     const ruins=await rollTable(tables[eligibility.ruins==='normal'?'ruinsA':'ruinsB'],env,[],{allowMissing:true});
