@@ -41,7 +41,7 @@ export class ZoneRuntime {
       if(doc.id===this.store.documentId){const assignments=JSON.stringify([this.store.config.sceneId,this.store.config.grid,this.store.config.groups.map(g=>[g.sceneId,g.tokenId])]);this.store.reload();if(assignments!==JSON.stringify([this.store.config.sceneId,this.store.config.grid,this.store.config.groups.map(g=>[g.sceneId,g.tokenId])]))this.triggers.prime();refresh();if(this.store.authoritative&&Object.keys(doc.getFlag(MODULE,'pendingTravelReports')||{}).length)void this.travel.enqueue(()=>this.travel.mergeHandoverReports()).catch(()=>{});}
       else if(doc.getFlag(MODULE,'sector')?.version===1||event==='deleteJournalEntry')this.schedule();
     });
-    on('updateUser',()=>{if(!this.store.authoritative)void this.travel.activeDialog?.close();if(!this.store.isGM){this.calibrator.cancel();this.overlay.stop();this.dialog?.close();}else{refresh();if(this.store.authoritative)void this.travel.recoverPendingMoves().catch(()=>{});else void this.travel.activeDialog?.close();}});
+    on('updateUser',()=>{if(!this.store.isGM){void this.travel.activeDialog?.close();this.calibrator.cancel();this.overlay.stop();this.dialog?.close();}else{refresh();if(this.store.authoritative)void this.travel.recoverPendingMoves().catch(()=>{});}});
     this.schedule();refresh();void this.travel.recoverPendingMoves().catch(()=>{});
   }
   stop(){for(const [name,id] of this.hooks)this.env.Hooks.off(name,id);this.hooks=[];this.suspended=true;this.unsubscribe?.();this.calibrator.cancel();this.overlay.stop();}

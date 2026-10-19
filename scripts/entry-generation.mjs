@@ -26,7 +26,7 @@ async function requireDocument(result,expected,env){
   return resolved;
 }
 const one=result=>{if(result.entries.length!==1)throw new Error('Entry generation requires exactly one final table result.');return result.entries[0];};
-function entry(result,extra={}){return {...empty(),title:result.documentTitle||result.text,details:result.text,uuid:result.uuid||'',...extra,generation:{method:'add-entry',sources:result.sources}};}
+function entry(result,extra={}){return {...empty(),title:result.documentTitle||result.text,details:result.description||result.text,uuid:result.uuid||'',...extra,generation:{method:'add-entry',sources:result.sources}};}
 export async function generateEntry(kind,sector,{env=globalThis,arkCoordinate=null,event=false}={}){
   if(sector?.sectorType==='special'&&kind!=='history')throw new Error('Special Zone Sector content is manually authored.');
   if(!env.game.user.isGM)throw new Error('GM access required for entry generation.');

@@ -1,5 +1,5 @@
 import {resolveConfiguredDocument,referenceSelection,warnReferenceOnce} from '../document-references.mjs';
-import {rollThreat,boundedRoll} from '../sector-randomizer.mjs';
+import {rollThreat,rollTable,boundedRoll} from '../sector-randomizer.mjs';
 import {journalBodyText,locationDescription} from '../location-text.mjs';
 import {sectorName} from '../journal-organization.mjs';
 import {positionToCoordinate,tokenCenter,canonicalCoordinate} from '../zone/grid.mjs';
@@ -14,26 +14,28 @@ export class TravelEvents {
  async saveState(state,config=travelConfiguration(this.env)){this.assertAuthority();const document=await this.store.ensureDocument();this.assertAuthority();await document.setFlag(MODULE,STATE_FLAG,pruneTravelState(state,config.historyLimit));}
  async chance(sides){this.assertAuthority();const result=await this.roll(sides);if(!Number.isSafeInteger(result)||result<1||result>sides)throw new Error(`Invalid private 1d${sides} result.`);return result===1;}
  async rollWeather(){
-  this.assertAuthority();const table=await resolveConfiguredDocument('travelEvents.weatherTable',this.env);this.assertAuthority();const draw=await table.roll({recursive:false});
-  if(draw?.results?.length!==1)throw new Error('Weather Conditions needs one usable text result.');
-  const row=draw.results[0],structured=row.flags?.[MODULE]?.weather;
-  if(row.documentUuid||row.documentId)throw new Error('Weather Conditions requires text results, not document references.');
-  const rawCondition=structured?.condition??row.description??row.text??'',rawDescription=structured?.description||'';if(typeof rawCondition!=='string'||typeof rawDescription!=='string')throw new Error('Weather condition/description must be text.');
+  this.assertAuthority();const key='travelEvents.weatherTable',table=await resolveConfiguredDocument(key,this.env);
+  const draw=await rollTable(table,this.env,[],{assertAuthority:()=>this.assertAuthority(),configurationKey:key});
+  if(draw.entries.length!==1)throw new Error(`${key}: RollTable ${table.name} (${table.uuid}) needs one final weather result, received ${draw.entries.length}.`);
+  const row=draw.entries[0],structured=row.weather;
+  // Text and Journal names are supported; Actors/Items/Scenes are configuration errors.
+  if(row.documentType&&!['JournalEntry','JournalEntryPage'].includes(row.documentType))throw new Error(`${key}: RollTable ${table.name} (${table.uuid}), result "${row.name}": expected weather text or a Journal name, received ${row.documentType}.`);
+  const rawCondition=structured?.condition??row.name,rawDescription=structured?.description??row.description;
+  if(typeof rawCondition!=='string'||typeof rawDescription!=='string')throw new Error(`${key}: weather condition/description must be text.`);
   const condition=journalBodyText(rawCondition,this.env),description=journalBodyText(rawDescription,this.env);
-  if(!condition||condition.length>4000||description.length>20000)throw new Error('Weather result is empty or too long.');
-  return {condition,description,tableUuid:table.uuid||referenceSelection('travelEvents.weatherTable',this.env).uuid};
+  if(!condition||condition.length>4000)throw new Error(`${key}: weather label is empty or exceeds 4000 characters; put narrative text in Description.`);
+  return {condition,description,tableUuid:table.uuid||referenceSelection(key,this.env).uuid,sources:row.sources,uuid:row.uuid||''};
  }
  async rollEncounter(){
   this.assertAuthority();const threatType=await resolveConfiguredDocument('generation.threatType',this.env);
-  const guarded=Object.create(this.env);guarded.assertGenerationAuthority=()=>this.assertAuthority();
-  const selected=await boundedRoll(async()=>{const results=await rollThreat({threatType},guarded,{excludePhenomena:true});if(!results.length)return null;if(results.length!==1)throw new Error('Travel encounters need one final identity.');return results[0];},'Travel Encounter (Phenomena excluded)');
+  const selected=await boundedRoll(async()=>{const results=await rollThreat({threatType},this.env,{excludePhenomena:true,assertAuthority:()=>this.assertAuthority()});if(!results.length)return null;if(results.length!==1)throw new Error('Travel encounters need one final identity.');return results[0];},'Travel Encounter (Phenomena excluded)');
   const result=selected.result;if(!result.text?.trim()&&!result.documentTitle)throw new Error('Empty encounter result.');
-  let details=result.text;
-  if(result.uuid&&['JournalEntry','JournalEntryPage'].includes(result.documentType)){const snapshot=await locationDescription(result,this.env);details=snapshot.details||details;}
-  else if(result.uuid&&result.documentType==='Actor'){try{const actor=await this.env.fromUuid(result.uuid);if(typeof actor?.system?.description==='string')details=journalBodyText(actor.system.description,this.env)||details;}catch{}}
-  return {title:result.documentTitle||result.text,details,uuid:result.uuid||'',documentType:result.documentType,category:selected.category,sources:result.sources};
+  let details=result.description||result.text;
+  if(result.uuid&&['JournalEntry','JournalEntryPage'].includes(result.documentType)){const snapshot=await locationDescription(result,this.env);details=[result.description,snapshot.details].filter((value,index,all)=>value&&all.indexOf(value)===index).join("\n\n")||details;}
+  else if(result.uuid&&result.documentType==='Actor'){try{const actor=await this.env.fromUuid(result.uuid);if(typeof actor?.system?.description==='string')details=[result.description,journalBodyText(actor.system.description,this.env)].filter((value,index,all)=>value&&all.indexOf(value)===index).join("\n\n")||details;}catch{}}
+  return {title:result.name||result.documentTitle||result.text,details,uuid:result.uuid||'',documentType:result.documentType,category:selected.category,sources:result.sources};
  }
- diagnostic(state,message){state.diagnostics.push({timestamp:Date.now(),message});if(this.env.game.user.isGM)warnReferenceOnce(`Travel Events: ${message}`,this.env);}
+ diagnostic(state,error){const message=error?.message||String(error);state.diagnostics.push({timestamp:Date.now(),message,...(error?.stack?{stack:error.stack}:{})});if(error instanceof Error)this.env.console?.error('MYZ Travel Events',error);if(this.env.game.user.isGM)warnReferenceOnce(`Travel Events: ${message}`,this.env);}
  onEntry(context){return this.enqueue(()=>this.process(context));}
  async process({journal,token,group,entryId,coordinate=null,test=false,persist=!test,force=null}){
   this.assertAuthority();const config=travelConfiguration(this.env),sector=journal?.getFlag(MODULE,'sector');
@@ -49,13 +51,13 @@ export class TravelEvents {
    const weatherDue=force==='weather'||(!force&&(!state.weather||await this.chance(config.weatherChance)));
    if(weatherDue){try{const next=await this.rollWeather();const previous=state.weather;if(!previous||next.condition.trim().replace(/\s+/g,' ').toLowerCase()!==previous.condition.trim().replace(/\s+/g,' ').toLowerCase()){
     state.weather={...next,previous:previous?.condition||null,timestamp:Date.now()};state.weatherChangedAt=state.weather.timestamp;state.weatherRevision=(state.weatherRevision||0)+1;if(previous)event.weatherChange={...state.weather};
-   }}catch(error){event.errors.push(error.message);this.diagnostic(state,error.message);}}
-  }catch(error){event.errors.push(error.message);this.diagnostic(state,error.message);}
+   }}catch(error){event.errors.push(error.message);this.diagnostic(state,error);}}
+  }catch(error){event.errors.push(error.message);this.diagnostic(state,error);}
   try{
    const denominator=config.reduceExplored&&exploredSector(sector)?config.exploredChance:config.encounterChance;
    const encounterDue=force==='encounter'||(!force&&await this.chance(denominator));
-   if(encounterDue){try{this.assertAuthority();event.encounter=await this.encounter();this.assertAuthority();event.detection=await this.detection(group,config);}catch(error){event.errors.push(error.message);this.diagnostic(state,error.message);}}
-  }catch(error){event.errors.push(error.message);this.diagnostic(state,error.message);}
+   if(encounterDue){try{this.assertAuthority();event.encounter=await this.encounter();this.assertAuthority();event.detection=await this.detection(group,config);}catch(error){event.errors.push(error.message);this.diagnostic(state,error);}}
+  }catch(error){event.errors.push(error.message);this.diagnostic(state,error);}
   const meaningful=Boolean(event.weatherChange||event.encounter);
   if(persist&&!this.store.authoritative){if(this.env.game.user.isGM&&this.store.document){const key=this.env.foundry.utils.randomID();await this.store.document.setFlag(MODULE,`pendingTravelReports.${key}`,{event:{...event,pending:meaningful},meaningful,weather:state.weather,weatherBeforeTimestamp,weatherChangedAt:state.weatherChangedAt,weatherBeforeRevision,weatherRevision:state.weatherRevision});}return {event,meaningful,weather:state.weather,pending:true};}
   if(persist){const progress=state.processed.find(entry=>entry.id===id);progress.status='completed';if(meaningful){event.pending=config.showDialog;if(config.recordHistory||event.pending)state.history.push(event);}await this.saveState(state,config);}
@@ -64,10 +66,10 @@ export class TravelEvents {
   return {event,meaningful,weather:state.weather};
  }
  async acknowledge(id,config=travelConfiguration(this.env)){
-  const state=this.state;const event=state.history.find(event=>event.id===id);if(!event)return;event.pending=false;if(!config.recordHistory)state.history=state.history.filter(event=>event.id!==id);await this.saveState(state,config);
+  const state=this.state;const event=state.history.find(event=>event.id===id);if(!event)return;event.pending=false;await this.saveState(state,config);
  }
  review(id){return this.enqueue(async()=>{this.assertAuthority();const event=this.state.history.find(event=>event.id===id);if(!event)throw new Error('Travel event no longer available.');const shown=await this.report(event);if(shown&&this.store.authoritative)await this.acknowledge(id);});}
- setWeather(condition,description=''){return this.enqueue(async()=>{this.assertAuthority();if(typeof condition!=='string'||condition.length>4000||typeof description!=='string'||description.length>20000)throw new Error('Invalid manual weather.');const state=this.state;state.weatherRevision=(state.weatherRevision||0)+1;state.weatherChangedAt=Date.now();state.weather=condition.trim()?{condition:condition.trim(),description,previous:state.weather?.condition||null,tableUuid:referenceSelection('travelEvents.weatherTable',this.env).uuid,timestamp:Date.now()}:null;await this.saveState(state);});}
+ setWeather(condition,description=''){return this.enqueue(async()=>{this.assertAuthority();if(typeof condition!=='string'||condition.length>4000||typeof description!=='string')throw new Error('Invalid manual weather.');const state=this.state;state.weatherRevision=(state.weatherRevision||0)+1;state.weatherChangedAt=Date.now();state.weather=condition.trim()?{condition:condition.trim(),description,previous:state.weather?.condition||null,tableUuid:referenceSelection('travelEvents.weatherTable',this.env).uuid,timestamp:Date.now()}:null;await this.saveState(state);});}
  test(context,{kind='check',persist=false}={}){return this.enqueue(async()=>{this.assertAuthority();if(kind==='findPath')return this.detection(context.group,travelConfiguration(this.env));return this.process({...context,test:true,persist,force:kind==='weather'?'weather':kind==='encounter'?'encounter':null});});}
  async mergeHandoverReports(){
   this.assertAuthority();const document=this.store.document;if(!document)return;
