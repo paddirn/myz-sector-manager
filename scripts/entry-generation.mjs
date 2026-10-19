@@ -1,10 +1,11 @@
+import {LEGACY_EVENT_UUIDS} from './document-references.mjs';
 import {locationDescription} from './location-text.mjs';
-import {TABLE_UUIDS,ENVIRONMENTS,resolveGenerationTable,rollTable,rollThreat,resolveNamedDocument,mapEnvironment,boundedRoll} from './sector-randomizer.mjs';
+import {ENVIRONMENTS,resolveGenerationTable,rollTable,rollThreat,resolveNamedDocument,mapEnvironment,boundedRoll} from './sector-randomizer.mjs';
 import {canonicalCoordinate} from './zone/grid.mjs';
 import {normalizeLoot} from './loot.mjs';
 export const ENCOUNTER_STATUSES=['Active','Resolved','Defeated','Hidden'];
 export const ENCOUNTER_TYPES=['Humanoid','Monster','Encounter'];
-export const EVENT_TABLES={zone:'RollTable.24wtBybpf1ObKbcG',ark:'RollTable.c5Saikp36mQWGqL1'};
+export const EVENT_TABLES=LEGACY_EVENT_UUIDS;
 export function normalizeEncounter(entry={}){
   const status=ENCOUNTER_STATUSES.find(value=>value.toLowerCase()===String(entry.status||'Active').toLowerCase());
   const type=ENCOUNTER_TYPES.find(value=>value.toLowerCase()===String(entry.type||'').toLowerCase())||({humanoid:'Humanoid',monster:'Monster',encounter:'Encounter'}[entry.generated?.threatCategory])||'Encounter';
@@ -29,7 +30,7 @@ function entry(result,extra={}){return {...empty(),title:result.documentTitle||r
 export async function generateEntry(kind,sector,{env=globalThis,arkCoordinate=null,event=false}={}){
   if(sector?.sectorType==='special'&&kind!=='history')throw new Error('Special Zone Sector content is manually authored.');
   if(!env.game.user.isGM)throw new Error('GM access required for entry generation.');
-  const table=key=>resolveGenerationTable(TABLE_UUIDS[key],key,env);
+  const table=key=>resolveGenerationTable(`generation.${key}`,key,env);
   if(kind==='encounters'){
     const threatType=await table('threatType');
     const selected=await boundedRoll(async()=>{const values=await rollThreat({threatType},env,{excludePhenomena:true});if(!values.length)return null;if(values.length!==1)throw new Error('Encounter generation requires exactly one threat identity.');return values[0];},'Encounters (Phenomena excluded)');
@@ -46,7 +47,7 @@ export async function generateEntry(kind,sector,{env=globalThis,arkCoordinate=nu
   if(kind==='effects')return entry(await requireDocument(one(await rollTable(await table('phenomenon'),env)),'JournalEntry',env),{category:'Phenomenon',duration:''});
   if(kind==='history'&&event){
     const ark=canonicalCoordinate(arkCoordinate),code=canonicalCoordinate(sector.code);
-    const result=one(await rollTable(await resolveGenerationTable(EVENT_TABLES[ark&&ark===code?'ark':'zone'],'History Event',env),env));
+    const result=one(await rollTable(await resolveGenerationTable(`events.${ark&&ark===code?'ark':'zone'}`,'History Event',env),env));
     return entry(await requireDocument(result,'JournalEntry',env));
   }
   if(kind==='locations'){

@@ -1,3 +1,4 @@
+import {withLegacyReferences} from './helpers/reference-fixture.mjs';
 import {normalizeLoot} from '../scripts/loot.mjs';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,7 +8,7 @@ function fixture(overrides={},dice={},faces=[1,6]){
   const texts={environment:'<b>Overgrown Ruins</b>',ruinsA:'Hospital',ruinsB:'Factory',rot:'2 — Rot-Heavy Area',threatLevel:'2',threatType:'Humanoid',humanoid:'Zone Ghouls',encounter:'Wanderers',monster:'Devourer',phenomenon:'Acid Rain',artifact:'Ancient Rifle',mood:'A distant howl',scrap:'Copper wire',...overrides};
   const calls=[],pools=[];
   const tables=new Map(Object.entries(TABLE_UUIDS).map(([key,uuid])=>[uuid,{uuid,name:key,documentName:'RollTable',async roll(options){assert.deepEqual(options,{recursive:false});calls.push(key);return {results:[{id:key,range:key==='artifact'?[111,111]:undefined,description:texts[key]}]};}}]));
-  const env={game:{user:{isGM:true}},fromUuid:async uuid=>tables.get(uuid)};
+  const env={game:{user:{isGM:true}},fromUuid:async uuid=>tables.get(uuid)};withLegacyReferences(env);
   const queues=Object.fromEntries(Object.entries(dice).map(([key,value])=>[key,[...value]]));
   const roll=async formula=>queues[formula]?.length?queues[formula].shift():1;
   const rollBaseDice=async level=>{pools.push(level);return [...faces];};

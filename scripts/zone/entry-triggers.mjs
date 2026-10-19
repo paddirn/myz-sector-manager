@@ -1,5 +1,7 @@
 import {locateToken} from './grid.mjs';
 const MODULE='myz-sector-manager',FLAG='entryTriggers';
+// Legacy macroEnabled was the checkbox value; it now selects once/repeat, never enablement.
+export const macroRunOnce=trigger=>Boolean(trigger.macroRunOnce??trigger.macroEnabled??false);
 // Independent of Effects UI; callers can supply another trigger list later.
 export class SectorEntryTriggers {
  constructor(store,env=globalThis){this.store=store;this.env=env;this.positions=new Map();this.pending=new Set();this.queue=Promise.resolve();this.executing=new Set();}
@@ -35,13 +37,14 @@ export class SectorEntryTriggers {
  async run(journal,tokenUuid,triggers,token){
   for(const trigger of triggers){
    if(!this.store.authoritative)return;
-   if(!trigger.macroEnabled||!trigger.macroUuid||!trigger.triggerId)continue;
+   if(trigger.macroDisabled===true||!trigger.macroUuid||!trigger.triggerId)continue;
    const state=structuredClone(journal.getFlag(MODULE,FLAG)||{records:[]});
    const history=state.records||[];
-   if(history.some(record=>record.tokenUuid===tokenUuid&&record.triggerId===trigger.triggerId))continue;
-   // Persist before execution: even a reconnect or failed Macro cannot silently replay.
-   const record={triggerId:trigger.triggerId,tokenUuid,macroUuid:trigger.macroUuid,status:'running',timestamp:Date.now()};
-   history.push(record);state.records=history;await journal.setFlag(MODULE,FLAG,state);
+   const previous=history.findIndex(record=>record.tokenUuid===tokenUuid&&record.triggerId===trigger.triggerId);
+   if(macroRunOnce(trigger)&&previous!==-1)continue;
+   // Persist the latest attempt before execution. Once mode consumes it; repeat mode ignores it on a new entry.
+   const record={triggerId:trigger.triggerId,tokenUuid,macroUuid:trigger.macroUuid,status:'running',runOnce:macroRunOnce(trigger),timestamp:Date.now()};
+   if(previous===-1)history.push(record);else history[previous]=record;state.records=history;await journal.setFlag(MODULE,FLAG,state);
    try{
     const macro=await this.env.fromUuid(trigger.macroUuid);
     if(macro?.documentName!=='Macro')throw new Error(`Macro ${trigger.macroUuid} is missing or unavailable`);

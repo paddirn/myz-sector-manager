@@ -1,3 +1,4 @@
+import {LEGACY_GENERATION_UUIDS,REFERENCE_DEFINITIONS,REFERENCE_BY_KEY,configuredUuid,resolveConfiguredDocument} from './document-references.mjs';
 import {terrainDescription} from './terrain-descriptions.mjs';
 import {locationDescription} from './location-text.mjs';
 import {cleanThreatRecord,threatDeletion} from './sector-fields.mjs';
@@ -7,12 +8,7 @@ import {sectorNaming,sectorName} from './journal-organization.mjs';
 import {CONSUMABLES} from './sector-content.mjs';
 // Table-driven generation: no Journal writes, chat messages, or drawn-result mutation.
 export const RANDOMIZATION_METHODS = [{id:'core',label:'Core Rulebook Tables',generate:generateSector}];
-export const TABLE_UUIDS = Object.freeze({
-  environment:'RollTable.UEm95WiZocwvFGSU',ruinsA:'RollTable.QxY3EmhqXMdKa3sC',ruinsB:'RollTable.n1CEYKphbiBZLDUb',
-  rot:'RollTable.rp2JNLkCDatudc88',threatLevel:'RollTable.3FWOT8OJaXc7bfrC',threatType:'RollTable.Kk8jRbrOk3NejHUB',
-  humanoid:'RollTable.5ZVTmWwi5wyi52rd',encounter:'RollTable.Sh3Srm3KHyGgR7uh',monster:'RollTable.tsNy12fCcREgIDLk',phenomenon:'RollTable.jIRwumcfuFBGU8Zp',
-  artifact:'RollTable.aarjzrm2IwJYczhi',mood:'RollTable.8aGJhfpHDBv52W1K',scrap:'RollTable.sWLvZ6qZikXt2k6l'
-});
+export const TABLE_UUIDS=LEGACY_GENERATION_UUIDS;
 // Rulebook p. 156 eligibility, independent of the environment's display text.
 const WILDERNESS=['Thick Woods','Scrublands','Marshlands','Dead Woods','Ash Desert','Huge Crater','Glasified Field'];
 const NORMAL_RUINS=['Overgrown Ruins','Crumbling Ruins','Decayed Ruins','Unscathed Ruins'];
@@ -30,15 +26,16 @@ export function plainText(value,env=globalThis){
 }
 export async function resolveGenerationTable(uuid,purpose,env=globalThis){
   if(!env.game.user.isGM)throw new Error('GM access required for entry generation.');
-  let table;try{table=await env.fromUuid(uuid);}catch(error){throw new Error(`Cannot resolve ${purpose} table ${uuid}: ${error.message}`);}
-  if(table?.documentName!=='RollTable'||typeof table.roll!=='function'||(table.testUserPermission&&!table.testUserPermission(env.game.user,'OBSERVER')))throw new Error(`Missing or inaccessible ${purpose} RollTable: ${uuid}`);
-  return table;
+  const key=REFERENCE_BY_KEY.has(uuid)?uuid:null;
+  if(!key)throw new Error(`Unknown generation reference key: ${uuid}`);
+  return resolveConfiguredDocument(key,env);
 }
 export async function resolveTables(env=globalThis){
   if(!env.game.user.isGM)throw new Error('Only a GM can randomize sectors.');
   const tables={};
-  for(const [purpose,uuid] of Object.entries(TABLE_UUIDS)){
-    const table=await resolveGenerationTable(uuid,purpose,env);
+  for(const {key} of REFERENCE_DEFINITIONS.filter(def=>def.key.startsWith('generation.'))){
+    const purpose=key.slice('generation.'.length);
+    const table=await resolveGenerationTable(`generation.${purpose}`,purpose,env);
     tables[purpose]=table;
   }
   return tables;
@@ -171,18 +168,18 @@ export function mapThreatType(result){
 const generatedEntry=(result,kind,quantity)=>({title:result.documentType==='JournalEntryPage'?(result.documentTitle||result.text):result.text,status:'Active',details:result.text,uuid:({locations:['Scene','JournalEntry','JournalEntryPage'],encounters:['Actor','JournalEntry','JournalEntryPage'],effects:['Actor','JournalEntry','JournalEntryPage'],loot:['Item']}[kind]||[]).includes(result.documentType)?result.uuid:'',...(quantity===undefined?{}:{quantity}),...(kind==='effects'?{category:'Phenomenon',duration:''}:{}),generated:{method:'core',sources:result.sources}});
 // Preserve category before resolving its nested table; final names never classify threats.
 export async function rollThreat(tables,env=globalThis,{excludePhenomena=false}={}){
-  const selection=await rollTable(tables.threatType,env,[],{resolveNested:false,acceptDraw:excludePhenomena?draw=>{if(draw.results.length!==1)throw new Error('Manual Threat Type requires one result.');const raw=draw.results[0],origin=raw.parent?.uuid,category=['humanoid','encounter','monster','phenomenon'].find(key=>TABLE_UUIDS[key]===origin);if(category)return category!=='phenomenon';if(raw.documentUuid===TABLE_UUIDS.phenomenon)return false;const range=raw.range;return !((draw.roll?.total===6&&(!range||(range[0]<=6&&range[1]>=6)))||(range?.[0]===6&&range?.[1]===6));}:null});
+  const selection=await rollTable(tables.threatType,env,[],{resolveNested:false,acceptDraw:excludePhenomena?draw=>{if(draw.results.length!==1)throw new Error('Manual Threat Type requires one result.');const raw=draw.results[0],origin=raw.parent?.uuid,category=['humanoid','encounter','monster','phenomenon'].find(key=>(tables[key]?.uuid||configuredUuid(`generation.${key}`,env))===origin);if(category)return category!=='phenomenon';if(raw.documentUuid&&raw.documentUuid===configuredUuid('generation.phenomenon',env))return false;const range=raw.range;return !((draw.roll?.total===6&&(!range||(range[0]<=6&&range[1]>=6)))||(range?.[0]===6&&range?.[1]===6));}:null});
   if(selection.rejected)return [];
   if(excludePhenomena&&selection.entries.length!==1)throw new Error('Manual Threat Type generation requires exactly one top-level result.');
   const threats=[];
-  const categoryFor=uuid=>['humanoid','encounter','monster','phenomenon'].find(key=>TABLE_UUIDS[key]===uuid);
+  const categoryFor=uuid=>['humanoid','encounter','monster','phenomenon'].find(key=>(tables[key]?.uuid||configuredUuid(`generation.${key}`,env))===uuid);
   for(const selected of selection.entries){
     let category,result;
     if(selected.documentType==='RollTable'){
       category=categoryFor(selected.uuid);
       if(!category)throw new Error(`Threat Type references an unconfigured category RollTable: ${selected.uuid}`);
       if(excludePhenomena&&category==='phenomenon')return [];
-      result=await rollTable(tables[category]||await resolveGenerationTable(TABLE_UUIDS[category],category,env),env,[tables.threatType.uuid]);
+      result=await rollTable(tables[category]||await resolveGenerationTable(`generation.${category}`,category,env),env,[tables.threatType.uuid]);
     }else{
       // Some APIs/modules recurse despite the requested option. Embedded result parents
       // identify the originating category, so reuse those final results without rerolling.
@@ -191,7 +188,7 @@ export async function rollThreat(tables,env=globalThis,{excludePhenomena=false}=
       if(categories.length>1)throw new Error('Threat result has conflicting originating categories.');
       if(categories.length){category=categories[0];result={entries:[selected]};}
       else if(selected.documentType)throw new Error(`Final ${selected.documentType} result "${selected.documentTitle||selected.text}" has no originating Threat category. Preserve its parent RollTable or disable recursive resolution.`);
-      else{category=mapThreatType(selected);if(excludePhenomena&&category==='phenomenon')return [];result=await rollTable(tables[category]||await resolveGenerationTable(TABLE_UUIDS[category],category,env),env,[tables.threatType.uuid]);}
+      else{category=mapThreatType(selected);if(excludePhenomena&&category==='phenomenon')return [];result=await rollTable(tables[category]||await resolveGenerationTable(`generation.${category}`,category,env),env,[tables.threatType.uuid]);}
     }
     if(excludePhenomena&&category==='phenomenon')return [];
     for(const leaf of result.entries){

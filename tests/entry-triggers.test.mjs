@@ -45,6 +45,32 @@ test('v14 pending/paused waypoints wait for stop; endpoint only, completed telep
 });
 test('each registered Expedition token has independent history; failed persistence cannot execute; disabled and missing Macro handling',async()=>{
  const f=fixture();await f.move(500);const second={...f.token,id:'expedition',uuid:'Scene.zone.Token.expedition',x:0};f.scene.tokens.set(second.id,second);f.store.config.groups.push({sceneId:'zone',tokenId:second.id});f.service.prime();second.x=500;await f.service.updated(second,{x:500});assert.equal(f.events.length,4);assert.equal(f.history().length,4);
- await f.service.reset(f.journal);f.sector.effects[0].macroEnabled=false;f.env.fromUuid=async()=>null;await f.move(0);await f.move(500);assert.equal(f.history().length,1);assert.equal(f.history()[0].status,'failed');assert.match(f.history()[0].error,/missing/);
+ await f.service.reset(f.journal);f.sector.effects[0].macroDisabled=true;f.env.fromUuid=async()=>null;await f.move(0);await f.move(500);assert.equal(f.history().length,1);assert.equal(f.history()[0].status,'failed');assert.match(f.history()[0].error,/missing/);
  await f.service.reset(f.journal);f.journal.setFlag=async()=>{throw Error('Write denied');};await f.move(0);await f.move(500);assert.equal(f.events.length,4);assert(f.errors.some(message=>message.includes('Write denied')));
+});
+test('unchecked repeat mode executes on each reentry, ignores old fired history, and keeps one latest outcome per token',async()=>{
+ const f=fixture();await f.move(500);assert.equal(f.events.length,2);
+ for(const effect of f.sector.effects)effect.macroRunOnce=false;
+ for(let visit=0;visit<3;visit++){await f.move(0);await f.move(500);assert.equal(f.events.length,4+visit*2);await f.service.updated(f.token,{x:500});assert.equal(f.events.length,4+visit*2);}
+ assert.equal(f.history().length,2);assert(f.history().every(record=>record.runOnce===false));
+ const reloaded=new SectorEntryTriggers(f.store,f.env);reloaded.prime();await reloaded.updated(f.token,{x:500});assert.equal(f.events.length,8);f.token.x=0;await reloaded.updated(f.token,{x:0});f.token.x=500;await reloaded.updated(f.token,{x:500});assert.equal(f.events.length,10);
+ for(const effect of f.sector.effects)effect.macroRunOnce=true;
+ await f.move(0);await f.move(500);assert.equal(f.events.length,10);await f.service.reset(f.journal,'first');await f.move(0);await f.move(500);assert.equal(f.events.length,11);
+});
+test('legacy unchecked and missing mode are repeatable; separate disabled state remains independent',async()=>{
+ const f=fixture();f.sector.effects[0].macroEnabled=false;delete f.sector.effects[1].macroEnabled;
+ await f.move(500);await f.move(0);await f.move(500);assert.equal(f.events.length,4);
+ f.sector.effects[0].macroDisabled=true;await f.move(0);await f.move(500);assert.equal(f.events.length,5);
+});
+test('repeatable Macros remain sequential, await async completion, and keep token histories independent',async()=>{
+ const f=fixture();for(const effect of f.sector.effects)effect.macroRunOnce=false;
+ let finish;const gate=new Promise(resolve=>finish=resolve);f.env.fromUuid=async uuid=>({documentName:'Macro',canExecute:true,execute:async()=>{f.events.push(uuid);if(uuid==='Macro.one')await gate;}});
+ f.token.x=500;const pending=f.service.updated(f.token,{x:500});await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(f.events,['Macro.one']);finish();await pending;assert.equal(f.events.length,2);
+ const second={...f.token,id:'other',uuid:'Scene.zone.Token.other',x:0};f.scene.tokens.set(second.id,second);f.store.config.groups.push({sceneId:'zone',tokenId:second.id});f.service.prime();second.x=500;await f.service.updated(second,{x:500});assert.equal(f.events.length,4);assert.equal(f.history().length,4);
+ await f.move(0);await f.move(500);assert.equal(f.events.length,6);assert.equal(f.history().length,4);
+});
+test('repeatable v14 waypoints cannot fire passed-through sectors or startup stop hooks',async()=>{
+ const f=fixture();for(const effect of f.sector.effects)effect.macroRunOnce=false;await f.service.stopped(f.token);assert.equal(f.events.length,0);
+ f.token.movement={state:'pending'};f.token.x=500;await f.service.updated(f.token,{x:500});f.token.x=1500;await f.service.updated(f.token,{x:1500});f.token.movement.state='completed';await f.service.stopped(f.token);assert.equal(f.events.length,0);
+ for(let i=0;i<2;i++){f.token.movement.state='pending';f.token.x=500;await f.service.updated(f.token,{x:500});f.token.movement.state='completed';await f.service.stopped(f.token);assert.equal(f.events.length,(i+1)*2);f.token.x=0;await f.service.updated(f.token,{x:0});}
 });
