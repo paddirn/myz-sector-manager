@@ -1,3 +1,4 @@
+import {safeImageSource} from '../scripts/zone/presentation.mjs';
 import {imagePath,journalImageSource} from '../scripts/sector-images.mjs';
 import {isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle} from '../scripts/sector-types.mjs';
 import {generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES} from '../scripts/entry-generation.mjs';
@@ -20,7 +21,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,imagePath,journalImageSource,isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,safeImageSource,imagePath,journalImageSource,isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -462,4 +463,33 @@ test('Images previews remain visible while metadata uses optional details and pa
 test('a permission failure preserves an image page reference and shows an unavailable preview',async()=>{
   const {app,context}=fixture(),ref=referenceZone('Compendium.myz.book.JournalEntry.a.JournalEntryPage.p');ref.input.name='special.images.0.uuid';const preview={textContent:'',replaceChildren(){this.textContent='';}};ref.zone.closest=()=>({querySelector:()=>preview});context.fromUuid=async()=>{throw new Error('Permission denied');};
   await app.renderReference(ref.zone);assert.match(preview.textContent,/unavailable: Permission denied/);assert.equal(ref.input.value,'Compendium.myz.book.JournalEntry.a.JournalEntryPage.p');assert.match(ref.target.textContent,/Reference unavailable/);
+});
+
+test('Special Overview places the complete Overlay Image control after GM Notes without changing its path',()=>{
+  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='overview-order';app.draft=context.normalizeSector({sectorType:'special',special:{overlayImage:'worlds/test/image.webp'}});const before=JSON.stringify(app.draft),html=app.build();assert(html.indexOf('name="notes"')<html.lastIndexOf('data-overlay-image-pick'));assert(html.indexOf('name="special.overview"')<html.indexOf('name="notes"'));assert.equal(JSON.stringify(app.draft),before);
+  app.draft.sectorType='normal';assert.doesNotMatch(app.build(),/data-overlay-image-pick aria-label/);
+});
+test('world and compendium Actor avatars resolve safely, clear to a fallback and never modify Actor data',async()=>{
+  for(const uuid of ['Actor.portrait','Compendium.myz.actors.Actor.portrait']){
+    const {app,context,documents}=fixture(),ref=referenceZone(uuid);ref.input.name='special.inhabitants.0.uuid';
+    const target={attrs:{},innerHTML:'',setAttribute(key,value){this.attrs[key]=value;},removeAttribute(key){delete this.attrs[key];},replaceChildren(image){this.image=image;image.parentNode=this;}};
+    ref.zone.closest=()=>({querySelector:selector=>selector==='[data-inhabitant-avatar]'?target:null});
+    context.document.createElement=()=>({listeners:{},addEventListener(key,fn){this.listeners[key]=fn;}});context.foundry.applications.ux.TextEditor.implementation.enrichHTML=async()=>'<a class="content-link">Actor</a>';
+    const actor={uuid,documentName:'Actor',name:'Portrait Actor',img:'worlds/test/portrait.webp'},before=structuredClone(actor);documents.set(uuid,actor);await app.renderReference(ref.zone);assert.equal(target.image.src,actor.img);assert.equal(target.image.draggable,false);assert.deepEqual(actor,before);
+    target.image.listeners.error();assert.match(target.innerHTML,/<svg/);assert.equal(target.attrs['aria-label'],'No Actor portrait available');
+    app.capture=()=>{};await app.clearReference(ref.zone);assert.equal(ref.input.value,'');assert.match(target.innerHTML,/<svg/);
+    actor.img='javascript:alert(1)';ref.input.value=uuid;await app.renderReference(ref.zone);assert.match(target.innerHTML,/<svg/);
+  }
+});
+test('Inhabitants and Events order titles before right-side arrows, with avatars only on Inhabitants',()=>{
+  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='headings';app.draft=context.normalizeSector({sectorType:'special',special:{inhabitants:[{title:'Inhabitant'}],events:[{title:'Event'}]}});
+  for(const tab of ['Inhabitants','Events']){app.tab=tab;const html=app.build(),heading=html.slice(html.indexOf('data-entry-header'),html.indexOf('class="sm-entry-body"'));assert(heading.indexOf('data-entry-title')<heading.indexOf('data-chevron'));assert.match(heading,/sm-special-toggle/);if(tab==='Inhabitants')assert(heading.indexOf('data-inhabitant-avatar')<heading.indexOf('data-entry-title'));else assert.doesNotMatch(heading,/data-inhabitant-avatar/);}
+});
+test('Images bulk state affects full previews and metadata in place without changing data or another sector',()=>{
+  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='gallery-bulk';app.draft=context.normalizeSector({sectorType:'special',special:{images:[{title:'Linked',uuid:'JournalEntry.a.JournalEntryPage.p',details:'Notes'},{title:'Manual'}]}});app.tab='Images';const before=JSON.stringify(app.draft),state=app.entryState('special.images'),cards=new Map();
+  for(const entry of state.entries){const button={attrs:{},setAttribute(key,value){this.attrs[key]=value;},focus(){}},body={hidden:false,contains:()=>false},chevron={},details={open:false};cards.set(entry.id,{classList:{toggle(){}},querySelector:selector=>({'[data-image-toggle]':button,'[data-image-body]':body,'[data-image-chevron]':chevron,'[data-image-metadata]':details}[selector])});}
+  app.element.querySelector=selector=>cards.get(selector.match(/data-entry="([^"]+)"/)?.[1]);app.render=()=>assert.fail('Bulk actions must not rerender images');
+  for(const collapsed of [true,false]){app.collapseAll(collapsed);for(const {id} of state.entries){const card=cards.get(id);assert.equal(card.querySelector('[data-image-body]').hidden,collapsed);assert.equal(card.querySelector('[data-image-metadata]').open,!collapsed);assert.equal(state.previewCollapsed.has(id),collapsed);}assert.equal(JSON.stringify(app.draft),before);}
+  app.collapseAll(true);app.sectorId='different-gallery';app.draft=context.normalizeSector({sectorType:'special',special:{images:[{title:'Other'}]}});assert.equal(app.entryState('special.images').previewCollapsed.size,0);
+  app.draft.special.images=[];app.collapseAll(true);app.collapseAll(false);assert.equal(JSON.stringify(app.draft.special.images),'[]');
 });

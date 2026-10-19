@@ -1,3 +1,4 @@
+import {safeImageSource} from './zone/presentation.mjs';
 import {imagePath,journalImageSource} from './sector-images.mjs';
 import {isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle} from './sector-types.mjs';
 import {generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES} from './entry-generation.mjs';
@@ -124,7 +125,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     let main=`<section class="sm-main"><header class="sm-header"><h2>Zone Sectors</h2><div class="sm-header-buttons"><button type="button" disabled>Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<div class="sm-content"><div class="sm-empty"><p>Create a sector or select one from the list. Each record is a GM-only Journal Entry.</p></div></div></section>`;
     if(j){
       let body='';
-      if(this.tab==='Overview') body=`<div class="sm-overview-grid"><div class="sm-field"><label for="sm-sector-name">Sector name</label><div class="sm-name-control"><input id="sm-sector-name" data-sector-name value="${attr(sectorName(d))}"><button type="button" data-action="reset-name">Reset to Default</button></div></div>${field('Coordinates','code',d.code).replace('<input name="code"','<input size="4" name="code"')}${terrainField(d)}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost']).replace('<span>Exploration Status</span>',`<span>${sectorIcon(d,'status')} Exploration Status</span>`)}${rotField(d)}${threatField(d)}</div>${isSpecial(d)?`<section><h3>Scene</h3>${reference('special.scene',0,d.special.sceneUuid,'special.sceneUuid')}</section>${field('Source','special.source',d.special.source)}${this.overlayImageControl()}${area('Overview','special.overview',d.special.overview,12)}`:`${this.overviewSection('Mood','mood',d.mood)}${this.overviewSection('Description','description',d.description)}`}${area('GM Notes','notes',d.notes)}`;
+      if(this.tab==='Overview') body=`<div class="sm-overview-grid"><div class="sm-field"><label for="sm-sector-name">Sector name</label><div class="sm-name-control"><input id="sm-sector-name" data-sector-name value="${attr(sectorName(d))}"><button type="button" data-action="reset-name">Reset to Default</button></div></div>${field('Coordinates','code',d.code).replace('<input name="code"','<input size="4" name="code"')}${terrainField(d)}${select('Exploration Status','status',d.status,['Unexplored','Scouted','Visited','Explored','Cleared','Lost']).replace('<span>Exploration Status</span>',`<span>${sectorIcon(d,'status')} Exploration Status</span>`)}${rotField(d)}${threatField(d)}</div>${isSpecial(d)?`<section><h3>Scene</h3>${reference('special.scene',0,d.special.sceneUuid,'special.sceneUuid')}</section>${field('Source','special.source',d.special.source)}${area('Overview','special.overview',d.special.overview,12)}`:`${this.overviewSection('Mood','mood',d.mood)}${this.overviewSection('Description','description',d.description)}`}${area('GM Notes','notes',d.notes)}${isSpecial(d)?this.overlayImageControl():''}`;
       else if(this.tab==='The Situation')body=area('The Situation','special.situation',d.special.situation,7).replace('<textarea','<textarea data-autosize');
       else if(this.tab==='Images')body=this.imagesEntries();
       else if(['Inhabitants','Gear & Artifacts','Events'].includes(this.tab))body=this.specialEntries(COLLECTIONS[this.tab]);
@@ -243,6 +244,13 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager [data-overlay-preview] img{max-height:100px;max-width:100%;object-fit:contain}
       .myz-sector-manager [data-image-metadata]{padding:10px}
       .myz-sector-manager .sm-image-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;overflow-wrap:anywhere}
+
+      .myz-sector-manager .sm-special-toggle{justify-content:flex-start;text-align:left}
+      .myz-sector-manager .sm-special-toggle [data-entry-title]{flex:1;min-width:0;text-align:left;overflow-wrap:anywhere}
+      .myz-sector-manager .sm-special-toggle [data-chevron],.myz-sector-manager .sm-special-toggle [data-image-chevron]{margin-left:auto;flex:none}
+      .myz-sector-manager .sm-inhabitant-avatar{display:flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;overflow:hidden;border:1px solid #888;border-radius:4px;background:rgba(128,128,128,.12)}
+      .myz-sector-manager .sm-inhabitant-avatar img{display:block;width:36px;height:36px;object-fit:cover}
+      .myz-sector-manager [data-image-body][hidden]{display:none!important}
       .myz-sector-manager .sm-image-heading h3{margin:0;min-width:0}
       .myz-sector-manager .sm-empty{padding:22px;opacity:.8;overflow-wrap:anywhere}
 
@@ -279,10 +287,28 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   }
   imagesEntries(){
     const state=this.entryState('special.images'),entries=this.data.special.images;
-    return `<div class="sm-section-header"><p>Browse image-type Journal pages. Drop a page on the blank area to add and save it.</p><button type="button" data-action="add" data-collection="special.images">+ Add Image</button></div>`+entries.map((item,i)=>{
-      const id=state.entries[i].id,prefix=`special.images.${i}`;
-      return `<article class="sm-entry" data-entry="${id}"><div class="sm-image-heading"><h3 data-entry-title>${escapeHTML(item.title||`Image ${i+1}`)}</h3><button type="button" data-remove="special.images:${id}" aria-label="Remove ${attr(item.title||'image')}">✕</button></div><div class="sm-image-preview" data-image-preview role="status">Loading image page…</div><details data-image-metadata="${id}" ${state.collapsed.has(id)?'':'open'}><summary>Edit image details</summary>${field('Title',`${prefix}.title`,item.title)}${reference('special.images',i,item.uuid)}${area('Optional Notes',`${prefix}.details`,item.details)}</details></article>`;
+    return `<div class="sm-section-header"><p>Browse image-type Journal pages. Drop a page on the blank area to add and save it.</p><div class="sm-entry-controls"><button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button><button type="button" data-action="add" data-collection="special.images">+ Add Image</button></div></div>`+entries.map((item,i)=>{
+      const id=state.entries[i].id,prefix=`special.images.${i}`,collapsed=state.previewCollapsed.has(id);
+      return `<article class="sm-entry ${collapsed?'is-collapsed':''}" data-entry="${id}"><div class="sm-image-heading"><button type="button" class="sm-entry-toggle sm-special-toggle" data-image-toggle aria-expanded="${!collapsed}" aria-controls="${id}-image-body"><strong data-entry-title>${escapeHTML(item.title||`Image ${i+1}`)}</strong><span data-image-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span></button><button type="button" data-remove="special.images:${id}" aria-label="Remove ${attr(item.title||'image')}">✕</button></div><div id="${id}-image-body" data-image-body ${collapsed?'hidden':''}><div class="sm-image-preview" data-image-preview role="status">Loading image page…</div><details data-image-metadata="${id}" ${state.collapsed.has(id)?'':'open'}><summary>Edit image details</summary>${field('Title',`${prefix}.title`,item.title)}${reference('special.images',i,item.uuid)}${area('Optional Notes',`${prefix}.details`,item.details)}</details></div></article>`;
     }).join('');
+  }
+  setImageCollapsed(id,collapsed,metadata=false){
+    const state=this.entryState('special.images');if(!state.entries.some(entry=>entry.id===id))return;
+    if(collapsed)state.previewCollapsed.add(id);else state.previewCollapsed.delete(id);
+    const card=this.element.querySelector(`[data-entry="${id}"]`);if(!card)return;
+    const button=card.querySelector('[data-image-toggle]'),body=card.querySelector('[data-image-body]');
+    card.classList.toggle('is-collapsed',collapsed);button.setAttribute('aria-expanded',String(!collapsed));card.querySelector('[data-image-chevron]').textContent=collapsed?'▶':'▼';
+    if(collapsed&&body.contains(document.activeElement))button.focus();body.hidden=collapsed;
+    if(metadata){if(collapsed)state.collapsed.add(id);else state.collapsed.delete(id);card.querySelector('[data-image-metadata]').open=!collapsed;}
+  }
+  renderInhabitantAvatar(zone,doc){
+    if(!zone.querySelector('input').name?.startsWith('special.inhabitants.'))return;
+    const target=zone.closest('[data-entry]')?.querySelector('[data-inhabitant-avatar]');if(!target)return;
+    const fallback=()=>{target.setAttribute('role','img');target.setAttribute('aria-label','No Actor portrait available');target.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="currentColor"><circle cx="12" cy="7" r="4"/><path d="M3 22v-3a9 9 0 0 1 18 0v3z"/></svg>';};
+    fallback();const src=doc?.documentName==='Actor'?safeImageSource(doc.img):null;if(!src)return;
+    const image=document.createElement('img');image.alt=`${doc.name||'Actor'} portrait`;image.loading='lazy';image.draggable=false;
+    image.addEventListener('error',()=>{if(image.parentNode===target)fallback();},{once:true});image.src=src;
+    target.removeAttribute('role');target.removeAttribute('aria-label');target.replaceChildren(image);
   }
   renderJournalImage(zone,doc,message){
     const input=zone.querySelector('input');if(!input.name?.startsWith('special.images.'))return;
@@ -344,8 +370,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const entries=sectorCollection(this.data,key),state=this.entryState(key),gear=key==='special.gear';
     const label=gear?'Item':key==='special.inhabitants'?'Inhabitant':'Event';
     return `<div class="sm-section-header"><p>Manually authored ${escapeHTML(this.tab.toLowerCase())}; no RollTables are rolled.</p><div class="sm-entry-controls">${entries.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}">+ Add ${label}</button></div></div>`+entries.map((item,i)=>{
-      const id=state.entries[i].id,collapsed=state.collapsed.has(id),prefix=`${key}.${i}`;
-      return `<article class="sm-entry ${collapsed?'is-collapsed':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body"><span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span><strong data-entry-title>${escapeHTML(gear?lootTitle(item,`Item ${i+1}`):item.title||`${label} ${i+1}`)}</strong></button><button type="button" data-remove="${key}:${id}" aria-label="Remove ${attr(item.title||label)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}><div class="sm-grid">${field('Title',`${prefix}.title`,item.title)}${gear?`<label class="sm-field"><span>Quantity</span><input name="${prefix}.quantity" type="number" min="1" step="1" value="${specialQuantity(item.quantity)}"></label><label class="sm-field"><span>Type</span><select name="${prefix}.type">${LOOT_TYPES.map(type=>`<option value="${type}" ${item.type===type?'selected':''}>${type[0].toUpperCase()+type.slice(1)}</option>`).join('')}</select></label>`:''}${reference(key,i,item.uuid)}</div>${area(key==='special.events'?'Description':'Description / Notes',`${prefix}.details`,item.details)}</div></article>`;
+      const id=state.entries[i].id,collapsed=state.collapsed.has(id),prefix=`${key}.${i}`,aligned=['special.inhabitants','special.events'].includes(key),chevron=`<span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span>`,title=`<strong data-entry-title>${escapeHTML(gear?lootTitle(item,`Item ${i+1}`):item.title||`${label} ${i+1}`)}</strong>`,avatar=key==='special.inhabitants'?'<span class="sm-inhabitant-avatar" data-inhabitant-avatar role="img" aria-label="No Actor portrait available"></span>':'';
+      return `<article class="sm-entry ${collapsed?'is-collapsed':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle ${aligned?'sm-special-toggle':''}" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body">${aligned?`${avatar}${title}${chevron}`:`${chevron}${title}`}</button><button type="button" data-remove="${key}:${id}" aria-label="Remove ${attr(item.title||label)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}><div class="sm-grid">${field('Title',`${prefix}.title`,item.title)}${gear?`<label class="sm-field"><span>Quantity</span><input name="${prefix}.quantity" type="number" min="1" step="1" value="${specialQuantity(item.quantity)}"></label><label class="sm-field"><span>Type</span><select name="${prefix}.type">${LOOT_TYPES.map(type=>`<option value="${type}" ${item.type===type?'selected':''}>${type[0].toUpperCase()+type.slice(1)}</option>`).join('')}</select></label>`:''}${reference(key,i,item.uuid)}</div>${area(key==='special.events'?'Description':'Description / Notes',`${prefix}.details`,item.details)}</div></article>`;
     }).join('')+(!entries.length?'<p class="sm-empty">No entries yet. Add one to get started.</p>':'');
   }
   async changeSectorType(){
@@ -382,6 +408,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     el.querySelector('[data-overlay-image-pick]')?.addEventListener('click',()=>this.pickOverlayImage());
     el.querySelector('[data-overlay-image-clear]')?.addEventListener('click',()=>{this.draft.special.overlayImage='';this.markDirty();this.refreshOverlayImage();zone.overlay?.setDraft?.(this.sectorId,this.draft);});
     this.refreshOverlayImage();this.situationResize?.disconnect();if(globalThis.ResizeObserver){let width=0;this.situationResize=new ResizeObserver(entries=>{const next=entries[0]?.contentRect.width;if(next!==width){width=next;this.sizeSituation();}});this.situationResize.observe(el);}
+    el.querySelectorAll('[data-image-toggle]').forEach(button=>button.addEventListener('click',()=>{const id=button.closest('[data-entry]').dataset.entry;this.setImageCollapsed(id,!this.entryState('special.images').previewCollapsed.has(id));}));
     el.querySelectorAll('[data-image-metadata]').forEach(details=>details.addEventListener('toggle',()=>{const state=this.entryState('special.images');if(details.open)state.collapsed.delete(details.dataset.imageMetadata);else state.collapsed.add(details.dataset.imageMetadata);}));
     el.querySelector('[data-consumables-toggle]')?.addEventListener('click',()=>{const state=this.consumablesState();state.collapsed=!state.collapsed;this.refreshConsumables();});
     el.querySelectorAll('[data-reference]').forEach(zone=>{
@@ -509,7 +536,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     let sector=ENTRY_UI.get(this.sectorId);
     if(!sector){sector=new Map();ENTRY_UI.set(this.sectorId,sector);}
     let state=sector.get(key);
-    if(!state){state={entries:[],collapsed:new Set()};sector.set(key,state);}
+    if(!state){state={entries:[],collapsed:new Set(),previewCollapsed:new Set()};sector.set(key,state);}
     const available=new Set(state.entries);
     const entries=sectorCollection(this.data,key).map(item=>{
       const snapshot=JSON.stringify(item);
@@ -520,7 +547,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       if(old)available.delete(old);
       const record={id:old?.id||`sm-entry-${++entrySequence}`,item,snapshot};if(!old&&key.startsWith('special.'))state.collapsed.add(record.id);if(!old&&key==='loot'&&(lootCollected(item)||item.generated?.method==='core'))state.collapsed.add(record.id);return record;
     });
-    for(const removed of available)state.collapsed.delete(removed.id);
+    for(const removed of available){state.collapsed.delete(removed.id);state.previewCollapsed.delete(removed.id);}
     state.entries=entries;
     return state;
   }
@@ -543,7 +570,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   collapseAll(collapsed){
     const key=COLLECTIONS[this.tab];
     if(!key)return;
-    for(const {id} of this.entryState(key).entries)this.setCollapsed(key,id,collapsed);
+    for(const {id} of this.entryState(key).entries){if(key==='special.images')this.setImageCollapsed(id,collapsed,true);else this.setCollapsed(key,id,collapsed);}
   }
 
   async removeEntry(key,id){
@@ -601,7 +628,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const request=zone.referenceRequest=(zone.referenceRequest||0)+1;
     const current=()=>zone.referenceRequest===request && input.value===uuid && this.draft===draft;
     zone.querySelector('[data-reference-clear]').disabled=!uuid;
-    target.classList.remove('sm-reference-missing');if(input.name?.startsWith('special.images.'))this.renderJournalImage(zone,null,'Assign an Image-type Journal page.');
+    target.classList.remove('sm-reference-missing');this.renderInhabitantAvatar(zone,null);if(input.name?.startsWith('special.images.'))this.renderJournalImage(zone,null,'Assign an Image-type Journal page.');
     if(!uuid){target.textContent='Drop a document here';return;}
     target.textContent='Loading reference…';
     try{
@@ -610,7 +637,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       const doc=await fromUuid(uuid);
       if(!current())return;
       if(!doc){this.renderJournalImage(zone,null,'Journal page is missing or unavailable.');target.textContent=`Missing reference (${uuid})`;target.classList.add('sm-reference-missing');return;}
-      this.renderJournalImage(zone,doc);
+      this.renderJournalImage(zone,doc);this.renderInhabitantAvatar(zone,doc);
       if(!entry||(this.lootTypeRevisions.get(entry)||0)===revision)this.assignLootType(zone,doc,detectType);this.assignSpecialTitle(zone,doc,detectType);
       const html=await foundry.applications.ux.TextEditor.implementation.enrichHTML(`@UUID[${uuid}]`,{documents:true,links:false,rolls:false,embeds:false,custom:false});
       if(!current())return;
