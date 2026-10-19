@@ -82,12 +82,12 @@ export class ZoneOverlay {
     if(cell.root){this.root.removeChild(cell.root);cell.root.destroy({children:true});}
     const {PIXI}=this.env,b=cell.bounds,root=cell.root=new PIXI.Container();root.eventMode='none';root.interactiveChildren=false;this.root.addChild(root);
     if(special){const highlight=new PIXI.Graphics();highlight.eventMode='none';highlight.name='special-sector-highlight';highlight.lineStyle(4,0x17111f,.9).drawRect(b.x+2,b.y+2,b.width-4,b.height-4);highlight.lineStyle(2,SPECIAL_ACCENT,1).beginFill(SPECIAL_ACCENT,.12).drawRect(b.x+2,b.y+2,b.width-4,b.height-4).endFill();root.addChild(highlight);}
-    const mask=new PIXI.Graphics().beginFill(0xffffff).drawRect(b.x+1,b.y+1,b.width-2,b.height-2).endFill();root.addChild(mask);root.mask=mask;
+    const mask=new PIXI.Graphics().beginFill(0xffffff).drawRect(special?b.x:b.x+1,special?b.y:b.y+1,special?b.width:b.width-2,special?b.height:b.height-2).endFill();root.addChild(mask);root.mask=mask;
     const font=Math.max(1,Math.min(18,b.width/7,b.height/7)),padding=Math.min(4,b.width*.04,b.height*.04),available=b.width-padding*2;
     const text=(value,x,y,size=font,fill=0xfaf0d4)=>{
       const label=new PIXI.Text(String(value),{fontFamily:'Arial',fontSize:size,fill,stroke:0x111111,strokeThickness:Math.min(3,font/5),wordWrap:true,wordWrapWidth:available,breakWords:true});label.eventMode='none';label.position.set(x,y);root.addChild(label);return label;
     };
-    if(special&&imagePath(data.special?.overlayImage))this.addImage(cell,root,data.special.overlayImage,{x:b.x+padding,y:b.y+padding+font*1.2,width:available,height:Math.max(1,b.height/3-padding*2-font*1.2)});
+    if(special&&imagePath(data.special?.overlayImage))this.addImage(cell,root,data.special.overlayImage,{x:b.x,y:b.y,width:b.width,height:b.height/3});
     if(!this.config.overlay.labels)return;
     text(cell.code,b.x+padding,b.y+padding,font,data?0xfaf0d4:0x929a9f);
     if(!info)return;
@@ -116,7 +116,7 @@ export class ZoneOverlay {
     const texture=await this.imageLoads.get(path);
     if(!texture||root.destroyed||cell.root!==root||!this.root||!PIXI.Sprite)return;
     const size=fitImage(texture.width,texture.height,region);if(!size)return;
-    const image=new PIXI.Sprite(texture);image.eventMode='none';image.name='special-sector-image';image.position.set(size.x,size.y);image.width=size.width;image.height=size.height;root.addChild(image);
+    const image=new PIXI.Sprite(texture);image.eventMode='none';image.name='special-sector-image';image.position.set(size.x,size.y);image.width=size.width;image.height=size.height;root.addChildAt(image,2);
   }
   point(event){
     const {canvas,PIXI}=this.env,board=canvas.app?.canvas||canvas.app?.view,rect=board?.getBoundingClientRect(),screen=canvas.app?.screen;

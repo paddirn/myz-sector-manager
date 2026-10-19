@@ -11,6 +11,7 @@ const path=require('node:path');
   const root=path.resolve(__dirname,'..');
   const server=http.createServer((req,res)=>{
     if(req.url==='/test-wide.svg'){res.setHeader('Content-Type','image/svg+xml');res.end('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="100"><rect width="600" height="100" fill="orange"/></svg>');return;}
+    if(['/test-tall.svg','/test-fit.svg'].includes(req.url)){const [width,height]=req.url.includes('tall')?[100,600]:[600,200];res.setHeader('Content-Type','image/svg+xml');res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="orange"/></svg>`);return;}
     if(req.url==='/missing.png'){res.writeHead(404);res.end();return;}
     if(req.url==='/pixi.js'){res.setHeader('Content-Type','text/javascript');res.end(readFileSync(bundle));return;}
     const file=path.resolve(root,'.'+decodeURIComponent(req.url));
@@ -65,6 +66,15 @@ const path=require('node:path');
     await page.evaluate(()=>{const draft=structuredClone(data);draft.terrain='Live draft Terrain';overlay.setDraft('sector',draft);});assert.equal(await page.evaluate(()=>overlay.cells.get('A1').root.children.find(child=>child.name==='special-sector-terrain').text),'Live draft Terrain');
     await page.evaluate(()=>overlay.clearDraft());assert.equal(await page.evaluate(()=>overlay.cells.get('A1').root.children.find(child=>child.name==='special-sector-terrain').text),'Special Terrain');
     await page.evaluate(()=>{store.config.grid.width=220;store.config.grid.height=190;app.stage.scale.set(.6);overlay.draw();});await page.waitForFunction(()=>overlay.cells.get('A1').root.children.some(child=>child.name==='special-sector-image'));assert.equal(await page.evaluate(()=>textureLoads),1);
+    // The display region is the full width and full upper third, with contain fitting.
+    for(const [width,height,zoom] of [[180,180,1],[300,300,.5],[90,90,2]])for(const [path,aspect] of [['/test-wide.svg',6],['/test-tall.svg',1/6],['/test-fit.svg',3]]){
+      await page.evaluate(({width,height,zoom,path})=>{store.config.grid.width=width;store.config.grid.height=height;app.stage.scale.set(zoom);data.special.overlayImage=path;overlay.draw();},{width,height,zoom,path});
+      await page.waitForFunction(()=>overlay.cells.get('A1').root.children.some(child=>child.name==='special-sector-image'));
+      const geometry=await page.evaluate(()=>{const cell=overlay.cells.get('A1'),sprite=cell.root.children.find(child=>child.name==='special-sector-image'),terrain=cell.root.children.find(child=>child.name==='special-sector-terrain');return {x:sprite.x,y:sprite.y,width:sprite.width,height:sprite.height,cell:cell.bounds,global:sprite.getBounds(),terrainY:terrain.y,layer:cell.root.children.indexOf(sprite),coordinateLayer:cell.root.children.findIndex(child=>child.text==='A1')};});
+      assert(Math.abs(geometry.width/geometry.height-aspect)<.001);assert(Math.abs(geometry.x+geometry.width/2-geometry.cell.x-width/2)<.01);assert(Math.abs(geometry.y+geometry.height/2-geometry.cell.y-height/6)<.01);
+      if(aspect>=3)assert(Math.abs(geometry.width-width)<.01);else assert(Math.abs(geometry.height-height/3)<.01);
+      assert(Math.abs(geometry.global.width-geometry.width*zoom)<.01);assert(Math.abs(geometry.global.height-geometry.height*zoom)<.01);assert(geometry.y+geometry.height<=geometry.cell.y+height/3+.01);assert(geometry.terrainY>geometry.y+geometry.height);assert(geometry.layer<geometry.coordinateLayer);
+    }
     await page.evaluate(()=>{store.config.overlay.labels=false;overlay.draw();});await page.waitForFunction(()=>overlay.cells.get('A1').root.children.some(child=>child.name==='special-sector-image'));assert(await page.evaluate(()=>overlay.cells.get('A1').root.children.some(child=>child.name==='special-sector-highlight')));
     await page.evaluate(async()=>{data.special.overlayImage='/missing.png';overlay.draw();await overlay.imageLoads.get('/missing.png');});assert.equal(await page.evaluate(()=>overlay.cells.get('A1').root.children.some(child=>child.name==='special-sector-image')),false);
     await page.evaluate(()=>{data.special.overlayImage='';overlay.draw();store.config.overlay.labels=true;app.renderer.background.color=0xffffff;app.renderer.render(app.stage);});assert(await page.evaluate(()=>overlay.cells.get('A1').root.children.some(child=>child.name==='special-sector-highlight')));
