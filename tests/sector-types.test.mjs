@@ -15,7 +15,7 @@ test('repeated conversion retains both content sets, shared records, unknown fie
   let data=normalizeSectorType({version:1,code:'B7',description:'Normal description',special:{overview:text,situation:text,sceneUuid:'Scene.missing',source:'Custom book',inhabitants:[{title:'Workers'}],gear:[{title:'Vest',type:'armor',quantity:2}],events:[{uuid:'Compendium.myz.book.JournalEntry.parent.JournalEntryPage.page'}],future:'keep'},pathStunts:{safePath:true},history:[{title:'Visit'}],secrets:['Legacy']});
   const before=structuredClone(data);for(const type of ['special','normal','special','normal']){data=normalizeSectorType({...structuredClone(data),sectorType:type});assert.deepEqual({...data,sectorType:'normal'},before);}
   assert.equal(sectorCollection(data,'special.gear').length,1);assert.equal(data.special.overview,text);
-  assert.deepEqual(sectorTabs({sectorType:'special'}),['Overview','The Situation','Inhabitants','Gear & Artifacts','Events','Images','Find the Path','History']);
+  assert.deepEqual(sectorTabs({sectorType:'special'}),['Overview','Locations','Inhabitants','Gear & Artifacts','Events','Images','Find the Path','History']);
 });
 test('Special Gear shares all six types and keeps positive integer quantities without adding collected flags',()=>{
   for(const type of ['scrap','armor','artifact','chassis','gear','weapon']){const entry=normalizeSpecialGear({title:'Unmodified',type,quantity:3,custom:'keep'});assert.equal(entry.type,type);assert.equal(entry.quantity,3);assert.equal(entry.title,'Unmodified');assert.equal(entry.collected,undefined);assert.equal(entry.custom,'keep');}
