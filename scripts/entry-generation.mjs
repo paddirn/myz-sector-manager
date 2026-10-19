@@ -1,3 +1,4 @@
+import {locationDescription} from './location-text.mjs';
 import {TABLE_UUIDS,ENVIRONMENTS,resolveGenerationTable,rollTable,rollThreat,resolveNamedDocument,mapEnvironment,boundedRoll} from './sector-randomizer.mjs';
 import {canonicalCoordinate} from './zone/grid.mjs';
 import {normalizeLoot} from './loot.mjs';
@@ -50,7 +51,8 @@ export async function generateEntry(kind,sector,{env=globalThis,arkCoordinate=nu
   }
   if(kind==='locations'){
     const ruins=locationRuinKind(sector);if(!ruins)return empty();
-    return entry(await requireDocument(one(await rollTable(await table(ruins==='industrial'?'ruinsB':'ruinsA'),env)),'JournalEntry',env));
+    const result=await locationDescription(one(await rollTable(await table(ruins==='industrial'?'ruinsB':'ruinsA'),env,[],{allowMissing:true})),env);
+    return entry(result,{details:result.details,...(result.referenceWarning?{referenceWarning:result.referenceWarning}:{})});
   }
   return empty();
 }

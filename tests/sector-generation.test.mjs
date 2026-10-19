@@ -192,7 +192,7 @@ test('both ruin categories persist Journal/Page references and unresolved ruins 
     const next=await generateSector(f.existing,f.options);const entry=next.locations.find(entry=>entry.generated);assert.equal(entry.uuid,uuid);assert.equal(entry.title,type==='JournalEntryPage'?'Ruin Journal':'Ruin title');
     let stored=f.existing;await saveGeneratedSector({getFlag:()=>stored,update:async changes=>{stored=structuredClone(changes['flags.myz-sector-manager.sector']);},setFlag:async(mod,key,value)=>{stored=structuredClone(value);}},f.existing,next,f.env);assert.equal(stored.locations.find(entry=>entry.generated).uuid,uuid);
   }
-  const f=fixture();f.tables.get(TABLE_UUIDS.ruinsA).roll=async()=>({results:[{documentUuid:'JournalEntry.deleted',description:'Hospital'}]});const before=structuredClone(f.existing);await assert.rejects(generateSector(f.existing,f.options),/missing or unavailable/);assert.deepEqual(f.existing,before);
+  const f=fixture();f.tables.get(TABLE_UUIDS.ruinsA).roll=async()=>({results:[{documentUuid:'JournalEntry.deleted',description:'Hospital'}]});const before=structuredClone(f.existing);const unresolved=await generateSector(f.existing,f.options);assert.equal(unresolved.locations.at(-1).uuid,'JournalEntry.deleted');assert.equal(unresolved.locations.at(-1).details,'');assert.match(unresolved.locations.at(-1).referenceWarning,/missing/i);assert.deepEqual(f.existing,before);
 });
 
 test('Core and house modes share severity and artifact counts; neither bypasses threat eligibility or absent ones',async()=>{
@@ -240,4 +240,11 @@ test('full sector generation uses bounded artifact exclusion and preserves sourc
 test('Normal randomization preserves all inactive Special content and legacy Secrets',async()=>{
   const f=fixture();f.existing.sectorType='normal';f.existing.special={sceneUuid:'Scene.missing',source:'Book',overview:'Special\n\nIntro',situation:'Keep',inhabitants:[{title:'Group'}],gear:[{title:'Weapon',quantity:2,type:'weapon'}],events:[{uuid:'JournalEntry.parent.JournalEntryPage.page'}],future:{keep:true}};f.existing.secrets=[{title:'Hidden legacy secret'}];
   const before=structuredClone(f.existing);const next=await generateSector(f.existing,f.options);assert.deepEqual(next.special,before.special);assert.deepEqual(next.secrets,before.secrets);assert.equal(next.sectorType,'normal');assert.deepEqual(f.existing,before);
+});
+
+test('full normal/industrial generation snapshots journal bodies and preserves manual Location edits',async()=>{
+  for(const [terrain,key,uuid,type] of [['Overgrown Ruins','ruinsA','JournalEntry.narrative','JournalEntry'],['Derelict Industries','ruinsB','Compendium.myz.ruins.JournalEntry.book.JournalEntryPage.p','JournalEntryPage']]){
+    const f=fixture({environment:terrain}),page={type:'text',text:{content:'<p>First room.</p><p>Second room.<img src="hidden.png"></p>'}},document={uuid,documentName:type,name:'Narrative',...(type==='JournalEntry'?{pages:[page]}:page)};f.tables.set(uuid,document);f.tables.get(TABLE_UUIDS[key]).roll=async()=>({results:[{documentUuid:uuid}]});f.existing.locations[0].details='Manual edits stay';
+    const next=await generateSector(f.existing,f.options);assert.equal(next.locations[0].details,'Manual edits stay');assert.equal(next.locations.at(-1).details,'First room.\n\nSecond room.');assert.equal(next.locations.at(-1).uuid,uuid);assert.equal(f.existing.locations[0].details,'Manual edits stay');
+  }
 });

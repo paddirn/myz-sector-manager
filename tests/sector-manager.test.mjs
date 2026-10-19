@@ -1,6 +1,6 @@
 import {safeImageSource} from '../scripts/zone/presentation.mjs';
 import {imagePath,journalImageSource} from '../scripts/sector-images.mjs';
-import {isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle} from '../scripts/sector-types.mjs';
+import {isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel} from '../scripts/sector-types.mjs';
 import {generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES} from '../scripts/entry-generation.mjs';
 import {normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion} from '../scripts/sector-fields.mjs';
 import {LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected} from '../scripts/loot.mjs';
@@ -21,7 +21,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,safeImageSource,imagePath,journalImageSource,isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({console,safeImageSource,imagePath,journalImageSource,isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -297,9 +297,9 @@ test('manager fields and section headings reuse shared icons even with zero entr
 
 test('manager icon slots refresh current values, status, counts and collected resources without replacing controls',()=>{
   const {app}=fixture();const slots=['rot','status','encounters','phenomena','loot'].map(iconSlot=>({dataset:{iconSlot},innerHTML:''}));app.element.querySelectorAll=()=>slots;
-  app.draft={rot:0,status:'Scouted',encounters:[],effects:[],supplies:{bullets:{quantity:1,collected:false}}};app.refreshSectorIcons();assert(slots[0].innerHTML.includes('Rot Level: 0'));assert(slots[4].innerHTML.includes('Uncollected Loot Available'));
+  app.draft={rot:0,status:'Scouted',encounters:[],effects:[],supplies:{bullets:{quantity:1,collected:false}}};app.refreshSectorIcons();assert(slots[0].innerHTML.includes('Rot Level: 0'));assert(slots[4].innerHTML.includes('Uncollected Gear &amp; Artifacts Available'));
   app.draft.rot=2;app.draft.status='Explored';app.draft.encounters=[{}];app.draft.effects=[{category:'Weather'},{category:'Phenomenon'}];app.draft.supplies.bullets.collected=true;app.refreshSectorIcons();
-  assert(slots[0].innerHTML.includes('Rot Level: 2'));assert(slots[1].innerHTML.includes('data-sector-icon="explored"'));assert(slots[2].innerHTML.includes('1 Encounter'));assert(slots[3].innerHTML.includes('1 Phenomenon'));assert(slots[4].innerHTML.includes('No Uncollected Loot'));
+  assert(slots[0].innerHTML.includes('Rot Level: 2'));assert(slots[1].innerHTML.includes('data-sector-icon="explored"'));assert(slots[2].innerHTML.includes('1 Inhabitant'));assert(slots[3].innerHTML.includes('1 Phenomenon'));assert(slots[4].innerHTML.includes('No Uncollected Gear &amp; Artifacts'));
 });
 test('a coordinate duplicate discovered during folder initialization respects cancelled unsaved-change navigation',async()=>{
   const {app,context}=fixture();context.ensureJournalFolders=async()=>({sectors:{id:'folder'}});app.sectorId='original';app.tab='Loot';app.confirmLose=async()=>true;app.navigate=async()=>{};
@@ -332,7 +332,7 @@ test('collection autosaves the Loot list, preserves other saved fields, serializ
   const journal={id:'loot',name:'Sector',getFlag:()=>stored,setFlag:async(m,k,value)=>{writes++;stored=structuredClone(value);}};context.game.journal.get=()=>journal;app.sectorId='loot';app.draft=app.loadDraft(stored,journal);app.draft.notes='Unsaved notes';app.draft.loot[0].collected=true;
   const first=app.persistLoot();app.draft.loot[0].collected=false;const second=app.persistLoot();await Promise.all([first,second]);assert.equal(writes,2);assert.equal(stored.loot[0].collected,false);assert.equal(stored.loot[0].status,'Hidden');assert.equal(stored.notes,'Saved notes');assert.deepEqual(stored.custom,{keep:true});
   const reopened=new context.Manager();await reopened.navigate('loot');assert.equal(reopened.draft.loot[0].collected,false);assert.equal(reopened.draft.loot[0].uuid,'Item.radio');
-  stored.loot.push({title:'Other GM loot'});app.draft.loot[0].collected=true;await assert.rejects(app.persistLoot(),/Saved Loot changed/);assert.equal(writes,2);assert.equal(stored.loot[0].collected,false);
+  stored.loot.push({title:'Other GM loot'});app.draft.loot[0].collected=true;await assert.rejects(app.persistLoot(),/Saved Gear & Artifacts changed/);assert.equal(writes,2);assert.equal(stored.loot[0].collected,false);
 });
 test('collected entries initially collapse but remain manually expandable; other tabs retain Status controls',()=>{
   const {app,context}=fixture();context.game.journal.get=()=>({id:'a',getFlag:()=>({version:1})});app.sectorId='loot-collapse';app.draft=context.normalizeSector({...entries(),loot:[{title:'Taken',status:'Collected',uuid:'Item.keep'}]});app.tab='Loot';const state=app.entryState('loot');assert(state.collapsed.has(state.entries[0].id));assert.match(app.build(),/is-collected/);assert.match(app.build(),/name="loot.0.collected" checked/);assert.doesNotMatch(app.build(),/name="loot.0.status"/);
@@ -492,4 +492,10 @@ test('Images bulk state affects full previews and metadata in place without chan
   for(const collapsed of [true,false]){app.collapseAll(collapsed);for(const {id} of state.entries){const card=cards.get(id);assert.equal(card.querySelector('[data-image-body]').hidden,collapsed);assert.equal(card.querySelector('[data-image-metadata]').open,!collapsed);assert.equal(state.previewCollapsed.has(id),collapsed);}assert.equal(JSON.stringify(app.draft),before);}
   app.collapseAll(true);app.sectorId='different-gallery';app.draft=context.normalizeSector({sectorType:'special',special:{images:[{title:'Other'}]}});assert.equal(app.entryState('special.images').previewCollapsed.size,0);
   app.draft.special.images=[];app.collapseAll(true);app.collapseAll(false);assert.equal(JSON.stringify(app.draft.special.images),'[]');
+});
+
+test('Normal tab display labels change while IDs, storage, controls and descriptions remain compatible',()=>{
+  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='normal-labels';app.draft=context.normalizeSector({version:1,encounters:[{title:'Mutant',type:'Humanoid',status:'Defeated',uuid:'Actor.keep'}],loot:[{title:'Rifle',quantity:3,type:'weapon',uuid:'Item.keep'}],locations:[{title:'Manual',details:'Do not replace'}],history:[{title:'Visit'}]});
+  const before=JSON.stringify(app.draft);for(const [tab,label,key] of [['Encounters','Inhabitants','encounters'],['Loot','Gear & Artifacts','loot']]){app.tab=tab;const html=app.build();assert(html.includes(`data-tab="${tab}"`));assert(html.includes(`>${label.replaceAll('&','&amp;')}</button>`));assert(html.includes(`name="${key}.0.title"`));assert.match(html,/sm-entry-toggle sm-special-toggle/);const heading=html.slice(html.indexOf('data-entry-header'),html.indexOf('class="sm-entry-body"'));assert(heading.indexOf('data-entry-title')<heading.indexOf('data-chevron'));}
+  assert.equal(JSON.stringify(app.draft),before);assert.equal(app.draft.locations[0].details,'Do not replace');
 });

@@ -21,3 +21,6 @@ export function sectorTitle(data,title=''){
   const code=canonicalCoordinate(data?.code)||String(data?.code||'').trim();
   return code&&name&&!name.toLowerCase().startsWith(`${code} - `.toLowerCase())?`${code} - ${name}`:name;
 }
+
+// Labels are independent of tab IDs and the Normal storage keys.
+export const tabLabel=tab=>({Encounters:'Inhabitants',Loot:'Gear & Artifacts'}[tab]||tab);
