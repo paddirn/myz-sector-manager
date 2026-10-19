@@ -41,6 +41,7 @@ export async function resolveTables(env=globalThis){
   return tables;
 }
 export async function rollTable(table,env=globalThis,stack=[],{resolveNested=true,allowMissing=false,acceptDraw=null}={}){
+  env.assertGenerationAuthority?.();
   if(stack.length>=8||stack.includes(table.uuid))throw new Error(`Recursive RollTable cycle/depth at ${table.name} (${table.uuid}).`);
   const output=await table.roll({recursive:false});
   if(!output?.results?.length)throw new Error(`RollTable ${table.name} (${table.uuid}) returned no usable results.`);

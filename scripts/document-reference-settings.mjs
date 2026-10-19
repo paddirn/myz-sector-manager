@@ -26,7 +26,7 @@ export function createDocumentReferencesClass(ApplicationV2,env=globalThis){
    return root;
   }
   row(def){
-   const selection=referenceSelection(def.key,env,this.draft),result=this.results.get(def.key),candidate=this.draft.migration?.outcomes?.find(row=>row.key===def.key&&!['Migrated','Preserved override'].includes(row.status));
+   const selection=referenceSelection(def.key,env,this.draft),result=this.results.get(def.key),candidate=this.draft.migration?.outcomes?.find(row=>row.key===def.key&&row.uuid&&!['Migrated','Preserved override'].includes(row.status));
    return `<section class="dr-row" data-key="${escape(def.key)}"><strong>${escape(def.label)}</strong> · ${def.documentType} · ${def.required?'Required':'Optional'}<small>${escape(def.description)}</small><small>Bundled default: ${def.defaultUuid?escape(def.defaultUuid):'Unavailable'}</small>
     <label>Reference mode<select data-mode>${[['default','Use bundled default'],['custom','World override'],['disabled','Disabled (no fallback)']].map(([value,label])=>`<option value="${value}" ${selection.mode===value?'selected':''}>${label}</option>`).join('')}</select></label>
     <label>Full UUID (or drop a RollTable)<input data-uuid value="${escape(selection.uuid||'')}" aria-label="${escape(def.label)} UUID"></label>

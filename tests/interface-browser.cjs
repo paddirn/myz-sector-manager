@@ -91,7 +91,7 @@ const path=require('node:path');
       globalThis.zoneState=()=>records.get(game.settings.get('myz-sector-manager','zoneConfigurationId'))?.getFlag('myz-sector-manager','zoneConfiguration');
     `});
     await page.addScriptTag({type:'module',url:origin+'/scripts/sector-manager.mjs'});
-    await page.evaluate(async()=>{for(const callback of initCallbacks)callback();const {REFERENCE_DEFINITIONS}=await import('/scripts/document-references.mjs');await game.settings.set('myz-sector-manager','documentReferences',{formatVersion:1,references:Object.fromEntries(REFERENCE_DEFINITIONS.map(def=>[def.key,{mode:'custom',uuid:def.legacyUuid}])),migration:{version:1,outcomes:[]}});await ready();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
+    await page.evaluate(async()=>{for(const callback of initCallbacks)callback();const {REFERENCE_DEFINITIONS}=await import('/scripts/document-references.mjs');await game.settings.set('myz-sector-manager','documentReferences',{formatVersion:1,references:Object.fromEntries(REFERENCE_DEFINITIONS.filter(def=>def.legacyUuid).map(def=>[def.key,{mode:'custom',uuid:def.legacyUuid}])),migration:{version:1,outcomes:[]}});await game.settings.set('myz-sector-manager','travelEventsConfiguration',{enabled:false});await ready();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
 
     for(const tab of ['Overview','Find the Path','Locations','Encounters','Loot','Effects','History']){
       await page.locator(`[data-tab="${tab}"]`).click();

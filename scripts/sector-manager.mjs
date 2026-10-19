@@ -1,3 +1,4 @@
+import {MovementRecovery} from './travel/recovery.mjs';
 import {registerDocumentReferences} from './document-reference-settings.mjs';
 import {ensureReferenceMigration} from './document-references.mjs';
 import {macroRunOnce} from './zone/entry-triggers.mjs';
@@ -794,7 +795,7 @@ const zone=new ZoneRuntime({
   createSector:async(code,valid)=>{const manager=await game.myzSectorManager.open();if(manager)await manager.promptNewSector(code,valid);}
 });
 Hooks.once('init',()=>{
-  zone.register();registerDocumentReferences();
+  zone.register();zone.ReferenceClass=registerDocumentReferences();
   game.settings.register(MOD,'threatGenerationMode',{name:'Sector generation: threat identities',hint:'Core uses one threat identity with severity equal to the number of Base Dice showing 1. The 1d3 option is a house rule and does not change the severity roll.',scope:'world',config:true,type:String,choices:{core:'Core Rulebook: one threat with severity','individual-d3':'House rule: 1d3 individual threats'},default:'core',restricted:true});
   game.settings.register(MOD,'dangerousThreatLevel',{name:'Sector generation: Unusually Dangerous level',hint:'Numeric Threat Level when the table returns the open-ended 9+ category. Default 9. Explicit numeric table results take precedence.',scope:'world',config:true,type:Number,default:9,restricted:true});
 });
@@ -802,6 +803,7 @@ Hooks.once('ready',async()=>{
   const referencesReady=ensureReferenceMigration().catch(error=>{console.error(`${MOD} | Document References migration`,error);ui.notifications.error(`Document References migration: ${error.message}. Open Module Settings → Document References to review/retry.`);});
   game.myzSectorManager={
     zone:zone.api(),
+    travel:{weather:()=>game.user.isGM?zone.travel.state.weather:null,history:()=>game.user.isGM?zone.travel.state.history:[],configure:async()=>{if(game.user.isGM)return new zone.TravelClass().render(true);},roster:async()=>{if(game.user.isGM)return new zone.RosterClass().render(true);}},
     migrateJournals:()=>organization.run(),
     open:async(id=null)=>{
       if(!game.user.isGM){ui.notifications.warn('GM access only.');return;}
@@ -814,5 +816,6 @@ Hooks.once('ready',async()=>{
     getSector:(journalId)=>{if(!game.user.isGM)return null;const j=game.journal.get(journalId);return j?.getFlag(MOD,KEY)??null;}
   };
   await referencesReady;organization.start();zone.start();
+  const recovery=new MovementRecovery(globalThis,{suppressed:token=>zone.triggers.executing.has(token.uuid||`Scene.${token.parent?.id}.Token.${token.id}`)});recovery.start();
   console.info(`${MOD} | Ready. Run game.myzSectorManager.open() from a Script Macro.`);
 });

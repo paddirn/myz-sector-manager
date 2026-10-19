@@ -4,7 +4,7 @@ const MODULE='myz-sector-manager',FLAG='entryTriggers';
 export const macroRunOnce=trigger=>Boolean(trigger.macroRunOnce??trigger.macroEnabled??false);
 // Independent of Effects UI; callers can supply another trigger list later.
 export class SectorEntryTriggers {
- constructor(store,env=globalThis){this.store=store;this.env=env;this.positions=new Map();this.pending=new Set();this.queue=Promise.resolve();this.executing=new Set();}
+ constructor(store,env=globalThis,{beforeMacros=null}={}){this.beforeMacros=beforeMacros;this.store=store;this.env=env;this.positions=new Map();this.pending=new Set();this.queue=Promise.resolve();this.executing=new Set();}
  prime(){this.positions.clear();this.pending.clear();for(const track of this.store.config.groups){const token=this.store.scene?.tokens.get(track.tokenId);if(token)this.positions.set(token.uuid||token.id,locateToken(track,this.store.scene,this.store.config.grid).coordinate);}}
  updated(token,changes){
   if(!['x','y'].some(key=>key in changes))return Promise.resolve();
@@ -24,11 +24,10 @@ export class SectorEntryTriggers {
   if(!track)return Promise.resolve();
   const to=locateToken(track,this.store.scene,this.store.config.grid).coordinate;
   if(!to||to===from)return Promise.resolve();
-  const records=this.store.sectorRecords(to);
+  const records=this.store.sectorRecords(to),gridAtEntry=JSON.stringify(this.store.config.grid);
   const task=this.queue.then(async()=>{
-   if(!this.store.authoritative)return;
-   this.executing.add(identity);
-   try{for(const journal of records){const sector=journal.getFlag(MODULE,'sector');if(sector?.sectorType==='special'||sector?.initialSavePending)continue;await this.run(journal,identity,sector.effects||[],token);}}
+   if(!this.store.authoritative||gridAtEntry!==JSON.stringify(this.store.config.grid)||!this.store.config.groups.some(group=>group.id===track.id&&group.sceneId===track.sceneId&&group.tokenId===token.id))return;
+   try{let travelProcessed=false;for(const journal of records){const sector=journal.getFlag(MODULE,'sector');if(sector?.sectorType==='special'||sector?.initialSavePending)continue;if(!travelProcessed&&this.beforeMacros){travelProcessed=true;await this.beforeMacros({journal,token,group:track,coordinate:to,entryId:this.env.foundry?.utils?.randomID?.()||`${Date.now()}-${Math.random()}`});}this.executing.add(identity);await this.run(journal,identity,sector.effects||[],token);}}
    finally{this.executing.delete(identity);}
   });
   this.queue=task.catch(error=>this.report(error));return this.queue;

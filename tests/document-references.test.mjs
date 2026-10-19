@@ -11,8 +11,8 @@ function fixture(configuration=emptyReferenceConfiguration()){
  const table=(uuid,name='Test table',text='A result')=>{const doc={uuid,name,documentName:'RollTable',formula:'1d6',results:[{range:[1,6],weight:1,description:text}],testUserPermission:()=>true,roll:async()=>({results:[{description:text}]})};docs.set(uuid,doc);return doc;};
  return {env,docs,table,warnings,registered,menus,saved:()=>saved,writes:()=>writes,lookups:()=>lookups};
 }
-test('registry audits 28 unique resources; zero bundled defaults; fresh worlds never resolve legacy IDs implicitly',async()=>{
- assert.equal(REFERENCE_DEFINITIONS.length,28);assert.equal(new Set(REFERENCE_DEFINITIONS.map(def=>def.key)).size,28);assert.equal(REFERENCE_DEFINITIONS.filter(def=>def.defaultUuid).length,0);assert.equal(REFERENCE_DEFINITIONS.filter(def=>def.required).length,13);
+test('registry audits 29 unique resources; zero bundled defaults; fresh worlds never resolve legacy IDs implicitly',async()=>{
+ assert.equal(REFERENCE_DEFINITIONS.length,29);assert.equal(new Set(REFERENCE_DEFINITIONS.map(def=>def.key)).size,29);assert.equal(REFERENCE_DEFINITIONS.filter(def=>def.defaultUuid).length,0);assert.equal(REFERENCE_DEFINITIONS.filter(def=>def.required).length,13);
  const f=fixture();for(const def of REFERENCE_DEFINITIONS)f.table(def.legacyUuid,def.label);
  const results=await validateAllReferences(f.env);assert(results.every(row=>row.status==='Unconfigured'));assert.equal(f.lookups(),0);await assert.rejects(resolveConfiguredDocument('generation.environment',f.env),/Unconfigured/);
 });
@@ -35,7 +35,7 @@ test('migration recognizes structurally valid named legacy tables; preserves ove
 });
 test('unrelated legacy names, wrong types, missing tables and malformed six-result descriptions are never activated',async()=>{
  const f=fixture();for(const def of REFERENCE_DEFINITIONS)f.table(def.legacyUuid,'Completely unrelated');const wrong=REFERENCE_DEFINITIONS[0];f.docs.get(wrong.legacyUuid).documentName='Actor';const terrain=REFERENCE_DEFINITIONS.find(def=>def.terrain);const doc=f.docs.get(terrain.legacyUuid);doc.name=terrain.label;assert.equal(legacyIdentity(terrain,doc),false);
- const result=await migrateReferenceConfiguration(f.env);assert.deepEqual(result.references,{});assert.equal(result.migration.outcomes.length,28);assert(result.migration.outcomes.some(row=>row.status==='Review legacy identity'));assert(result.migration.outcomes.some(row=>row.status==='Wrong Document Type'));
+ const result=await migrateReferenceConfiguration(f.env);assert.deepEqual(result.references,{});assert.equal(result.migration.outcomes.length,29);assert(result.migration.outcomes.some(row=>row.status==='Review legacy identity'));assert(result.migration.outcomes.some(row=>row.status==='Wrong Document Type'));
 });
 test('migration requires active GM, avoids duplicate in-flight work and never overwrites concurrent settings',async()=>{
  const f=fixture();f.env.game.users.activeGM={id:'other'};assert.equal(await migrateReferenceConfiguration(f.env),null);assert.equal(f.lookups(),0);f.env.game.users.activeGM={id:'gm'};
@@ -43,7 +43,7 @@ test('migration requires active GM, avoids duplicate in-flight work and never ov
  const conflict=fixture();let first=true;conflict.env.fromUuid=async()=>{if(first){first=false;await saveReferenceConfiguration({...conflict.saved(),references:{'generation.rot':{mode:'disabled'}}},conflict.env);}return null;};await assert.rejects(migrateReferenceConfiguration(conflict.env),/changed during migration/);assert.equal(conflict.writes(),1);assert.equal(conflict.saved().migration.version,0);assert.equal(conflict.saved().references['generation.rot'].mode,'disabled');
 });
 test('configuration export/import preserves explicit modes, labels and missing UUIDs; merge/replace never apply before Save',()=>{
- const f=fixture();f.saved().references={'generation.rot':{mode:'disabled'},'generation.environment':{mode:'custom',uuid:'RollTable.world',name:'World environment'}};const text=JSON.stringify(exportReferenceConfiguration(f.saved(),f.env));const data=JSON.parse(text);assert.equal(data.formatVersion,1);assert.equal(data.moduleVersion,'0.1.24');assert.equal(Object.keys(data.references).length,28);assert.equal(data.references['generation.rot'].mode,'disabled');
+ const f=fixture();f.saved().references={'generation.rot':{mode:'disabled'},'generation.environment':{mode:'custom',uuid:'RollTable.world',name:'World environment'}};const text=JSON.stringify(exportReferenceConfiguration(f.saved(),f.env));const data=JSON.parse(text);assert.equal(data.formatVersion,1);assert.equal(data.moduleVersion,'0.1.24');assert.equal(Object.keys(data.references).length,29);assert.equal(data.references['generation.rot'].mode,'disabled');
  const imported=JSON.stringify({formatVersion:1,module:MODULE,references:{'generation.environment':{mode:'custom',uuid:'Compendium.shared.tables.RollTable.env',name:'Original name'}}});const before=structuredClone(f.saved());const merged=importReferenceConfiguration(imported,f.saved(),'merge');assert.equal(merged.references['generation.rot'].mode,'disabled');assert.equal(merged.references['generation.environment'].name,'Original name');const replaced=importReferenceConfiguration(imported,f.saved(),'replace');assert.equal(replaced.references['generation.rot'],undefined);assert.deepEqual(f.saved(),before);assert.equal(f.writes(),0);
 });
 test('malformed/oversized imports, pollution, unknown keys/properties/types and versions are rejected atomically',()=>{

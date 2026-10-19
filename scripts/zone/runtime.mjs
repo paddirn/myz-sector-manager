@@ -1,3 +1,5 @@
+import {registerTravelSettings} from '../travel/settings.mjs';
+import {TravelEvents} from '../travel/service.mjs';
 import {SectorEntryTriggers} from './entry-triggers.mjs';
 import {ZoneStore,MODULE} from './store.mjs';
 import {ZoneOverlay} from './overlay.mjs';
@@ -10,10 +12,10 @@ import {registerOverlayShortcut,warnShortcutConflict} from './shortcut.mjs';
 
 export class ZoneRuntime {
   constructor({onChange=()=>{},openSector=async()=>{},createSector=async()=>{}}={},env=globalThis){
-    this.env=env;this.store=new ZoneStore(env);this.triggers=new SectorEntryTriggers(this.store,env);this.overlay=new ZoneOverlay(this.store,env);this.overlay.onSelect=code=>this.selectCoordinate(code);this.calibrator=new ZoneCalibration(this.store,this.overlay,env);
+    this.env=env;this.store=new ZoneStore(env);this.travel=new TravelEvents(this.store,env);this.triggers=new SectorEntryTriggers(this.store,env,{beforeMacros:context=>this.travel.onEntry(context).catch(()=>{})});this.overlay=new ZoneOverlay(this.store,env);this.overlay.onSelect=code=>this.selectCoordinate(code);this.calibrator=new ZoneCalibration(this.store,this.overlay,env);
     this.onChange=onChange;this.openSector=openSector;this.createSector=createSector;this.hooks=[];this.suspended=false;this.pending=false;
   }
-  register(){this.store.register();this.env.Hooks.once('setup',()=>registerOverlayShortcut(this));}
+  register(){this.store.register();registerTravelSettings(this,this.env);this.env.Hooks.once('setup',()=>registerOverlayShortcut(this));}
   schedule(){
     if(this.pending)return;
     this.pending=true;
@@ -30,17 +32,17 @@ export class ZoneRuntime {
     on('canvasPan',()=>this.schedule());
     on('canvasReady',()=>{this.suspended=false;this.store.emit();refresh();});
     on('canvasTearDown',()=>{if(this.calibrator.active)this.calibrator.cancel();this.suspended=true;this.overlay.stop();});
-    on('updateToken',(token,changes)=>{void this.triggers.updated(token,changes); void this.store.tokenChanged(token,changes).catch(()=>{});});
+    on('updateToken',(token,changes)=>{void this.triggers.updated(token,changes); void this.store.tokenChanged(token,changes).catch(()=>{});if(changes.flags?.[MODULE]?.pendingTravelEntries)void this.travel.recoverPendingMoves().catch(()=>{});});
     on('moveToken',token=>{void this.triggers.updated(token,{x:token.x,y:token.y});});
     on('stopToken',token=>{void this.triggers.stopped(token);});
     for(const event of ['deleteToken','createToken','moveToken','stopToken','pauseToken'])on(event,token=>{void this.store.tokenChanged(token).catch(()=>{});});
     for(const event of ['updateScene','deleteScene'])on(event,scene=>{if(scene.id===this.store.config.sceneId){this.store.emit();refresh();}});
     for(const event of ['createJournalEntry','updateJournalEntry','deleteJournalEntry'])on(event,doc=>{
-      if(doc.id===this.store.documentId){const assignments=JSON.stringify([this.store.config.sceneId,this.store.config.grid,this.store.config.groups.map(g=>[g.sceneId,g.tokenId])]);this.store.reload();if(assignments!==JSON.stringify([this.store.config.sceneId,this.store.config.grid,this.store.config.groups.map(g=>[g.sceneId,g.tokenId])]))this.triggers.prime();refresh();}
+      if(doc.id===this.store.documentId){const assignments=JSON.stringify([this.store.config.sceneId,this.store.config.grid,this.store.config.groups.map(g=>[g.sceneId,g.tokenId])]);this.store.reload();if(assignments!==JSON.stringify([this.store.config.sceneId,this.store.config.grid,this.store.config.groups.map(g=>[g.sceneId,g.tokenId])]))this.triggers.prime();refresh();if(this.store.authoritative&&Object.keys(doc.getFlag(MODULE,'pendingTravelReports')||{}).length)void this.travel.enqueue(()=>this.travel.mergeHandoverReports()).catch(()=>{});}
       else if(doc.getFlag(MODULE,'sector')?.version===1||event==='deleteJournalEntry')this.schedule();
     });
-    on('updateUser',()=>{if(!this.store.isGM){this.calibrator.cancel();this.overlay.stop();this.dialog?.close();}else refresh();});
-    this.schedule();refresh();
+    on('updateUser',()=>{if(!this.store.authoritative)void this.travel.activeDialog?.close();if(!this.store.isGM){this.calibrator.cancel();this.overlay.stop();this.dialog?.close();}else{refresh();if(this.store.authoritative)void this.travel.recoverPendingMoves().catch(()=>{});else void this.travel.activeDialog?.close();}});
+    this.schedule();refresh();void this.travel.recoverPendingMoves().catch(()=>{});
   }
   stop(){for(const [name,id] of this.hooks)this.env.Hooks.off(name,id);this.hooks=[];this.suspended=true;this.unsubscribe?.();this.calibrator.cancel();this.overlay.stop();}
   async configure(){
