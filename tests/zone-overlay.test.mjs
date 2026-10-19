@@ -50,8 +50,8 @@ test('saved sector updates replace only affected label containers, retaining zer
   const f=fixture();let data={version:1,code:'A1',terrain:'Thick Woods',rot:0,status:'Scouted',encounters:[{title:'Creature'}],effects:[{category:'Phenomenon'}],loot:[{title:'Artifact'}]};f.env.game.journal=[{getFlag:()=>data}];f.overlay.draw();
   const root=f.overlay.root,a=f.overlay.cells.get('A1'),b=f.overlay.cells.get('B1'),beforeA=a.root,beforeB=b.root;
   const titles=()=>a.root.children.filter(c=>c.sectorTooltip).map(c=>c.sectorTooltip);
-  assert(titles().includes('Rot Level: 0'));assert(titles().includes('1 Encounter'));assert(titles().includes('1 Phenomenon'));assert(titles().includes('Uncollected Loot Available'));
-  data={...data,rot:2,status:'Explored',loot:[{title:'Artifact',status:'Collected'}]};f.overlay.draw();assert.equal(f.overlay.root,root);assert(beforeA.destroyed);assert.equal(b.root,beforeB);assert(titles().includes('Rot Level: 2'));assert(!titles().includes('Uncollected Loot Available'));
+  assert(titles().includes('Rot Level: 0'));assert(titles().includes('1 Inhabitant'));assert(titles().includes('1 Phenomenon'));assert(titles().includes('Uncollected Gear & Artifacts Available'));
+  data={...data,rot:2,status:'Explored',loot:[{title:'Artifact',status:'Collected'}]};f.overlay.draw();assert.equal(f.overlay.root,root);assert(beforeA.destroyed);assert.equal(b.root,beforeB);assert(titles().includes('Rot Level: 2'));assert(!titles().includes('Uncollected Gear & Artifacts Available'));
   data={...data,code:'B1'};f.overlay.draw();assert.equal(a.root.children.filter(c=>c.text).length,1);assert.notEqual(b.root,beforeB);
   f.env.game.journal=[];f.overlay.draw();assert.equal(b.root.children.filter(c=>c.text).length,1);
 });

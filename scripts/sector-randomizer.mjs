@@ -1,3 +1,4 @@
+import {locationDescription} from './location-text.mjs';
 import {cleanThreatRecord,threatDeletion} from './sector-fields.mjs';
 import {normalizeLoot,itemLootType} from './loot.mjs';
 import {storedTravel} from './travel-time.mjs';
@@ -275,8 +276,8 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
   output.threatLevel=threat.level;output.terrain=eligibility.name;output.rot=mapRot(rot);output.mood=mood.text;
   const add=(key,result,quantity,defaultType='scrap')=>{const raw=generatedEntry(result,key,quantity),entry=key==='loot'?normalizeLoot({...raw,type:result.itemType||defaultType,typeSource:result.itemType?'reference':'default'}):raw;output[key].push(entry);return entry;};
   if(eligibility.ruins){
-    const ruins=await rollTable(tables[eligibility.ruins==='normal'?'ruinsA':'ruinsB'],env);
-    for(const result of ruins.entries){const resolved=await resolveRuinJournal(result,env);const entry=add('locations',resolved);if(resolved.referenceWarning)entry.referenceWarning=resolved.referenceWarning;}
+    const ruins=await rollTable(tables[eligibility.ruins==='normal'?'ruinsA':'ruinsB'],env,[],{allowMissing:true});
+    for(const result of ruins.entries){const resolved=await locationDescription(await resolveRuinJournal(result,env),env);const entry=add('locations',resolved);entry.details=resolved.details;entry.uuid=resolved.uuid||'';if(resolved.referenceWarning)entry.referenceWarning=resolved.referenceWarning;}
   }
   let threatCount=0;
   if(severity){

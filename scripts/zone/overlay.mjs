@@ -87,7 +87,7 @@ export class ZoneOverlay {
     const text=(value,x,y,size=font,fill=0xfaf0d4)=>{
       const label=new PIXI.Text(String(value),{fontFamily:'Arial',fontSize:size,fill,stroke:0x111111,strokeThickness:Math.min(3,font/5),wordWrap:true,wordWrapWidth:available,breakWords:true});label.eventMode='none';label.position.set(x,y);root.addChild(label);return label;
     };
-    if(special&&imagePath(data.special?.overlayImage))this.addImage(cell,root,data.special.overlayImage,{x:b.x,y:b.y,width:b.width,height:b.height/3});
+    if(special&&imagePath(data.special?.overlayImage))this.addImage(cell,root,data.special.overlayImage,{x:b.x+b.width*2/3,y:b.y,width:b.width/3,height:b.height/3});
     if(!this.config.overlay.labels)return;
     text(cell.code,b.x+padding,b.y+padding,font,data?0xfaf0d4:0x929a9f);
     if(!info)return;
