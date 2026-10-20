@@ -536,3 +536,11 @@ See the [complete setup, verified system-source references, private storage/reco
 Weather and encounter RollTables now accept Name-only results and retain optional multiline Descriptions. Weather shares nested world/compendium table resolution with sector generation, with cycle/depth checks and contextual errors. V14 results use `documentUuid` for linked targets without reading deprecated TableResult properties. The browser environment wrapper that caused “Illegal invocation” has been removed.
 
 Successful Travel Events use a persistent GM-only dialog. Close or X releases the next queued report and sector Macros; there is no automatic dismissal. Weather and encounters combine into one scrollable report, no-event checks stay silent, and closed reports remain in private Travel Event History. Use Name for a short weather identity and Description for narrative text. See [Travel Events setup and result formats](docs/travel-events.md) for linked-weather policy, diagnostics and backup-world checks.
+
+### Wandering Tokens (v0.1.27)
+
+NPCs can now wander one calibrated Zone sector North, South, East or West after the Party enters a new sector. Automatic checks default to at most two NPCs, but every placed token remains stationary until explicitly enabled. Player-owned Actors/tokens and Party/Expedition tokens are always excluded. Hidden NPCs keep their visibility; Special destinations are excluded by default, and uncreated sectors are allowed without creating records.
+
+Enable an NPC through **Token Configuration → Identity → Sector Manager → Allow Random Wandering**, or the GM token HUD lock/footprints button. In **Zone Map / Tracking**, use the selected-token bulk controls, **Wander Now**, or **Wandering Tokens** settings. Options include maximum 1–6 tokens, every entry/25% chance/manual frequency and Special destinations. Wander Now works even when automatic wandering is off. Travel reports finish first, then wandering runs, then sector Macros continue; NPC moves do not trigger Party entry actions.
+
+See [Wandering Tokens setup, storage, movement protections and manual checks](docs/wandering-tokens.md). Native Foundry v14 animation, Token Configuration submission and compatibility with your installed modules require backup-world verification.

@@ -1,3 +1,5 @@
+import {WanderingTokens} from '../wandering/service.mjs';
+import {registerWandering} from '../wandering/ui.mjs';
 import {registerTravelSettings} from '../travel/settings.mjs';
 import {TravelEvents} from '../travel/service.mjs';
 import {SectorEntryTriggers} from './entry-triggers.mjs';
@@ -12,10 +14,10 @@ import {registerOverlayShortcut,warnShortcutConflict} from './shortcut.mjs';
 
 export class ZoneRuntime {
   constructor({onChange=()=>{},openSector=async()=>{},createSector=async()=>{}}={},env=globalThis){
-    this.env=env;this.store=new ZoneStore(env);this.travel=new TravelEvents(this.store,env);this.triggers=new SectorEntryTriggers(this.store,env,{beforeMacros:context=>this.travel.onEntry(context).catch(()=>{})});this.overlay=new ZoneOverlay(this.store,env);this.overlay.onSelect=code=>this.selectCoordinate(code);this.calibrator=new ZoneCalibration(this.store,this.overlay,env);
+    this.env=env;this.store=new ZoneStore(env);this.travel=new TravelEvents(this.store,env);this.wandering=new WanderingTokens(this.store,env);this.triggers=new SectorEntryTriggers(this.store,env,{beforeMacros:context=>this.travel.onEntry(context).catch(()=>{}),afterTravel:context=>this.wandering.onEntry(context)});this.overlay=new ZoneOverlay(this.store,env);this.overlay.onSelect=code=>this.selectCoordinate(code);this.calibrator=new ZoneCalibration(this.store,this.overlay,env);
     this.onChange=onChange;this.openSector=openSector;this.createSector=createSector;this.hooks=[];this.suspended=false;this.pending=false;
   }
-  register(){this.store.register();registerTravelSettings(this,this.env);this.env.Hooks.once('setup',()=>registerOverlayShortcut(this));}
+  register(){this.store.register();registerTravelSettings(this,this.env);registerWandering(this,this.env);this.env.Hooks.once('setup',()=>registerOverlayShortcut(this));}
   schedule(){
     if(this.pending)return;
     this.pending=true;
@@ -32,7 +34,7 @@ export class ZoneRuntime {
     on('canvasPan',()=>this.schedule());
     on('canvasReady',()=>{this.suspended=false;this.store.emit();refresh();});
     on('canvasTearDown',()=>{if(this.calibrator.active)this.calibrator.cancel();this.suspended=true;this.overlay.stop();});
-    on('updateToken',(token,changes)=>{void this.triggers.updated(token,changes); void this.store.tokenChanged(token,changes).catch(()=>{});if(changes.flags?.[MODULE]?.pendingTravelEntries)void this.travel.recoverPendingMoves().catch(()=>{});});
+    on('updateToken',(token,changes,options={})=>{if(!options.myzWandering)void this.triggers.updated(token,changes); void this.store.tokenChanged(token,changes).catch(()=>{});if(changes.flags?.[MODULE]?.pendingTravelEntries)void this.travel.recoverPendingMoves().catch(()=>{});});
     on('moveToken',token=>{void this.triggers.updated(token,{x:token.x,y:token.y});});
     on('stopToken',token=>{void this.triggers.stopped(token);});
     for(const event of ['deleteToken','createToken','moveToken','stopToken','pauseToken'])on(event,token=>{void this.store.tokenChanged(token).catch(()=>{});});
@@ -76,13 +78,17 @@ export class ZoneRuntime {
     }).join('');
     if(config.arkCoordinate&&config.grid&&!coordinateToBounds(config.arkCoordinate,config.grid))warning+=(warning?' ':'')+'Ark is outside the configured grid; its map highlight is unavailable.';
     return `<style>.sm-zone-summary{flex-shrink:0;border-bottom:1px solid #888;padding:6px 12px;font-size:12px}.sm-zone-summary .zm-actions,.sm-zone-summary .zm-positions{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}.sm-zone-summary button{width:auto;height:auto;white-space:normal}.sm-zone-summary .zm-positions{margin-top:4px}.sm-zone-summary p{margin:4px 0}.sm-zone-summary em{opacity:.8}.sm-zone-summary .zm-expedition{display:grid;grid-template-columns:36px minmax(64px,88px) minmax(0,1fr) minmax(0,1.1fr);column-gap:6px;row-gap:4px;align-items:center;max-width:100%}.sm-zone-summary .zm-positions{display:block}.sm-zone-summary .zm-original-distance{display:flex;flex-direction:column;white-space:nowrap;min-width:0}.sm-zone-summary .zm-selected{display:flex;align-items:center;gap:4px;min-width:0;overflow-wrap:anywhere}.sm-zone-summary .zm-selected span{white-space:nowrap}.sm-zone-summary .zm-coordinate{width:36px;height:36px;flex:0 0 36px;font-size:10px;line-height:1.1;overflow-wrap:anywhere;padding:2px;border-radius:6px;font-weight:bold}.sm-zone-summary .zm-expedition+.zm-expedition{margin-top:6px}@container (max-width:640px){.sm-zone-summary .zm-expedition{grid-template-columns:36px minmax(0,1fr)}.sm-zone-summary .zm-selected{grid-column:2}.sm-zone-summary .zm-original-distance{grid-column:2;white-space:normal}.sm-zone-summary .zm-selected{flex-wrap:wrap}.sm-zone-summary .zm-selected span{white-space:normal}}.sm-zone-summary .zm-group-location{min-width:0;overflow-wrap:anywhere}.sm-zone-summary .zm-portrait{width:36px;height:36px;flex:0 0 36px;padding:0;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center}.sm-zone-summary .zm-portrait img{width:100%;height:100%;object-fit:contain}.sm-zone-summary .zm-portrait:focus-visible{outline:2px solid #d49a3d;outline-offset:2px}</style>
-      <details ${this.toolsOpen?'open':''}><summary>Zone Map / Tracking: <strong>${escapeHTML(scene?.name||config.sceneId||'Not configured')}</strong></summary><div class="zm-actions"><button type="button" data-zone-config>Configure / Tracking</button><button type="button" data-zone-view ${scene?'':'disabled'}>View Zone</button><button type="button" data-zone-select ${this.store.live&&config.grid?'':'disabled'}>Select on map</button><button type="button" data-zone-overlay aria-pressed="${Boolean(config.overlay.enabled)}" ${scene&&config.grid?'':'disabled'}>${config.overlay.enabled?'Hide':'Show'} overlay</button></div></details>
+      <details ${this.toolsOpen?'open':''}><summary>Zone Map / Tracking: <strong>${escapeHTML(scene?.name||config.sceneId||'Not configured')}</strong></summary><div class="zm-actions"><button type="button" data-zone-config>Configure / Tracking</button><button type="button" data-zone-view ${scene?'':'disabled'}>View Zone</button><button type="button" data-zone-select ${this.store.live&&config.grid?'':'disabled'}>Select on map</button><button type="button" data-zone-overlay aria-pressed="${Boolean(config.overlay.enabled)}" ${scene&&config.grid?'':'disabled'}>${config.overlay.enabled?'Hide':'Show'} overlay</button><button type="button" data-zone-wander>Wander Now</button><button type="button" data-zone-wander-settings>Wandering Tokens</button><button type="button" data-zone-wander-enable>Enable Wandering for Selected Tokens</button><button type="button" data-zone-wander-disable>Disable Wandering for Selected Tokens</button></div></details>
       ${warning?`<p role="alert">${escapeHTML(warning)}</p>`:''}${config.sceneId||config.arkCoordinate?`<div class="zm-ark zm-expedition">${config.grid&&coordinateToBounds(config.arkCoordinate,config.grid)?'<button type="button" class="zm-portrait" data-zone-ark title="Center on the Ark sector" aria-label="Center on the Ark sector"><i class="fa-solid fa-house" aria-hidden="true"></i></button>':'⌂'}<div>Ark: <strong>${escapeHTML(config.arkCoordinate||'Not designated')}</strong></div><div class="zm-original-distance">${partyDistance}</div>${selectedCell(config.arkCoordinate,'Ark')}</div>`:''}${tracks?`<div class="zm-positions">${tracks}</div>`:''}`;
   }
   bindSummary(container){
     if(!container||!this.store.isGM)return;
     container.querySelector('details')?.addEventListener('toggle',event=>{this.toolsOpen=event.target.open;});
     const run=handler=>async()=>{try{await handler();}catch(error){this.env.ui.notifications.error(`Zone Map: ${error.message}`);}};
+    container.querySelector('[data-zone-wander]')?.addEventListener('click',run(()=>this.wandering.manual()));
+    container.querySelector('[data-zone-wander-settings]')?.addEventListener('click',run(()=>new this.WanderingSettings().render(true)));
+    container.querySelector('[data-zone-wander-enable]')?.addEventListener('click',run(()=>this.wandering.bulk(true)));
+    container.querySelector('[data-zone-wander-disable]')?.addEventListener('click',run(()=>this.wandering.bulk(false)));
     container.querySelector('[data-zone-config]')?.addEventListener('click',run(()=>this.configure()));
     container.querySelector('[data-zone-ark]')?.addEventListener('click',run(()=>this.centerSector(this.store.config.arkCoordinate)));
     for(const button of container.querySelectorAll('[data-zone-coordinate]'))button.addEventListener('click',run(()=>this.centerSector(button.dataset.zoneCoordinate)));
