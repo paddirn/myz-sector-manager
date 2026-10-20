@@ -52,50 +52,8 @@ Automated tests simulate Foundry APIs and exercise real Chromium interfaces; the
 - Two GMs, authority handover, a queued Travel Event report and sequential sector Macros do not duplicate checks or expose private information.
 - World reload preserves configuration, flags, sector records and Macro behavior. Manual wandering works with automatic movement disabled and Manual only selected.
 
-## Wandering Tokens: Last Known Positions
+## Restored wandering and old world data (unreleased v0.1.30)
 
-Starting with **v0.1.28**, wandering can leave a persistent, player-visible Tile at an NPC's last known position. In **Wandering Tokens → Last Known Position Markers**, these three options default to enabled:
+The runtime is restored to v0.1.27, commit `041bf83c47b2ef8df8025e549c8a67bce6c29a65`. Marker creation/rendering, automatic hiding, marker settings, lifecycle handling, management controls and experimental alignment diagnostics are removed. The module does not automatically change any token's visibility or delete existing Tiles/flags.
 
-- **Enable Last Known Position Markers**: create one marker before the first eligible movement of a visible NPC. Turn it off to retain the earlier wandering behavior, without marker creation or automatic hiding. Existing markers remain until cleared.
-- **Use Grayscale Markers**: new markers request a local PIXI ColorMatrixFilter on their Tile mesh. The source image and shared textures are never modified. Unsupported filters fall back to the original artwork; marker alpha is 0.65 in either case. This option is captured when a marker is created, so existing marker styles do not change when it is toggled.
-- **Automatically Hide Wandering Tokens**: hide a marked NPC before its movement is submitted. With this off, a marker can exist while the real token remains visible. Disabling a setting never automatically reveals a token.
-
-For example, a visible **Zone Rat** occupies **B07**. On its first wandering move, Sector Manager leaves a faded Tile at B07, hides the Rat, then moves it to B08. Players continue seeing the faded Rat at B07; the GM can see its hidden token at B08. Later moves leave the marker at B07 until the GM clears or resets it.
-
-The marker uses the **placed token's texture**, not the Actor portrait, with its exact original document x/y and texture scale/tint. New markers are always upright (`rotation: 0`) at the original token elevation **plus 1**. Native v14 `TokenDocument.getSize` converts the captured grid-unit dimensions to a pixel footprint; legacy adapters use the Scene tactical cell dimensions once. Texture scale does not multiply Tile width/height. Standard Tile rendering supplies normal Scene/fog/layer visibility; relative overlap with other tokens follows native elevation/sorting. PNG/JPEG/WebP/transparency and animated textures use native Tile texture support. Unsupported animation/filter combinations retain the original art. Marker Tiles are not hidden, but do not bypass Scene visibility or fog. No tactical collision or separate wandering algorithm is added.
-
-### Previously hidden NPCs and manual revealing
-
-An NPC already hidden on its first marker-enabled wandering move leaves **no player-visible marker**. A persistent suppressed state prevents retroactive marker creation if the GM later reveals it. A hidden NPC is not considered observed merely because it wanders.
-
-Manually revealing a token with an existing marker leaves that marker untouched and does not immediately hide the token again. Its next actual wandering move reapplies automatic hiding if that option is on and the marker still exists. Clear removes the association and suppresses future marker creation until Reset; it does not hide or reveal the real token. A suppressed/cleared token without a marker keeps its current visibility during wandering.
-
-### Clear and reset
-
-The existing GM token HUD gains two additive controls, alongside the wandering toggle:
-
-- **Clear Last Known Position** deletes only markers owned by this module and linked to that token. It leaves token coordinates and visibility unchanged and prevents automatic replacement.
-- **Reset Last Known Position** confirms removal of the old marker and explicitly authorizes a new player-visible marker on the next successful wandering move, including for a hidden token. It does not reveal the token or create a new Tile immediately. Be aware that the next marker exposes the token's position at that future move's origin.
-
-In Sector Manager's **Zone Map / Tracking**, **Clear Selected Last Known Positions** applies to the explicitly selected, modifiable tokens. **Clear All Last Known Positions** asks for confirmation and removes only module-owned markers on the currently viewed Scene, clearing corresponding token references. It does not move or reveal tokens, touch other Scenes, or delete ordinary Tiles. A Scene change while an action waits cancels that action rather than applying it to an unintended Scene. Existing HUD controls, including those supplied by other modules, are not replaced.
-
-### Persistence, recovery and privacy
-
-Both documents use `flags.myz-sector-manager.lastKnownPosition`. Token tracking has schema version 1, source Scene/token IDs, a phase, Tile ID where applicable, and operation/origin/visibility data when needed. Tile metadata has `kind: "wandering-last-known"`, version 1, source Scene/token IDs, timestamp, original sector/position, operation ID and grayscale preference. Names are never used as ownership identifiers. The existing `wanderingEnabled` flag keeps its meaning.
-
-Creation is ordered: validate destination/artwork → persist a pending operation → create the Tile → persist its association and hide the token in one token update → await native movement → finalize. No destination means no marker, hide or initialization. Markers do not move or multiply on later wandering checks or ordinary reloads.
-
-Tile/artwork failure prevents movement and does not initialize a successful marker. Hiding failure also prevents movement. If movement fails without leaving its origin, rollback removes the new marker and restores visibility only when this operation successfully hid it and it is still at its origin. A partial/stopped move that changes position retains the original marker and keeps any automatic hiding already applied. Cleanup failures leave pending state for reconciliation instead of revealing an NPC. Interrupted pending operations are inspected by the active GM at Scene readiness/handover and before another marker-enabled move: at-origin operations are cleared conservatively without automatically revealing the token; completed/partial moves retain their existing marker. Pending native moves are left alone until completion/stop. Late Tiles from operations already cleared during handover are removed when received. Interrupted moves are not replayed automatically. Native document updates across Tiles and tokens are not an atomic server transaction; connection loss can require GM review.
-
-Deleting a source token removes only its owned marker. Deleting a Tile manually clears or reconciles stale tracking without replacing it. Copied tokens cannot adopt another token's marker; their copied tracking is cleared. Orphaned module markers are cleaned on Scene readiness. Marker lifecycle mutations share the authoritative GM's wandering queue; per-token in-flight guards, retained entry claims, origin metadata and Party-only dispatch remain in force. Tile, visibility and flag updates do not initiate Party events, Macros or wandering.
-
-Automated tests cover failures, hidden NPC suppression, first/subsequent moves, copies, reloads, cleanup and actual PIXI/WebGL filter isolation. They use simulated Foundry documents. In a backup v14 world, verify native Tile sizing/layering/fog, video/animated artwork, grayscale alongside other filters, player-view hiding before animation, restart/handover recovery, HUD coexistence (including Token HUD Art Button), both cleanup actions, and the following Travel/Macro sequence. No live Foundry verification was performed here.
-
-
-### Marker source transform fix (v0.1.29)
-
-All source artwork/footprint/position/elevation values are captured once before image loading, pending-state writes, hiding or movement. The Tile uses the captured top-left x/y directly, including fractional/off-grid positions; no center offset, snapping, sector conversion or sprite transform determines its origin. Sector conversion is used only for the stored sector annotation. Rotation is explicitly 0, and marker elevation is source elevation + 1 (including negative values); the source token's elevation/rotation are unchanged.
-
-The old implementation already copied top-left x/y directly, but copied source rotation and re-read appearance/dimensions/elevation after awaited operations. A rotated Tile can appear visually displaced about its center despite unchanged document x/y; live source edits could also change its footprint between capture and creation. No incorrect center-to-origin calculation was found. The fix freezes creation inputs instead of applying correction offsets.
-
-Existing Tiles are not repositioned, rotated or elevated automatically, preserving any GM corrections. No repair operation guesses original positions or elevations from a wandering token's current location. Clear/Reset remain explicit management tools for future marker creation. Verify actual v14 Tile rendering above your background map, elevation/level interactions, native footprint sizing and off-grid/scaled artwork in a backup world; automated tests do not load Foundry itself.
+For old world data, use the [optional, confirmed GM cleanup macro](legacy-marker-cleanup.md). It deletes only known module-owned legacy marker Tiles on the viewed Scene, clears recognized obsolete tracking flags and removes the three obsolete global options while preserving all normal wandering configuration. Current hidden/visible status, per-token wandering eligibility, ordinary Tiles and other Scenes are preserved. Run it on each affected Scene and manually reveal only the NPCs you intend to show. Unknown schema versions or inaccessible flags may remain inert.

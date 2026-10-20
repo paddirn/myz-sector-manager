@@ -545,17 +545,8 @@ Enable an NPC through **Token Configuration → Identity → Sector Manager → 
 
 See [Wandering Tokens setup, storage, movement protections and manual checks](docs/wandering-tokens.md). Native Foundry v14 animation, Token Configuration submission and compatibility with your installed modules require backup-world verification.
 
-### Wandering Tokens: Last Known Positions (v0.1.28)
+### Restore original wandering behavior (unreleased v0.1.30)
 
-Visible wandering NPCs now leave one persistent, faded Tile at their original position, then hide before moving. Later wandering leaves that marker in place. Previously hidden NPCs create no marker and cannot reveal themselves retroactively through this feature.
+The abandoned Last Known Position feature has been removed. Wandering again uses the stable v0.1.27 implementation: NPCs move one Zone sector and preserve their current visibility, without creating Tiles, processing artwork or hiding tokens. The original eligibility, HUD toggle, bulk controls, Wander Now, frequency and Party-entry protections remain.
 
-The existing Wandering Tokens settings include marker enablement, grayscale and automatic hiding (all default on). Token HUD controls clear or confirm a reset of an individual marker; Zone Map / Tracking includes selected-token cleanup and confirmed **Clear All Last Known Positions** on the viewed Scene. Clearing preserves token position and visibility. Manually revealing a token leaves its marker intact; the next actual wander reapplies configured hiding.
-
-See [Wandering Tokens: Last Known Positions](docs/wandering-tokens.md#wandering-tokens-last-known-positions) for the Zone Rat example, storage, grayscale fallback, recovery and player-view testing. Native Foundry rendering, visibility and other HUD modules require backup-world verification.
-
-
-### Last Known Position transform fix (v0.1.29)
-
-New markers use one snapshot of the TokenDocument's original top-left position, artwork, footprint and elevation before any asynchronous work. Tile rotation is always **0**, and elevation is **original token elevation + 1**. Native v14 footprint sizing avoids mixing texture scale with pixel dimensions. Fractional/off-grid source coordinates remain exact. Existing markers and GM corrections are untouched.
-
-See [marker source transform details](docs/wandering-tokens.md#marker-source-transform-fix-v0129) for the cause, safeguards and backup-world checks.
+Existing hidden tokens are **not** revealed automatically. Existing marker Tiles are **not** deleted on startup. GMs can use the [confirmed one-time legacy cleanup macro](https://github.com/paddirn/myz-sector-manager/blob/main/docs/legacy-marker-cleanup.md) on each affected Scene to remove only known module-owned markers and obsolete state, without moving or revealing tokens. Unknown/remaining legacy data is inert.
