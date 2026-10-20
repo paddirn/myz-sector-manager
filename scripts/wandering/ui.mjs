@@ -41,13 +41,14 @@ export function registerWandering(runtime,env=globalThis){
  env.game.settings.registerMenu(MODULE,'wanderingTokens',{name:'Wandering Tokens',label:'Configure Wandering Tokens',hint:'Automatic cardinal NPC movement on the Zone sector grid.',icon:'fa-solid fa-shoe-prints',type:runtime.WanderingSettings,restricted:true});
  const lifecycle=task=>{if(runtime.store.authoritative)void runtime.wandering.enqueue(task).catch(error=>env.console?.error('MYZ Last Known Position lifecycle',error));};
  env.Hooks.on('drawTile',tile=>styleMarker(tile,env));
+ env.Hooks.on('updateTile',tile=>{if(tile.object)styleMarker(tile.object,env);});
  env.Hooks.on('refreshTile',tile=>styleMarker(tile,env));
  env.Hooks.on('createTile',tile=>{const flag=markerMetadata(tile),token=tile.parent?.tokens?.get(flag?.sourceTokenId);if(flag&&token)lifecycle(()=>runtime.wandering.markers.reconcile(token));});
  env.Hooks.on('stopToken',token=>{if(token.getFlag?.(MODULE,'lastKnownPosition'))lifecycle(()=>runtime.wandering.markers.reconcile(token));});
  env.Hooks.on('deleteToken',token=>lifecycle(()=>runtime.wandering.markers.deletedToken(token)));
  env.Hooks.on('deleteTile',tile=>lifecycle(()=>runtime.wandering.markers.deletedTile(tile)));
  env.Hooks.on('createToken',token=>lifecycle(()=>runtime.wandering.markers.reconcile(token)));
- env.Hooks.on('canvasReady',canvas=>lifecycle(()=>runtime.wandering.markers.sceneReady(canvas?.scene||env.canvas?.scene)));
+ env.Hooks.on('canvasReady',canvas=>lifecycle(async()=>{const scene=canvas?.scene||env.canvas?.scene;await runtime.wandering.markers.sceneReady(scene);await runtime.wandering.alignment.clearOrphans(scene);}));
  env.Hooks.on('updateUser',()=>lifecycle(()=>runtime.wandering.markers.sceneReady(env.canvas?.scene)));
  env.Hooks.on('renderTokenConfig' ,(app,html)=>addTokenWandering(app,html,runtime,env));
  env.Hooks.on('renderTokenHUD',(app,html)=>addWanderingHUD(app,html,runtime,env));

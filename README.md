@@ -559,3 +559,9 @@ See [Wandering Tokens: Last Known Positions](docs/wandering-tokens.md#wandering-
 New markers use one snapshot of the TokenDocument's original top-left position, artwork, footprint and elevation before any asynchronous work. Tile rotation is always **0**, and elevation is **original token elevation + 1**. Native v14 footprint sizing avoids mixing texture scale with pixel dimensions. Fractional/off-grid source coordinates remain exact. Existing markers and GM corrections are untouched.
 
 See [marker source transform details](docs/wandering-tokens.md#marker-source-transform-fix-v0129) for the cause, safeguards and backup-world checks.
+
+### Marker visual alignment investigation (unreleased v0.1.30)
+
+The marker builder now preserves Token texture **fit and anchors**, alongside custom scale values. Token defaults (`contain`) differ from Tile defaults (`fill`), so matching coordinates and scale alone does not guarantee matching artwork.
+
+The reported native rendering case remains unverified. A GM-only **Test Marker Alignment** control creates a temporary comparison Tile without moving/hiding the selected NPC or changing its permanent marker state. It starts with grayscale off and opacity 1, provides rendering/transform reports and cleans up on Close/X. See [controlled alignment test instructions](docs/wandering-tokens.md#visual-alignment-investigation-and-controlled-test-unreleased-v0130). This change is awaiting in-Foundry verification before release.

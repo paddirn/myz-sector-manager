@@ -13,11 +13,17 @@ export function captureMarkerSource(token,grid){
  const size=typeof token.getSize==='function'?token.getSize({width:data.width,height:data.height}):{width:data.width*cells.width,height:data.height*cells.height};
  const x=data.x,y=data.y,elevation=data.elevation??0,alpha=data.alpha??1;
  if(![x,y,elevation,size.width,size.height,alpha].every(Number.isFinite)||size.width<=0||size.height<=0)throw new Error('Last Known Position: invalid source position, footprint or elevation.');
- const texture={src:data.texture?.src,...Object.fromEntries(['scaleX','scaleY','tint'].filter(key=>data.texture?.[key]!==undefined).map(key=>[key,data.texture[key]]))};
- return {x,y,width:size.width,height:size.height,elevation,hidden:data.hidden===true,alpha:Math.min(1,Math.max(0,alpha))*.65,texture,
+ const texture={anchorX:.5,anchorY:.5,fit:'contain',src:data.texture?.src,...Object.fromEntries(['scaleX','scaleY','tint','anchorX','anchorY','fit'].filter(key=>data.texture?.[key]!==undefined).map(key=>[key,data.texture[key]]))};
+ return {orientation:{rotation:data.rotation??0,lockRotation:data.lockRotation===true,ringEnabled:data.ring?.enabled===true},x,y,width:size.width,height:size.height,elevation,hidden:data.hidden===true,alpha:Math.min(1,Math.max(0,alpha))*.65,texture,
   // Sector conversion is annotation only. It never determines or offsets Tile x/y.
   sector:positionToCoordinate({x:x+size.width/2,y:y+size.height/2},grid)};
 }
+// Both permanent and stationary diagnostic Tiles use this exact builder.
+export const ALIGNMENT_KIND='wandering-alignment-test';
+export function markerTileData(token,source,config,{operationId,kind=MARKER_KIND,alpha=source.alpha,grayscale=config.grayscale,ownerId=null}={}){
+ return {x:source.x,y:source.y,width:source.width,height:source.height,rotation:0,elevation:source.elevation+1,alpha,hidden:false,texture:{...source.texture},flags:{[MODULE]:{[MARKER_FLAG]:{version:1,kind,sourceSceneId:token.parent.id,sourceTokenId:token.id,createdAt:Date.now(),operationId,origin:{x:source.x,y:source.y},originalHidden:source.hidden,sector:source.sector,sourceElevation:source.elevation,grayscale,...(ownerId?{ownerId}:{})}}}};
+}
+export function visualMarkerMetadata(tile){const flag=tile?.getFlag?.(MODULE,MARKER_FLAG);return flag?.version===1&&[MARKER_KIND,ALIGNMENT_KIND].includes(flag.kind)?flag:null;}
 export class LastKnownPositions {
  constructor(store,env=globalThis){this.store=store;this.env=env;}
  assert(){if(!this.store.authoritative)throw new Error('Only the active GM can manage Last Known Positions.');}
@@ -62,7 +68,7 @@ export class LastKnownPositions {
   await this.set(token,state);let hiddenByUs=false;
   try{
    this.assert();
-   const [tile]=await token.parent.createEmbeddedDocuments('Tile',[{x:origin.x,y:origin.y,width:source.width,height:source.height,rotation:0,elevation:source.elevation+1,alpha:source.alpha,hidden:false,texture:source.texture,flags:{[MODULE]:{[MARKER_FLAG]:{version:1,kind:MARKER_KIND,sourceSceneId:token.parent.id,sourceTokenId:token.id,createdAt:Date.now(),operationId,origin,originalHidden,sector:source.sector,sourceElevation:source.elevation,grayscale:config.grayscale}}}}]);
+   const [tile]=await token.parent.createEmbeddedDocuments('Tile',[markerTileData(token,source,config,{operationId})]);
    if(!tile?.id)throw new Error('Last Known Position Tile creation returned no document.');
    validate();state={...state,phase:'moving',tileId:tile.id};await this.set(token,state,config.autoHide?{hidden:true}:{});hiddenByUs=config.autoHide&&!originalHidden;
    // No position update is sent until the hide + association update has completed.
@@ -87,7 +93,7 @@ export class LastKnownPositions {
 const filters=new WeakMap();
 // Local Tile mesh filter only: never mutate shared textures or other modules' filters.
 export function styleMarker(tile,env=globalThis){
- const mesh=tile?.mesh;if(!mesh)return;const previous=filters.get(tile),wanted=markerMetadata(tile.document)?.grayscale;
+ const mesh=tile?.mesh;if(!mesh)return;const previous=filters.get(tile),wanted=visualMarkerMetadata(tile.document)?.grayscale;
  if(previous&&wanted&&previous.mesh===mesh&&(mesh.filters||[]).includes(previous.filter))return;
  if(previous){previous.mesh.filters=(previous.mesh.filters||[]).filter(filter=>filter!==previous.filter);previous.filter.destroy?.();filters.delete(tile);}
  if(!wanted)return;

@@ -1,8 +1,9 @@
+import {MarkerAlignment} from './alignment.mjs';
 import {warnReferenceOnce} from '../document-references.mjs';
 import {LastKnownPositions} from './markers.mjs';
 import {MODULE,FLAG,wanderingConfiguration,baseEligible,destinations,canModify,playerControlled} from './model.mjs';
 export class WanderingTokens {
- constructor(store,env=globalThis,{random=Math.random}={}){this.store=store;this.env=env;this.random=random;this.queue=Promise.resolve();this.busy=new Set();this.markers=new LastKnownPositions(store,env);}
+ constructor(store,env=globalThis,{random=Math.random}={}){this.store=store;this.env=env;this.random=random;this.queue=Promise.resolve();this.busy=new Set();this.markers=new LastKnownPositions(store,env);this.alignment=new MarkerAlignment(this,env);}
  assertAuthority(){if(!this.store.authoritative)throw new Error('Only the active GM can move wandering tokens.');}
  enqueue(task){const next=this.queue.then(task);this.queue=next.catch(error=>this.env.console?.error('MYZ Wandering Tokens',error));return next;}
  index(length){const n=this.random();if(!Number.isFinite(n)||n<0||n>=1)throw new Error('Invalid wandering random value.');return Math.floor(n*length);}
@@ -20,10 +21,10 @@ export class WanderingTokens {
    await document.setFlag(MODULE,'wanderingEntries',{...saved,ids:[...saved.ids,context.entryId].slice(-1000)});this.assertAuthority();
    if(config.frequency==='quarter'&&this.index(4)!==0)return {moved:0};
   }
-  const candidates=Array.from(scene.tokens.values()).filter(token=>baseEligible(token,this.store,this.env,this.busy)&&destinations(token,this.store,config).length);let moved=0;const errors=[];
+  const candidates=Array.from(scene.tokens.values()).filter(token=>!this.alignment.hasTest(token)&&baseEligible(token,this.store,this.env,this.busy)&&destinations(token,this.store,config).length);let moved=0;const errors=[];
   for(let i=0;i<config.maximum&&candidates.length;i++){
    this.assertAuthority();if(scene.id!==this.store.scene?.id||grid!==JSON.stringify(this.store.config.grid))break;
-   const token=candidates.splice(this.index(candidates.length),1)[0];if(!baseEligible(token,this.store,this.env,this.busy))continue;
+   const token=candidates.splice(this.index(candidates.length),1)[0];if(this.alignment.hasTest(token)||!baseEligible(token,this.store,this.env,this.busy))continue;
    const choices=destinations(token,this.store,config);if(!choices.length)continue;const target=choices[this.index(choices.length)],key=token.uuid||token.id;
    this.busy.add(key);
    try{
