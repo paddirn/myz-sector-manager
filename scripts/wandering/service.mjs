@@ -1,6 +1,8 @@
+import {warnReferenceOnce} from '../document-references.mjs';
+import {LastKnownPositions} from './markers.mjs';
 import {MODULE,FLAG,wanderingConfiguration,baseEligible,destinations,canModify,playerControlled} from './model.mjs';
 export class WanderingTokens {
- constructor(store,env=globalThis,{random=Math.random}={}){this.store=store;this.env=env;this.random=random;this.queue=Promise.resolve();this.busy=new Set();}
+ constructor(store,env=globalThis,{random=Math.random}={}){this.store=store;this.env=env;this.random=random;this.queue=Promise.resolve();this.busy=new Set();this.markers=new LastKnownPositions(store,env);}
  assertAuthority(){if(!this.store.authoritative)throw new Error('Only the active GM can move wandering tokens.');}
  enqueue(task){const next=this.queue.then(task);this.queue=next.catch(error=>this.env.console?.error('MYZ Wandering Tokens',error));return next;}
  index(length){const n=this.random();if(!Number.isFinite(n)||n<0||n>=1)throw new Error('Invalid wandering random value.');return Math.floor(n*length);}
@@ -26,9 +28,10 @@ export class WanderingTokens {
    this.busy.add(key);
    try{
     this.assertAuthority();const options={animate:true,autoRotate:false,showRuler:false,constrainOptions:{ignoreWalls:true,ignoreCost:true},myzWandering:true};
-    const completed=typeof token.move==='function'?await token.move({x:target.x,y:target.y},options):await token.update({x:target.x,y:target.y},options);
+    const origin={x:token.x,y:token.y};const validate=()=>{this.assertAuthority();if(token.x!==origin.x||token.y!==origin.y||!baseEligible(token,this.store,this.env)||!destinations(token,this.store,config).some(point=>point.x===target.x&&point.y===target.y))throw new Error('Wandering token position, ownership or destination changed before movement.');};
+    const completed=await this.markers.move(token,config,target,()=>{validate();return typeof token.move==='function'?token.move({x:target.x,y:target.y},options):token.update({x:target.x,y:target.y},options);},validate);
     if(completed!==false)moved++;
-   }catch(error){errors.push({tokenId:token.id,message:error.message});this.env.console?.error(`MYZ wandering token ${token.id}`,error);}
+   }catch(error){errors.push({tokenId:token.id,message:error.message});this.env.console?.error(`MYZ wandering token ${token.id}`,error);if(config.markers&&this.store.authoritative)warnReferenceOnce(`Wandering token ${token.id}: ${error.message}`,this.env);}
    finally{this.busy.delete(key);}
   }
   return {moved,errors};

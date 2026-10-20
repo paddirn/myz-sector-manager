@@ -544,3 +544,11 @@ NPCs can now wander one calibrated Zone sector North, South, East or West after 
 Enable an NPC through **Token Configuration → Identity → Sector Manager → Allow Random Wandering**, or the GM token HUD lock/footprints button. In **Zone Map / Tracking**, use the selected-token bulk controls, **Wander Now**, or **Wandering Tokens** settings. Options include maximum 1–6 tokens, every entry/25% chance/manual frequency and Special destinations. Wander Now works even when automatic wandering is off. Travel reports finish first, then wandering runs, then sector Macros continue; NPC moves do not trigger Party entry actions.
 
 See [Wandering Tokens setup, storage, movement protections and manual checks](docs/wandering-tokens.md). Native Foundry v14 animation, Token Configuration submission and compatibility with your installed modules require backup-world verification.
+
+### Wandering Tokens: Last Known Positions (v0.1.28)
+
+Visible wandering NPCs now leave one persistent, faded Tile at their original position, then hide before moving. Later wandering leaves that marker in place. Previously hidden NPCs create no marker and cannot reveal themselves retroactively through this feature.
+
+The existing Wandering Tokens settings include marker enablement, grayscale and automatic hiding (all default on). Token HUD controls clear or confirm a reset of an individual marker; Zone Map / Tracking includes selected-token cleanup and confirmed **Clear All Last Known Positions** on the viewed Scene. Clearing preserves token position and visibility. Manually revealing a token leaves its marker intact; the next actual wander reapplies configured hiding.
+
+See [Wandering Tokens: Last Known Positions](docs/wandering-tokens.md#wandering-tokens-last-known-positions) for the Zone Rat example, storage, grayscale fallback, recovery and player-view testing. Native Foundry rendering, visibility and other HUD modules require backup-world verification.
