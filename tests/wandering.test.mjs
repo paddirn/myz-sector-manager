@@ -6,7 +6,7 @@ import {WanderingTokens} from '../scripts/wandering/service.mjs';
 import {SectorEntryTriggers} from '../scripts/zone/entry-triggers.mjs';
 import {coordinateToBounds,positionToCoordinate,tokenCenter} from '../scripts/zone/grid.mjs';
 function setup(){
- const f=fixture(),flags={},notices=[],updates=[];f.settings.set(SETTING,{...wanderingDefaults(),markers:false});f.env.game.users=[{id:'gm',isGM:true},{id:'player',isGM:false,active:false}];f.env.game.users.activeGM={id:'gm'};
+ const f=fixture(),flags={},notices=[],updates=[];f.settings.set(SETTING,wanderingDefaults());f.env.game.users=[{id:'gm',isGM:true},{id:'player',isGM:false,active:false}];f.env.game.users.activeGM={id:'gm'};
  const get=f.configDoc.getFlag.bind(f.configDoc),set=f.configDoc.setFlag.bind(f.configDoc);f.configDoc.getFlag=(m,k)=>k==='wanderingEntries'?flags[k]:get(m,k);f.configDoc.setFlag=async(m,k,v)=>k==='wanderingEntries'?flags[k]=structuredClone(v):set(m,k,v);
  f.env.console={error(){}};f.env.ui.notifications={info:message=>notices.push(message),warn:message=>notices.push(message),error:message=>notices.push(message)};
  const npc=(id,x=600,y=450,actor={ownership:{default:0}})=>{
@@ -18,7 +18,7 @@ function setup(){
  return {...f,flags,notices,updates,npc,service,context};
 }
 test('wandering defaults/validation, stationary flags, real ownership including offline/default owners, hidden/friendly/hostile NPCs and independent placed tokens',()=>{
- const f=setup(),a=f.npc('a'),b=f.npc('b',600,450,a.actor);assert.deepEqual(wanderingDefaults(),{version:1,enabled:true,maximum:2,frequency:'every',allowSpecial:false,markers:true,grayscale:true,autoHide:true});
+ const f=setup(),a=f.npc('a'),b=f.npc('b',600,450,a.actor);assert.deepEqual(wanderingDefaults(),{version:1,enabled:true,maximum:2,frequency:'every',allowSpecial:false});
  for(const maximum of [0,7,1.5,NaN,'2'])assert.throws(()=>validateWandering({maximum}));assert.throws(()=>validateWandering({frequency:'bad'}));
  assert(baseEligible(a,f.store,f.env));b.flags[FLAG]=false;assert(!baseEligible(b,f.store,f.env));delete b.flags[FLAG];assert(!baseEligible(b,f.store,f.env));assert.equal(a.flags[FLAG],true);
  a.actor.ownership.player=3;assert(playerControlled(a,f.env));assert(!baseEligible(a,f.store,f.env));a.disposition=-1;assert(!baseEligible(a,f.store,f.env));a.actor.ownership={default:3};assert(playerControlled(a,f.env));a.actor.ownership={gm:3};assert(baseEligible(a,f.store,f.env));a.actor.hasPlayerOwner=true;assert(!baseEligible(a,f.store,f.env));delete a.actor.hasPlayerOwner;
@@ -51,8 +51,8 @@ test('automatic selection is without replacement, at most configured count, sile
  assert.equal((await f.service.onEntry(f.context('move1'))).moved,0);const reloaded=new WanderingTokens(f.store,f.env);assert.equal((await reloaded.onEntry(f.context('move1'))).moved,0);
 });
 test('disabled/manual frequencies prevent automatic changes; manual still works; quarter chance rolls once per entry rather than per token',async()=>{
- const f=setup();f.npc('a');f.npc('b');for(const change of [{enabled:false},{frequency:'manual'}]){f.settings.set(SETTING,{...wanderingDefaults(),markers:false,...change});assert.equal((await f.service.onEntry(f.context(JSON.stringify(change)))).moved,0);assert.equal((await f.service.manual()).moved,2);}
- f.settings.set(SETTING,{...wanderingDefaults(),markers:false,frequency:'quarter'});let rolls=0;f.service.random=()=>{rolls++;return .75;};assert.equal((await f.service.onEntry(f.context('chanceMiss'))).moved,0);assert.equal(rolls,1);f.service.random=()=>{rolls++;return 0;};assert.equal((await f.service.onEntry(f.context('chanceHit'))).moved,2);assert.equal(rolls,6);
+ const f=setup();f.npc('a');f.npc('b');for(const change of [{enabled:false},{frequency:'manual'}]){f.settings.set(SETTING,{...wanderingDefaults(),...change});assert.equal((await f.service.onEntry(f.context(JSON.stringify(change)))).moved,0);assert.equal((await f.service.manual()).moved,2);}
+ f.settings.set(SETTING,{...wanderingDefaults(),frequency:'quarter'});let rolls=0;f.service.random=()=>{rolls++;return .75;};assert.equal((await f.service.onEntry(f.context('chanceMiss'))).moved,0);assert.equal(rolls,1);f.service.random=()=>{rolls++;return 0;};assert.equal((await f.service.onEntry(f.context('chanceHit'))).moved,2);assert.equal(rolls,6);
 });
 test('no eligible tokens, movement failures, permissions and inactive GM behavior remain controlled',async()=>{
  const f=setup();assert.equal((await f.service.manual()).moved,0);assert.equal(f.notices[0],'No eligible wandering tokens.');const a=f.npc('a'),b=f.npc('b');a.update=async()=>{throw Error('Native denial');};assert.equal((await f.service.onEntry(f.context('failure'))).moved,1);assert.equal(f.service.busy.size,0);assert.equal(f.notices.length,1);
@@ -84,4 +84,12 @@ test('two GM clients filter the same movement and authority handover does not re
 test('NPC programmatic update/move/stop events cannot recursively run wandering, Travel or Party Macros',async()=>{
  const f=setup(),npc=f.npc('npc');let travel=0,checks=0;const dispatcher=new SectorEntryTriggers(f.store,f.env,{beforeMacros:async()=>travel++,afterTravel:async context=>{checks++;await f.service.onEntry(context);}});dispatcher.prime();const native=npc.update.bind(npc);npc.update=async(data,options)=>{const result=await native(data,options);await dispatcher.updated(npc,data);await dispatcher.stopped(npc);return result;};
  const party=f.zone.tokens.get('party');party.x=0;await dispatcher.updated(party,{x:0});assert.equal(checks,1);assert.equal(travel,1);assert.equal(f.updates.length,1);await dispatcher.updated(party,{x:0});assert.equal(checks,1);
+});
+
+test('restored visible/hidden wandering never creates Tiles, processes artwork or changes visibility, even with obsolete options saved',async()=>{
+ const f=setup(),visible=f.npc('visible'),hidden=f.npc('hidden');visible.hidden=false;hidden.hidden=true;
+ f.zone.createEmbeddedDocuments=()=>assert.fail('No Tile creation during wandering');f.env.foundry.canvas={loadTexture:()=>assert.fail('No artwork processing')};Object.defineProperty(f.env,'PIXI',{get:()=>assert.fail('No grayscale processing')});
+ f.settings.set(SETTING,{...wanderingDefaults(),markers:true,grayscale:true,autoHide:true});
+ assert.equal((await f.service.manual()).moved,2);assert.equal(visible.hidden,false);assert.equal(hidden.hidden,true);
+ assert.equal((await f.service.onEntry(f.context('preserve-visibility'))).moved,2);assert.equal(visible.hidden,false);assert.equal(hidden.hidden,true);assert(f.updates.every(update=>Object.keys(update.data).sort().join(',')==='x,y'));
 });

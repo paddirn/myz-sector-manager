@@ -1,9 +1,9 @@
 import {coordinateToBounds,positionToCoordinate,tokenCenter,sceneCellSize,validateGrid} from '../zone/grid.mjs';
 export const MODULE='myz-sector-manager',SETTING='wanderingConfiguration',FLAG='wanderingEnabled';
-export const wanderingDefaults=()=>({version:1,enabled:true,maximum:2,frequency:'every',allowSpecial:false,markers:true,grayscale:true,autoHide:true});
+export const wanderingDefaults=()=>({version:1,enabled:true,maximum:2,frequency:'every',allowSpecial:false});
 export function validateWandering(raw){
  const next={...wanderingDefaults(),...raw};
- if(next.version!==1||typeof next.enabled!=='boolean'||typeof next.allowSpecial!=='boolean'||['markers','grayscale','autoHide'].some(key=>typeof next[key]!=='boolean')||!['every','quarter','manual'].includes(next.frequency)||!Number.isInteger(next.maximum)||next.maximum<1||next.maximum>6)throw new Error('Wandering Tokens: use a maximum of 1–6 and a supported frequency.');
+ if(next.version!==1||typeof next.enabled!=='boolean'||typeof next.allowSpecial!=='boolean'||!['every','quarter','manual'].includes(next.frequency)||!Number.isInteger(next.maximum)||next.maximum<1||next.maximum>6)throw new Error('Wandering Tokens: use a maximum of 1–6 and a supported frequency.');
  return next;
 }
 export const wanderingConfiguration=env=>validateWandering(env.game.settings.get(MODULE,SETTING)||wanderingDefaults());
