@@ -1,12 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {markerFixture} from './helpers/marker-fixture.mjs';
-import {MARKER_FLAG,MARKER_KIND,LastKnownPositions,markerMetadata,styleMarker} from '../scripts/wandering/markers.mjs';
+import {MARKER_FLAG,MARKER_KIND,LastKnownPositions,markerMetadata,styleMarker,captureMarkerSource} from '../scripts/wandering/markers.mjs';
 import {MODULE,SETTING} from '../scripts/wandering/model.mjs';
 const state=f=>f.token.getFlag(MODULE,MARKER_FLAG);
 test('visible NPC creates one artwork Tile at its exact source footprint, persists association and hides before native movement',async()=>{
  const f=markerFixture(),before=structuredClone({x:f.token.x,y:f.token.y,texture:f.token.texture});const result=await f.service.manual();assert.equal(result.moved,1);assert.deepEqual(f.events.slice(0,3),['tile-create','hide','move']);assert.equal(f.token.hidden,true);assert.equal(f.zone.tiles.size,1);
- const tile=[...f.zone.tiles.values()][0];assert.equal(tile.x,before.x);assert.equal(tile.y,before.y);assert.equal(tile.width,150);assert.equal(tile.height,200);assert.equal(tile.rotation,35);assert.deepEqual(tile.texture,before.texture);assert.equal(tile.hidden,false);assert.equal(tile.alpha,.65);assert.equal(tile.elevation,4);assert.equal(markerMetadata(tile).sourceTokenId,f.token.id);assert.equal(markerMetadata(tile).sector,'B2');assert.equal(markerMetadata(tile).grayscale,true);assert.equal(state(f).tileId,tile.id);assert.equal(state(f).phase,'active');
+ const tile=[...f.zone.tiles.values()][0];assert.equal(tile.x,before.x);assert.equal(tile.y,before.y);assert.equal(tile.width,150);assert.equal(tile.height,200);assert.equal(tile.rotation,0);assert.deepEqual(tile.texture,before.texture);assert.equal(tile.hidden,false);assert.equal(tile.alpha,.65);assert.equal(tile.elevation,5);assert.equal(markerMetadata(tile).sourceTokenId,f.token.id);assert.equal(markerMetadata(tile).sector,'B2');assert.equal(markerMetadata(tile).grayscale,true);assert.equal(state(f).tileId,tile.id);assert.equal(state(f).phase,'active');
  await f.service.manual();assert.equal(f.zone.tiles.size,1);assert.equal(tile.x,before.x);assert.equal(tile.y,before.y);assert.equal(f.events.filter(e=>e==='tile-create').length,1);
 });
 test('automatic and manual wandering share markers, persisted claims prevent duplicate events and reloaded managers do not recreate them',async()=>{
@@ -69,4 +69,28 @@ test('recovery waits for native pending movement and removes late Tiles from int
  const f=markerFixture();await f.service.manual();const saved=state(f);f.token.flags[MODULE][MARKER_FLAG]={...saved,phase:'moving'};f.token.movement={state:'pending'};f.token.x=saved.origin.x;f.token.y=saved.origin.y;await f.markers.reconcile(f.token);assert.equal(f.zone.tiles.size,1);assert.equal(state(f).phase,'moving');
  f.token.movement.state='completed';await f.markers.reconcile(f.token);assert.equal(f.zone.tiles.size,0);assert.equal(state(f).phase,'cleared');
  const tile={id:'late',parent:f.zone,getFlag:()=>({version:1,kind:MARKER_KIND,sourceSceneId:f.zone.id,sourceTokenId:f.token.id})};f.zone.tiles.set(tile.id,tile);await f.markers.reconcile(f.token);assert.equal(f.zone.tiles.size,0);assert.equal(state(f).phase,'cleared');assert.equal(f.token.hidden,true);
+});
+
+test('source transforms preserve exact off-grid x/y and footprint for 1x1/2x2, boundaries, rotations, signed elevations and texture scales',async()=>{
+ for(const [width,height,x,y,elevation,rotation,scaleX,scaleY] of [[1,1,531.25,426.75,0,83,1,1],[2,2,2775.5,2700.25,5,270,2,.5],[1,1,10.5,17.25,-2,-45,-1,1.2]]){
+  const f=markerFixture();Object.assign(f.token,{width,height,x,y,elevation,rotation});Object.assign(f.token.texture,{scaleX,scaleY});const before={x,y,width:width*100,height:height*100,elevation,rotation};await f.service.manual();assert.equal(f.zone.tiles.size,1);const tile=[...f.zone.tiles.values()][0];
+  assert.equal(tile.x,x);assert.equal(tile.y,y);assert.equal(tile.width,before.width);assert.equal(tile.height,before.height);assert.equal(tile.rotation,0);assert.equal(tile.elevation,elevation+1);assert.equal(f.token.elevation,elevation);assert.equal(f.token.rotation,rotation);assert.equal(tile.texture.scaleX,scaleX);assert.equal(tile.texture.scaleY,scaleY);assert.equal(f.token.hidden,true);
+ }
+});
+test('native v14 footprint and serialized document coordinates override rendered bounds without double scaling',()=>{
+ const f=markerFixture();f.token.toObject=source=>{assert.equal(source,true);return {x:531.25,y:412.75,width:2,height:2,elevation:-2,hidden:false,texture:{src:'rat.webp',scaleX:2,scaleY:3}};};
+ f.token.getSize=dimensions=>{assert.deepEqual(dimensions,{width:2,height:2});return {width:240,height:320};};f.token.object={x:999,y:888,bounds:{width:9999,height:9999},rotation:180};const captured=captureMarkerSource(f.token,f.store.config.grid);assert.equal(captured.x,531.25);assert.equal(captured.y,412.75);assert.equal(captured.width,240);assert.equal(captured.height,320);assert.equal(captured.elevation,-2);
+});
+test('artwork, dimensions, elevation and position are captured before async loading and pending-state updates',async()=>{
+ const f=markerFixture(),initial={x:f.token.x,y:f.token.y,width:f.token.width*100,height:f.token.height*100,texture:{...f.token.texture},elevation:f.token.elevation};
+ const load=f.env.foundry.canvas.loadTexture;f.env.foundry.canvas.loadTexture=async(...args)=>{f.token.width=2;f.token.height=3;f.token.elevation=20;f.token.rotation=300;f.token.texture.scaleX=4;f.token.texture.src='changed.webp';return load(...args);};
+ const update=f.token.update.bind(f.token);f.token.update=async(data,options)=>{if(data['flags.myz-sector-manager.lastKnownPosition']?.phase==='preparing'){f.token.elevation=100;f.token.texture.scaleY=5;}return update(data,options);};
+ await f.markers.move(f.token,f.config(),{x:1100,y:450},()=>update({x:1100,y:450}),()=>{});const tile=[...f.zone.tiles.values()][0];assert.equal(tile.x,initial.x);assert.equal(tile.y,initial.y);assert.equal(tile.width,initial.width);assert.equal(tile.height,initial.height);assert.deepEqual(tile.texture,initial.texture);assert.equal(tile.elevation,initial.elevation+1);assert.equal(tile.rotation,0);
+});
+test('two eligible NPCs receive independent source snapshots in manual and automatic checks, without duplicate markers or repair of existing Tiles',async()=>{
+ for(const automatic of [false,true]){
+  const f=markerFixture(),other={...f.token,id:'other',uuid:'Scene.zone.Token.other',flags:structuredClone(f.token.flags),x:1050.5,y:845.25,elevation:8,texture:{...f.token.texture}};f.zone.tokens.set(other.id,other);
+  if(automatic)await f.service.onEntry({entryId:'two-npcs',token:f.zone.tokens.get('party'),group:f.store.config.groups[0]});else await f.service.manual();
+  assert.equal(f.zone.tiles.size,2);const tiles=[...f.zone.tiles.values()];assert.deepEqual(tiles.map(tile=>[tile.x,tile.y,tile.rotation,tile.elevation]),[[600,450,0,5],[1050.5,845.25,0,9]]);tiles[0].x=721;tiles[0].rotation=19;tiles[0].elevation=77;await f.markers.sceneReady(f.zone);await f.service.manual();assert.equal(f.zone.tiles.size,2);assert.deepEqual([tiles[0].x,tiles[0].rotation,tiles[0].elevation],[721,19,77]);
+ }
 });

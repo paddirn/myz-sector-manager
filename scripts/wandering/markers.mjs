@@ -1,10 +1,23 @@
-import {MODULE,wanderingConfiguration} from './model.mjs';
-import {sceneCellSize,tokenCenter,positionToCoordinate} from '../zone/grid.mjs';
+import {MODULE} from './model.mjs';
+import {sceneCellSize,positionToCoordinate} from '../zone/grid.mjs';
 export const MARKER_FLAG='lastKnownPosition',MARKER_KIND='wandering-last-known';
 const values=collection=>Array.from(collection?.values?.()||[]);
 export function markerMetadata(tile){const flag=tile?.getFlag?.(MODULE,MARKER_FLAG);return flag?.version===1&&flag.kind===MARKER_KIND?flag:null;}
 export function ownsMarker(tile,token){const flag=markerMetadata(tile);return Boolean(flag&&flag.sourceSceneId===token.parent?.id&&flag.sourceTokenId===token.id);}
 const stateFor=(token,phase,extra={})=>({version:1,sourceSceneId:token.parent.id,sourceTokenId:token.id,phase,tileId:null,...extra});
+// Snapshot document source once, before texture loading or any token updates.
+// getSize accepts grid-unit dimensions and returns pixels; texture scale never sizes the footprint.
+export function captureMarkerSource(token,grid){
+ const data=typeof token.toObject==='function'?token.toObject(true):token;
+ const cells=sceneCellSize(token.parent);
+ const size=typeof token.getSize==='function'?token.getSize({width:data.width,height:data.height}):{width:data.width*cells.width,height:data.height*cells.height};
+ const x=data.x,y=data.y,elevation=data.elevation??0,alpha=data.alpha??1;
+ if(![x,y,elevation,size.width,size.height,alpha].every(Number.isFinite)||size.width<=0||size.height<=0)throw new Error('Last Known Position: invalid source position, footprint or elevation.');
+ const texture={src:data.texture?.src,...Object.fromEntries(['scaleX','scaleY','tint'].filter(key=>data.texture?.[key]!==undefined).map(key=>[key,data.texture[key]]))};
+ return {x,y,width:size.width,height:size.height,elevation,hidden:data.hidden===true,alpha:Math.min(1,Math.max(0,alpha))*.65,texture,
+  // Sector conversion is annotation only. It never determines or offsets Tile x/y.
+  sector:positionToCoordinate({x:x+size.width/2,y:y+size.height/2},grid)};
+}
 export class LastKnownPositions {
  constructor(store,env=globalThis){this.store=store;this.env=env;}
  assert(){if(!this.store.authoritative)throw new Error('Only the active GM can manage Last Known Positions.');}
@@ -43,13 +56,13 @@ export class LastKnownPositions {
   }
   if(state&&state.phase!=='armed')return execute();
   if(token.hidden&&!state?.allowHidden){await this.set(token,stateFor(token,'suppressed',{originalHidden:true}));return execute();}
-  const wasHidden=token.hidden===true;const src=await this.artwork(token);validate();if((token.hidden===true)!==wasHidden)throw new Error('Token visibility changed during marker preparation.');
-  const origin={x:token.x,y:token.y},originalHidden=token.hidden===true,size=sceneCellSize(token.parent),operationId=this.env.foundry.utils.randomID();
+  const source=captureMarkerSource(token,this.store.config.grid);await this.artwork(source);validate();if((token.hidden===true)!==source.hidden)throw new Error('Token visibility changed during marker preparation.');
+  const origin={x:source.x,y:source.y},originalHidden=source.hidden,operationId=this.env.foundry.utils.randomID();
   state=stateFor(token,'preparing',{origin,target:{x:target.x,y:target.y},originalHidden,operationId});
   await this.set(token,state);let hiddenByUs=false;
   try{
-   this.assert();const texture={src,...Object.fromEntries(['scaleX','scaleY','tint'].filter(key=>token.texture[key]!==undefined).map(key=>[key,token.texture[key]]))};
-   const [tile]=await token.parent.createEmbeddedDocuments('Tile',[{x:origin.x,y:origin.y,width:token.width*size.width,height:token.height*size.height,rotation:token.rotation||0,elevation:token.elevation||0,alpha:Math.min(1,Math.max(0,Number(token.alpha??1)))*.65,hidden:false,texture,flags:{[MODULE]:{[MARKER_FLAG]:{version:1,kind:MARKER_KIND,sourceSceneId:token.parent.id,sourceTokenId:token.id,createdAt:Date.now(),operationId,origin,originalHidden,sector:positionToCoordinate(tokenCenter(token,token.parent),this.store.config.grid),grayscale:config.grayscale}}}}]);
+   this.assert();
+   const [tile]=await token.parent.createEmbeddedDocuments('Tile',[{x:origin.x,y:origin.y,width:source.width,height:source.height,rotation:0,elevation:source.elevation+1,alpha:source.alpha,hidden:false,texture:source.texture,flags:{[MODULE]:{[MARKER_FLAG]:{version:1,kind:MARKER_KIND,sourceSceneId:token.parent.id,sourceTokenId:token.id,createdAt:Date.now(),operationId,origin,originalHidden,sector:source.sector,sourceElevation:source.elevation,grayscale:config.grayscale}}}}]);
    if(!tile?.id)throw new Error('Last Known Position Tile creation returned no document.');
    validate();state={...state,phase:'moving',tileId:tile.id};await this.set(token,state,config.autoHide?{hidden:true}:{});hiddenByUs=config.autoHide&&!originalHidden;
    // No position update is sent until the hide + association update has completed.

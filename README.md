@@ -552,3 +552,10 @@ Visible wandering NPCs now leave one persistent, faded Tile at their original po
 The existing Wandering Tokens settings include marker enablement, grayscale and automatic hiding (all default on). Token HUD controls clear or confirm a reset of an individual marker; Zone Map / Tracking includes selected-token cleanup and confirmed **Clear All Last Known Positions** on the viewed Scene. Clearing preserves token position and visibility. Manually revealing a token leaves its marker intact; the next actual wander reapplies configured hiding.
 
 See [Wandering Tokens: Last Known Positions](docs/wandering-tokens.md#wandering-tokens-last-known-positions) for the Zone Rat example, storage, grayscale fallback, recovery and player-view testing. Native Foundry rendering, visibility and other HUD modules require backup-world verification.
+
+
+### Last Known Position transform fix (v0.1.29)
+
+New markers use one snapshot of the TokenDocument's original top-left position, artwork, footprint and elevation before any asynchronous work. Tile rotation is always **0**, and elevation is **original token elevation + 1**. Native v14 footprint sizing avoids mixing texture scale with pixel dimensions. Fractional/off-grid source coordinates remain exact. Existing markers and GM corrections are untouched.
+
+See [marker source transform details](docs/wandering-tokens.md#marker-source-transform-fix-v0129) for the cause, safeguards and backup-world checks.
