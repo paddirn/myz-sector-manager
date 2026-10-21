@@ -1,11 +1,13 @@
+import {normalizeShop} from './settlement-shop.mjs';
 // Versioned, JSON-safe authored content. Common name/coordinates/terrain stay on the sector.
 export const SETTLEMENT_TABS=Object.freeze(['Overview','Projects','Inhabitants','Factions','Events','Threads','Shop']);
-export const SETTLEMENT_COLLECTIONS=Object.freeze({Projects:'settlement.projects',Inhabitants:'settlement.inhabitants',Factions:'settlement.factions',Events:'settlement.events',Threads:'settlement.threads',Shop:'settlement.shops'});
+export const SETTLEMENT_COLLECTIONS=Object.freeze({Projects:'settlement.projects',Inhabitants:'settlement.inhabitants',Factions:'settlement.factions',Events:'settlement.events',Threads:'settlement.threads',Shop:'settlement.shop.groups'});
 export const SETTLEMENT_ACCENT='#47aeb3';
 export const settlementAccent=value=>/^#[0-9a-f]{6}$/i.test(value||'')?value:SETTLEMENT_ACCENT;
 export const DISPOSITIONS=['Unknown','Friendly','Neutral','Unfriendly','Hostile'];
 export const SETTLEMENT_TYPES=['Ark','Village','Town','Trading Post','Outpost','Fortress','Industrial Facility','Mobile Settlement','Other'];
 export const PROJECT_STATUSES=['Planned','In Progress','Completed','Abandoned'];
+// shops is the read-only legacy recovery archive; active inventory lives in shop.groups.
 const listKeys=['projects','inhabitants','factions','events','threads','shops'];
 const identity=()=>globalThis.foundry?.utils?.randomID?.()||globalThis.crypto.randomUUID();
 export function settlementDefaults(){return {version:1,type:'Other',disposition:'Unknown',population:'',leadership:'',description:'',image:'',notes:'',history:'',situation:'',defenses:'',resources:'',economy:'',arkUuid:'',...Object.fromEntries(listKeys.map(key=>[key,[]]))};}
@@ -29,6 +31,7 @@ export function normalizeSettlement(raw={}){
       return next;
     });
   }
+  result.shop=normalizeShop(raw.shop,result.shops);
   return result;
 }
 export function newSettlementEntry(key){
@@ -38,8 +41,6 @@ export function newSettlementEntry(key){
   if(key==='factions')Object.assign(entry,{leader:'',goals:'',resources:'',disposition:'Unknown',allies:'',rivals:'',tensions:''});
   if(key==='events')Object.assign(entry,{status:'Planned',trigger:'',outcomes:'',related:''});
   if(key==='threads')Object.assign(entry,{status:'Open',npcs:'',factions:'',clues:'',developments:'',resolution:''});
-  if(key==='shops')Object.assign(entry,{proprietor:'',type:'General Goods',inventory:[]});
-  if(key==='inventory')Object.assign(entry,{quantity:'',price:'',uuid:''});
   return entry;
 }
 export function requireProject(doc,systemId='mutant-year-zero'){
