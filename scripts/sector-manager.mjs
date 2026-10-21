@@ -147,7 +147,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
           arr.map((item,i)=>{const id=state.entries[i].id, collapsed=state.collapsed.has(id);return `<article class="sm-entry ${collapsed?'is-collapsed':''} ${key==='loot'&&lootCollected(item)?'is-collected':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle sm-special-toggle" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body"><strong data-entry-title>${escapeHTML(key==='loot'?lootTitle(item,`Entry ${i+1}`):item.title||`Entry ${i+1}`)}</strong><span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span></button><button type="button" data-remove="${key}:${id}" title="Remove entry" aria-label="Remove ${attr(item.title||`Entry ${i+1}`)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}><div class="sm-grid">${field('Title',`${key}.${i}.title`,item.title||'')}${this.tab==='Loot'?field('Quantity',`${key}.${i}.quantity`,normalizeLoot(item).quantity,'number')+`<label class="sm-field"><span>Type</span><select name="loot.${i}.type">${LOOT_TYPES.map(type=>`<option value="${type}" ${normalizeLoot(item).type===type?'selected':''}>${type[0].toUpperCase()+type.slice(1)}</option>`).join('')}</select></label><label class="sm-loot-collected" title="Collected saves this sector’s Gear &amp; Artifacts entries automatically; other sector fields still use Save Sector."><input type="checkbox" name="loot.${i}.collected" ${lootCollected(item)?'checked':''}> Collected</label>${item.status&&item.status!=='Active'?`<small title="Previous status retained for compatibility; the checkbox now controls availability.">Previous status: ${escapeHTML(item.status)}</small>`:''}`:this.tab==='Encounters'?select('Status',`${key}.${i}.status`,normalizeEncounter(item).status,ENCOUNTER_STATUSES)+select('Type',`${key}.${i}.type`,normalizeEncounter(item).type,ENCOUNTER_TYPES)+(item.legacyStatus?`<small>Previous status: ${escapeHTML(item.legacyStatus)} (retained)</small>`:'')+(item.legacyType?`<small>Previous type: ${escapeHTML(item.legacyType)} (retained)</small>`:''):select('Status',`${key}.${i}.status`,item.status||'Active',['Active','Hidden','Discovered','Resolved','Collected','Depleted','Inactive'])}${this.tab==='Effects'?select('Category',`${key}.${i}.category`,item.category||'Weather',['Weather','Phenomenon','Special Effect','Hazard'])+reference(key,i,item.uuid||''):reference(key,i,item.uuid||'')}</div>${item.referenceWarning?`<p class="sm-reference-missing" data-reference-warning role="status">${escapeHTML(item.referenceWarning)}</p>`:''}${area('Details / Rules / Notes',`${key}.${i}.details`,item.details||'')}${this.tab==='Encounters'?`<div class="sm-inhabitant-description" data-inhabitant-preview></div><div class="sm-imported-portrait" data-imported-portrait="${i}"></div>`:''}${this.tab==='Effects'?field('Duration / Trigger',`${key}.${i}.duration`,item.duration||'')+this.macroControl(item,i):''}</div></article>`;}).join('')+
           (!arr.length?`<div class="sm-empty">No ${escapeHTML(tabLabel(this.tab).toLowerCase())} yet. Add an entry to get started.</div>`:'');
       }
-      main=`<section class="sm-main"><header class="sm-header"><div><h2 data-sector-heading>${escapeHTML(sectorTitle(d))}</h2><small>GM only · Journal-backed · ${escapeHTML(d.code||'No sector ID')}${isSettlement(d)?` · Scene: ${escapeHTML(game.scenes?.get(d.sceneId)?.name||d.sceneId||'Unassigned')}`:''}</small></div><div class="sm-header-buttons"><button type="button" data-action="change-type">Change Sector Type</button><button type="button" data-action="journal">Open Journal</button><button type="button" data-action="delete">Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<nav class="sm-tabs">${tabs.map(t=>`<button type="button" data-tab="${t}" class="${t===this.tab?'active':''} ${tabHasContent(d,t)?'':'sm-tab-empty'}">${escapeHTML(tabLabel(t))}</button>`).join('')}${isAuthored(d)?'':`<button type="button" data-action="randomize" ${this.canRandomize?'':'disabled title="Save this sector before randomizing."'}>Randomize</button>`}</nav><div class="sm-content">${body}</div><footer class="sm-footer"><span>${this.dirty?'● Unsaved changes':'Changes saved'}</span><button type="button" data-action="save" ${this.busy?'disabled':''}>Save Sector</button></footer></section>`;
+      main=`<section class="sm-main"><header class="sm-header"><div><h2 data-sector-heading>${escapeHTML(sectorTitle(d))}</h2><small>GM only · Journal-backed · ${escapeHTML(d.code||'No sector ID')}${isSettlement(d)?` · Scene: ${escapeHTML(game.scenes?.get(d.sceneId)?.name||d.sceneId||'Unassigned')}`:''}</small></div><div class="sm-header-buttons"><button type="button" data-action="change-type">Change Sector Type</button><button type="button" data-action="journal">Open Journal</button><button type="button" data-action="delete">Delete Sector</button><button type="button" data-action="new">+ New Sector</button></div></header>${zoneSummary}<nav class="sm-tabs">${tabs.map(t=>`<button type="button" data-tab="${t}" class="${t===this.tab?'active':''} ${tabHasContent(d,t)?'':'sm-tab-empty'}">${escapeHTML(tabLabel(t))}</button>`).join('')}${isAuthored(d)?'':`<button type="button" data-action="randomize" ${this.canRandomize?'':'disabled title="Save this sector before randomizing."'}>Randomize</button>`}</nav><div class="sm-content${isSettlement(d)&&this.tab==='Shop'?' sm-shop-content':''}">${body}</div><footer class="sm-footer"><span>${this.dirty?'● Unsaved changes':'Changes saved'}</span><button type="button" data-action="save" ${this.busy?'disabled':''}>Save Sector</button></footer></section>`;
     }
     return `<style>
       .myz-sector-manager .sm-window-content{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;padding:0;overflow:hidden}
@@ -158,18 +158,36 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-toolbar,.myz-sector-manager .sm-sidebar>input{flex-shrink:0}
       .myz-sector-manager .sm-toolbar button{width:100%}
       .myz-sector-manager .sm-list button.sm-sector-settlement{border-left:4px double var(--sm-settlement-accent,${SETTLEMENT_ACCENT})}
-      .myz-sector-manager .sm-shop-table-scroll{overflow-x:auto;max-width:100%}
-      .myz-sector-manager .sm-shop-table{width:100%;table-layout:fixed;border-collapse:collapse}
-      .myz-sector-manager .sm-shop-table th,.myz-sector-manager .sm-shop-table td{padding:6px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
-      .myz-sector-manager .sm-shop-table th:first-child{width:24%}
-      .myz-sector-manager .sm-shop-table th:nth-child(2){width:13%}
-      .myz-sector-manager .sm-shop-table th:nth-child(3){width:18%}
-      .myz-sector-manager .sm-shop-table th:nth-child(4){width:12%}
+      .myz-sector-manager .sm-content.sm-shop-content{display:flex;overflow:hidden;padding:8px;scrollbar-gutter:auto}
+      .myz-sector-manager .sm-shop{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;gap:6px}
+      .myz-sector-manager .sm-shop button{width:auto;flex:none;padding:4px 7px;white-space:nowrap}
+      .myz-sector-manager .sm-shop-top{display:flex;flex-wrap:wrap;gap:5px;align-items:center;flex:none;min-width:0}
+      .myz-sector-manager .sm-shop-top label{display:flex;gap:4px;align-items:center;min-width:0}
+      .myz-sector-manager .sm-shop-top select{min-width:0;max-width:150px}
+      .myz-sector-manager .sm-shop-top small,.myz-sector-manager .sm-shop-top details{flex-basis:100%;overflow-wrap:anywhere}
+      .myz-sector-manager .sm-shop-inventory{position:relative;flex:1;min-height:0;min-width:0;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;overflow-anchor:none}
+      .myz-sector-manager .sm-shop-sticky{position:sticky;top:0;z-index:2;background:#e4dfd4;color:#191919;box-shadow:0 1px 2px #0006;border-radius:4px 4px 0 0}
+      .myz-sector-manager .sm-shop-heading{display:flex;align-items:center;gap:2px;padding:3px;min-width:0;flex-wrap:wrap}
+      .myz-sector-manager .sm-shop-heading [data-shop-toggle]{padding:3px;min-width:20px}
+      .myz-sector-manager .sm-shop-name{min-width:60px;width:60px;flex:1;font-weight:bold!important;border:1px solid transparent;background:transparent;color:inherit;padding:3px}
+      .myz-sector-manager .sm-shop-name:focus{border-color:#777;background:#fff}
+      .myz-sector-manager .sm-shop-group-actions{display:flex;gap:2px;align-items:center;margin-left:auto}
+      .myz-sector-manager .sm-shop-group-actions select{min-width:0;max-width:110px}
+      .myz-sector-manager .sm-shop-table{font:inherit;width:100%;table-layout:fixed;border-collapse:collapse;margin:0}
+      .myz-sector-manager .sm-shop-table th,.myz-sector-manager .sm-shop-table td{padding:5px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
       .myz-sector-manager .sm-shop-table [data-shop-requirement]{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
       .myz-sector-manager .sm-shop-table [data-shop-comment]{white-space:pre-wrap}
-      .myz-sector-manager .sm-shop-management{display:flex;flex-wrap:wrap;gap:5px;padding:6px}
-      .myz-sector-manager .sm-shop-management select{max-width:180px}
-      .myz-sector-manager .sm-shop-table .is-selected{outline:1px solid #a87b3c}
+      .myz-sector-manager .sm-shop-table [data-shop-travel]{width:100%;min-width:0}
+      .myz-sector-manager .sm-shop-accessible-head{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+      .myz-sector-manager .sm-shop-table .is-selected{outline:1px solid #a87b3c;outline-offset:-1px}
+      .myz-sector-manager .sm-shop-empty{padding:8px;margin:0}
+      .myz-sector-manager .sm-shop-toolbar{display:flex;gap:4px;align-items:center;flex:none;min-width:0;border-top:1px solid #777;padding-top:6px}
+      .myz-sector-manager .sm-shop-toolbar label{display:flex;gap:3px;align-items:center;min-width:0;white-space:nowrap}
+      .myz-sector-manager .sm-shop-toolbar label:first-child{flex:1.4}
+      .myz-sector-manager .sm-shop-toolbar label:has([data-shop-move]){flex:1}
+      .myz-sector-manager .sm-shop-toolbar select{width:100%;min-width:0;max-width:100%}
+      @container (max-width:600px){.myz-sector-manager .sm-shop-table th{font-size:11px;padding:4px 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.myz-sector-manager .sm-shop-toolbar{flex-wrap:wrap}.myz-sector-manager .sm-shop-toolbar label:first-child{flex-basis:calc(100% - 65px)}.myz-sector-manager .sm-shop-toolbar label:has([data-shop-move]){flex:1 1 140px;min-width:min(140px,100%)}}
+      @container (max-width:440px){.myz-sector-manager .sm-shop-group-actions{flex-basis:100%;justify-content:flex-end}}
       .myz-sector-manager .sm-inhabitant-description{overflow-wrap:anywhere;max-height:300px;overflow:auto}
       .myz-sector-manager .sm-inhabitant-description:empty{display:none}
       .myz-sector-manager .sm-imported-portrait img{max-width:100%;max-height:110px;object-fit:contain}

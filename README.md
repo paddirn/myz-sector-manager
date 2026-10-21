@@ -553,7 +553,7 @@ Existing hidden tokens are **not** revealed automatically. Existing marker Tiles
 
 ## Settlement sectors
 
-Choose **Settlement** when creating a sector to track an inhabited community through **Overview, Projects, Inhabitants, Factions, Events, Threads, Shop**. It uses the existing editor window and GM-only Journal storage, with Scene-specific Settlement coordinates. Official MYZ Ark Project Items are linked, with independent progress per Settlement; the Shop uses a single categorized inventory of live Gear/Artifact Item references. No source Items, Ark statistics or character resources are modified.
+Choose **Settlement** when creating a sector to track an inhabited community through **Overview, Projects, Inhabitants, Factions, Events, Threads, Shop**. It uses the existing editor window and GM-only Journal storage, with Scene-specific Settlement coordinates. Official MYZ Ark Project Items are linked, with independent progress per Settlement; the Shop uses a single categorized inventory of live Foundry Item references. No source Items, Ark statistics or character resources are modified.
 
 Settlements have a configurable map border and skip Normal sector Travel/weather/Macro entry checks. Wandering uses the shared Special/Settlement destination option. Normal and Special records remain intact; confirmed type changes preserve inactive content.
 
@@ -561,6 +561,12 @@ See [Settlement instructions, data model and manual Foundry checks](https://gith
 
 ### Shop inventory and Actor Info imports (0.1.32)
 
-The Settlement Shop now has custom groups and five columns: **Item, Cost, Requirement, Weight, Comment**. Drop verified MYZ Gear/Artifact Items into groups; values come from their source documents. Use the group controls to reorder, move, replace or remove references, and **Refresh Items** to see source updates. Old merchant inventories become groups, with complete previous records retained in a downloadable recovery backup.
+The Settlement Shop has custom groups and type-specific columns; General uses **Item, Cost, Req., Weight, Comment**. Drop Foundry Items of any type into groups; values come from their source documents. Use the group controls to reorder, move, replace or remove references, and **Refresh Items** to see source updates. Old merchant inventories become groups, with complete previous records retained in a downloadable recovery backup.
 
 All three Inhabitants interfaces accept world/Compendium Actors on their blank area. Imports copy the Actor name, portrait and the actual MYZ Info-tab narrative into an editable, safely formatted snapshot. Existing descriptions and unrelated campaign fields are retained; duplicate Actors select their existing entry. Source changes never overwrite campaign edits. Actor/Shop drops save their collection; other edits use Save Sector. See the [mapping, migration and manual-check details](https://github.com/paddirn/myz-sector-manager/blob/main/docs/settlement-sectors.md).
+
+### Shop group types and scrolling (0.1.33)
+
+Shop groups now support **General, Weapons, Armor, Vehicles, Services** layouts and accept any Item type. Choose a type independently of the group name; missing source fields remain blank. Vehicles track **Land/Water** per Shop entry without changing the Item. Existing groups default safely to General.
+
+Group headings are compact and inline editable. The heading and column labels stick together while the inventory scrolls; one bottom **Selection / Move / Replace / Remove** toolbar stays visible across every group. Delete appears only for empty groups. Item reorder arrows move existing rows in place, preserving selection, scroll position and collapsed groups. Smaller windows use a responsive toolbar. See the [field mapping and manual v14 checks](https://github.com/paddirn/myz-sector-manager/blob/main/docs/settlement-sectors.md).
