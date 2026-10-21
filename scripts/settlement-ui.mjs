@@ -1,3 +1,5 @@
+import {sortEditorEntries} from './entry-order.mjs';
+import {renderFaction,hydrateFactions,bindFactions} from './settlement-factions-ui.mjs';
 import {renderShop,hydrateShop,bindShop} from './settlement-shop-ui.mjs';
 import {SETTLEMENT_COLLECTIONS,SETTLEMENT_TYPES,DISPOSITIONS,PROJECT_STATUSES,newSettlementEntry,requireProject,projectInformation,assignProject} from './settlement.mjs';
 import {sectorCollection} from './sector-types.mjs';
@@ -24,13 +26,13 @@ export function renderSettlement(host,{field,area,select,reference,terrainField}
       if(item.factionId&&!s.factions.some(f=>f.id===item.factionId))factions.push([item.factionId,'Missing faction (association preserved)']);
       body=`${field('Role / Occupation',`${p}.role`,item.role)}${choice('Disposition Toward the Party',`${p}.disposition`,item.disposition,DISPOSITIONS)}<label class="sm-field"><span>Associated Faction</span><select name="${p}.factionId">${factions.map(([id,title])=>`<option value="${esc(id)}" ${id===item.factionId?'selected':''}>${esc(title)}</option>`).join('')}</select></label>${image('Portrait',`${p}.portrait`,item.portrait)}${ref('inhabitants',`${p}.uuid`,item.uuid)}`;
     }
-    if(kind==='factions')body=field('Leader',`${p}.leader`,item.leader)+[['Goals / Motivations','goals'],['Resources / Influence','resources'],['Allies','allies'],['Rivals / Enemies','rivals'],['Current Tensions','tensions']].map(([label,key])=>text(label,`${p}.${key}`,item[key],3)).join('')+choice('Relationship to the Party',`${p}.disposition`,item.disposition,DISPOSITIONS);
     if(kind==='events')body=choice('Status',`${p}.status`,item.status||'Planned',['Planned','Active','Resolved','Cancelled'])+[['Trigger / Conditions','trigger'],['Consequences / Outcomes','outcomes'],['Related NPCs or Factions','related']].map(([label,key])=>text(label,`${p}.${key}`,item[key],3)).join('');
     if(kind==='threads')body=choice('Status',`${p}.status`,item.status||'Open',['Open','In Progress','Resolved','Abandoned'])+[['Important NPCs','npcs'],['Associated Factions','factions'],['Clues / Discoveries','clues'],['Possible Developments','developments'],['Resolution / Outcome','resolution']].map(([label,key])=>text(label,`${p}.${key}`,item[key],3)).join('');
     return common+body+text('GM Notes',`${p}.notes`,item.notes);
   };
   return `<div class="sm-section-header"><p>${kind==='projects'?'Drop an MYZ Ark Project Item from Items or a Compendium on the blank area, or add a Project and drop onto its reference. Changes save with Save Sector.':'Descriptive GM records; nothing executes or transfers automatically.'}</p><div class="sm-entry-controls">${entries.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}">+ Add ${esc(host.tab==='Projects'?'Project':host.tab==='Inhabitants'?'Inhabitant':host.tab==='Factions'?'Faction':host.tab==='Events'?'Event':'Thread')}</button></div></div>`+entries.map((item,i)=>{
     const id=state.entries[i].id,collapsed=state.collapsed.has(id),p=`${key}.${i}`;
+    if(kind==='factions')return renderFaction(host,item,p,id,collapsed);
     return `<article class="sm-entry ${collapsed?'is-collapsed':''}" data-entry="${id}"><div class="sm-entry-head" data-entry-header="${id}"><button type="button" class="sm-entry-toggle sm-special-toggle" data-entry-toggle aria-expanded="${!collapsed}" aria-controls="${id}-body"><strong data-entry-title>${esc(item.title||item.referenceName||`New ${host.tab.slice(0,-1)}`)}</strong><span data-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span></button><button type="button" data-remove="${key}:${id}" aria-label="Remove ${esc(item.title||host.tab)}">✕</button></div><div class="sm-entry-body" id="${id}-body" ${collapsed?'hidden':''}>${fields(item,p,i)}</div></article>`;
   }).join('')+(!entries.length?`<p class="sm-empty">No ${esc(host.tab.toLowerCase()==='shop'?'shops':host.tab.toLowerCase())} have been added to this settlement.</p>`:'');
 }
@@ -38,19 +40,22 @@ export function renderSettlement(host,{field,area,select,reference,terrainField}
 export async function renderProject(host,target,entry){
   const uuid=entry?.uuid,draft=host.draft,request=target.projectRequest=(target.projectRequest||0)+1;
   const current=()=>host.draft===draft&&entry.uuid===uuid&&target.projectRequest===request;
-  if(!uuid){target.textContent='Drop an Ark Project Item onto the reference field.';return;}
+  const card=target.closest('[data-entry]');if(card)card.dataset.sortName=entry?.referenceName||entry?.title||'Unnamed project';
+  if(!uuid){target.textContent='Drop an Ark Project Item onto the reference field.';sortEditorEntries(host,target.closest('.sm-content')?.parentElement||host.element);return;}
   try{
     const doc=requireProject(await fromUuid(uuid),game.system?.id||'mutant-year-zero');if(!current())return;
+    const card=target.closest('[data-entry]');if(card){card.dataset.sortName=doc.name;const heading=card.querySelector('[data-entry-title]');if(heading)heading.textContent=doc.name;}
     target.replaceChildren();const title=document.createElement('h4');title.textContent=doc.name;target.append(title);
     const image=document.createElement('div');image.className='sm-project-image';host.showImage(image,imagePath(doc.img),doc.name,'No project illustration');target.append(image);
     // Escape source HTML as text; the native sheet remains the authoritative rich-text view.
     const details=document.createElement('dl');for(const [label,value] of projectInformation(doc)){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;const parsed=new DOMParser().parseFromString(String(value),'text/html');dd.textContent=parsed.body.textContent;details.append(dt,dd);}target.append(details);
-    const button=document.createElement('button');button.type='button';button.textContent='Open Project Item Sheet';button.addEventListener('click',()=>doc.sheet.render(true));target.append(button);
   }catch(error){if(current()){target.textContent=`Project reference unavailable (${uuid}): ${error.message}. Assignment and progress retained.`;target.classList.add('sm-reference-missing');}}
+  sortEditorEntries(host,target.closest('.sm-content')?.parentElement||host.element);
 }
 
 export async function hydrateSettlement(host,root){
   if(host.tab==='Shop')await hydrateShop(host,root);
+  if(host.tab==='Factions')await hydrateFactions(host,root);
   for(const target of root.querySelectorAll('[data-settlement-preview]'))host.showImage(target,imagePath(target.dataset.imagePath),'Settlement image','No image selected');
   await Promise.all(Array.from(root.querySelectorAll('[data-project-view]'),target=>renderProject(host,target,host.data.settlement.projects[Number(target.dataset.projectView)])));
 }
@@ -67,6 +72,7 @@ export function bindSettlement(host){
     }}).render(true);
   })())));
   if(host.tab==='Shop'){bindShop(host);return;}
+  if(host.tab==='Factions'){bindFactions(host);return;}
   if(host.tab!=='Projects')return;
   const content=el.querySelector('.sm-content'),blank=event=>!event.target.closest('[data-entry],input,textarea,button,select,a');
   content.addEventListener('dragover',event=>{if(blank(event)){event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy';}});
