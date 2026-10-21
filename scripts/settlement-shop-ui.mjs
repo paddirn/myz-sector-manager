@@ -1,4 +1,4 @@
-import {newShopGroup,requireShopItem,resolveShopItem,putShopItem,moveShopEntry,reorderById,SHOP_GROUP_TYPES,groupType,shopColumns,TRAVEL_TYPES,vehicleTravelType,initializeVehicleTravel} from './settlement-shop.mjs';
+import {newShopGroup,resolveShopDrop,resolveShopItem,putShopItem,moveShopEntry,reorderById,SHOP_GROUP_TYPES,groupType,shopColumns,TRAVEL_TYPES,vehicleTravelType,initializeVehicleTravel} from './settlement-shop.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const entries=shop=>shop.groups.flatMap(group=>group.entries.map(entry=>({group,entry})));
 export function shopState(host){
@@ -80,15 +80,17 @@ export function bindShop(host){
   for(const input of el.querySelectorAll('[data-shop-travel]'))input.addEventListener('change',()=>{if(!game.user.isGM)return;const entry=entries(host.draft.settlement.shop).find(row=>row.entry.id===input.dataset.shopTravel)?.entry;if(entry&&TRAVEL_TYPES.includes(input.value)){entry.travelType=input.value;host.markDirty();}});
   const accepts=event=>!event.target.closest('input,textarea,select,button,a');
   content.addEventListener('dragover',event=>{if(accepts(event)){event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy';}});
-  content.addEventListener('drop',event=>{if(!accepts(event))return;event.preventDefault();event.stopPropagation();void report((async()=>{
+  content.addEventListener('drop',event=>{if(!accepts(event))return;event.preventDefault();event.stopPropagation();host.handledShopDrops??=new WeakSet();if(host.handledShopDrops.has(event))return;host.handledShopDrops.add(event);void report((async()=>{
     if(!game.user.isGM||host.droppingShop)return;host.droppingShop=true;
     try{
       rememberViewport(host);host.capture();const draft=host.draft,id=host.sectorId,signature=JSON.stringify(draft),journal=host.journal,saved=journal?.getFlag('myz-sector-manager','sector');if(!saved||saved.initialSavePending)throw new Error('Save this Settlement before dropping Shop Items.');
-      const baseline=JSON.stringify(saved.settlement?.shop??null),wasDirty=host.dirty,payload=foundry.applications.ux.TextEditor.implementation.getDragEventData(event),doc=requireShopItem(payload.uuid?await fromUuid(payload.uuid):null);
+      const baseline=JSON.stringify(saved.settlement?.shop??null),wasDirty=host.dirty;
+      let payload;try{payload=foundry.applications.ux.TextEditor.implementation.getDragEventData(event);}catch{throw new Error('Invalid drag data. Drop a Foundry Item document.');}
+      const doc=await resolveShopDrop(payload);
       if(host.draft!==draft||host.sectorId!==id||!host.rendered||JSON.stringify(draft)!==signature)throw new Error('Sector selection or edits changed. Nothing was added; drop again.');
       const target=state.replace?.groupId||event.target.closest('[data-shop-group]')?.dataset.shopGroup||state.selectedGroup,result=putShopItem(draft.settlement.shop,doc,target,{replaceId:state.replace?.entryId});state.replace=null;state.selectedGroup=result.group.id;state.selectedEntryId=result.entry.id;state.collapsed.delete(result.group.id);state.revealSelected=true;
       if(result.duplicate){ui.notifications.info('This Item is already in that group; selected its existing reference.');await host.render();return;}
-      host.markDirty();const after=JSON.stringify(draft);await host.persistShop(journal,baseline);if(host.draft===draft&&host.sectorId===id){if(JSON.stringify(draft)===after)host.dirty=wasDirty;await host.render();}
+      host.markDirty();const after=JSON.stringify(draft);try{await host.persistShop(journal,baseline);}catch(error){throw new Error(`Could not save Shop inventory: ${error.message}. The draft remains available; retry Save Sector.`);}if(host.draft===draft&&host.sectorId===id){if(JSON.stringify(draft)===after)host.dirty=wasDirty;await host.render();}
     }finally{host.droppingShop=false;}
   })());});
 }

@@ -174,6 +174,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-shop-group-actions{display:flex;gap:2px;align-items:center;margin-left:auto}
       .myz-sector-manager .sm-shop-group-actions select{min-width:0;max-width:110px}
       .myz-sector-manager .sm-shop-table{font:inherit;width:100%;table-layout:fixed;border-collapse:collapse;margin:0}
+      .myz-sector-manager .sm-shop .sm-shop-table thead{color:#fff}
+      .myz-sector-manager .sm-shop .sm-shop-table thead tr th{color:#fff!important}
       .myz-sector-manager .sm-shop-table th,.myz-sector-manager .sm-shop-table td{padding:5px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
       .myz-sector-manager .sm-shop-table [data-shop-requirement]{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
       .myz-sector-manager .sm-shop-table [data-shop-comment]{white-space:pre-wrap}
