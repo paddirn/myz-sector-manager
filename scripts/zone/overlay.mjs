@@ -1,3 +1,5 @@
+import {isAuthored,isSettlement,sectorOnScene,sectorTitle} from '../sector-types.mjs';
+import {settlementAccent} from '../settlement.mjs';
 import {imagePath,fitImage,SPECIAL_ACCENT} from '../sector-images.mjs';
 import {gridBounds,coordinateToBounds,positionToCoordinate,canonicalCoordinate} from './grid.mjs';
 import {MODULE} from './store.mjs';
@@ -66,9 +68,9 @@ export class ZoneOverlay {
   clearDraft(){this.draft=null;this.draw();}
   refreshSectors(){
     this.records=new Map();
-    for(const journal of this.env.game.journal){const data=this.draft&&this.draft.id===journal.id?this.draft.data:journal.getFlag(MODULE,'sector');if(data?.version!==1)continue;const code=canonicalCoordinate(data.code);if(code&&!this.records.has(code))this.records.set(code,data);}
+    for(const journal of this.env.game.journal){const data=this.draft&&this.draft.id===journal.id?this.draft.data:journal.getFlag(MODULE,'sector');if(data?.version!==1||!sectorOnScene(data,this.store.config.sceneId))continue;const code=canonicalCoordinate(data.code);if(code&&!this.records.has(code))this.records.set(code,data);}
     if(!this.preview&&this.labelClip)for(const [code,data] of this.records){
-      if(data.sectorType!=='special'||this.cells.has(code))continue;const b=coordinateToBounds(code,this.config.grid),c=this.labelClip;
+      if(!isAuthored(data)||this.cells.has(code))continue;const b=coordinateToBounds(code,this.config.grid),c=this.labelClip;
       if(b&&b.x<c.right&&b.x+b.width>c.x&&b.y<c.bottom&&b.y+b.height>c.y)this.cells.set(code,{code,bounds:b,signature:null,root:null});
     }
     for(const cell of this.cells.values())this.updateCell(cell);
@@ -77,22 +79,27 @@ export class ZoneOverlay {
   updateCell(cell){
     const data=this.records.get(cell.code),info=data?sectorIndicators(data):null;
     const special=data?.sectorType==='special'&&!this.preview;
-    const signature=JSON.stringify([info,special,special?data.special?.overlayImage:null]);if(cell.signature===signature&&cell.root)return;
+    const settlement=isSettlement(data)&&!this.preview;
+    const accent=settlementAccent(this.env.game.settings?.get?.(MODULE,'settlementAccent'));
+    const signature=JSON.stringify([info,special,settlement,settlement?sectorTitle(data):null,settlement?accent:null,special?data.special?.overlayImage:settlement?data.settlement?.image:null]);if(cell.signature===signature&&cell.root)return;
     cell.signature=signature;
     if(cell.root){this.root.removeChild(cell.root);cell.root.destroy({children:true});}
     const {PIXI}=this.env,b=cell.bounds,root=cell.root=new PIXI.Container();root.eventMode='none';root.interactiveChildren=false;this.root.addChild(root);
     if(special){const highlight=new PIXI.Graphics();highlight.eventMode='none';highlight.name='special-sector-highlight';highlight.lineStyle(4,0x17111f,.9).drawRect(b.x+2,b.y+2,b.width-4,b.height-4);highlight.lineStyle(2,SPECIAL_ACCENT,1).beginFill(SPECIAL_ACCENT,.12).drawRect(b.x+2,b.y+2,b.width-4,b.height-4).endFill();root.addChild(highlight);}
+    if(settlement){const highlight=new PIXI.Graphics();highlight.eventMode='none';highlight.name='settlement-sector-highlight';const color=Number.parseInt(accent.slice(1),16);highlight.lineStyle(4,0x111f20,.9).drawRect(b.x+2,b.y+2,b.width-4,b.height-4);highlight.lineStyle(2,color,1).beginFill(color,.16).drawRect(b.x+2,b.y+2,b.width-4,b.height-4).endFill();root.addChild(highlight);}
     const mask=new PIXI.Graphics().beginFill(0xffffff).drawRect(special?b.x:b.x+1,special?b.y:b.y+1,special?b.width:b.width-2,special?b.height:b.height-2).endFill();root.addChild(mask);root.mask=mask;
     const font=Math.max(1,Math.min(18,b.width/7,b.height/7)),padding=Math.min(4,b.width*.04,b.height*.04),available=b.width-padding*2;
     const text=(value,x,y,size=font,fill=0xfaf0d4)=>{
       const label=new PIXI.Text(String(value),{fontFamily:'Arial',fontSize:size,fill,stroke:0x111111,strokeThickness:Math.min(3,font/5),wordWrap:true,wordWrapWidth:available,breakWords:true});label.eventMode='none';label.position.set(x,y);root.addChild(label);return label;
     };
     if(special&&imagePath(data.special?.overlayImage))this.addImage(cell,root,data.special.overlayImage,{x:b.x+b.width*2/3,y:b.y,width:b.width/3,height:b.height/3});
+    if(settlement&&imagePath(data.settlement?.image))this.addImage(cell,root,data.settlement.image,{x:b.x+b.width*2/3,y:b.y,width:b.width/3,height:b.height/3});
     if(!this.config.overlay.labels)return;
     text(cell.code,b.x+padding,b.y+padding,font,data?0xfaf0d4:0x929a9f);
     if(!info)return;
+    if(settlement){const name=text(`Settlement: ${data.customName||'Unnamed'}`,b.x+padding,b.y+padding+font*1.25,font*.7);name.name='settlement-sector-name';}
     if(info.terrain.visible){
-      if(special){const label=text(info.terrain.value,0,0,font*.8);label.name='special-sector-terrain';const region={width:available,height:b.height*.22};if(label.width>0&&label.height>0){const scale=Math.min(1,region.width/label.width,region.height/label.height);label.scale?.set(scale);label.position.set(b.x+(b.width-label.width)/2,b.y+b.height-padding-label.height);}}
+      if(special||settlement){const label=text(info.terrain.value,0,0,font*.8);label.name='special-sector-terrain';const region={width:available,height:b.height*.22};if(label.width>0&&label.height>0){const scale=Math.min(1,region.width/label.width,region.height/label.height);label.scale?.set(scale);label.position.set(b.x+(b.width-label.width)/2,b.y+b.height-padding-label.height);}}
       else text(info.terrain.value,b.x+padding,b.y+padding+font*1.25,font*.7);
     }
     const size=font*.85,step=font*1.35;let x=b.x+padding,y=b.y+b.height*.56;
@@ -129,7 +136,7 @@ export class ZoneOverlay {
   showTooltip(code,event){
     if(!this.env.document?.createElement)return;
     if(!this.tooltip){const node=this.tooltip=this.env.document.createElement('div');node.className='myz-sector-overlay-tooltip';node.setAttribute('role','tooltip');node.style.cssText='position:fixed;z-index:100000;pointer-events:none;max-width:260px;white-space:pre-line;overflow-wrap:anywhere;padding:5px 8px;border:1px solid #aaa;border-radius:4px;background:#191919;color:#faf0d4;font:12px sans-serif;';this.env.document.body.append(node);}
-    const info=this.records.get(code);this.tooltip.textContent=[code,...(info?Object.entries(sectorIndicators(info)).filter(([key,value])=>value.visible&&(key!=='status'||this.config.overlay.status)).map(([,value])=>value.title):[])].join('\n');
+    const info=this.records.get(code);this.tooltip.textContent=[code,...(isSettlement(info)?[`Settlement: ${sectorTitle(info)}`]:[]),...(info?Object.entries(sectorIndicators(info)).filter(([key,value])=>value.visible&&(key!=='status'||this.config.overlay.status)).map(([,value])=>value.title):[])].join('\n');
     this.tooltip.hidden=false;this.tooltip.style.left=Math.max(0,Math.min(event.clientX+14,(this.env.innerWidth||1000)-280))+'px';this.tooltip.style.top=Math.max(0,Math.min(event.clientY+14,(this.env.innerHeight||800)-this.tooltip.offsetHeight-8))+'px';
   }
   bind(){

@@ -1,8 +1,10 @@
+import {SETTLEMENT_COLLECTIONS} from './settlement.mjs';
 export const CONSUMABLES=Object.freeze({cleanGrub:'Clean Grub',rotGrub:'Rot Grub',cleanWater:'Clean Water',rotWater:'Rot Water',bullets:'Bullets',booze:'Booze',components:'Components'});
 // Meaningful content, independent of presentation and schema defaults.
 const text=value=>typeof value==='string'&&value.trim().length>0;
 const entryContent=entry=>['title','details','uuid','duration'].some(key=>text(entry?.[key]))||Number(entry?.quantity)>0;
 export function tabHasContent(data,tab){
+  if(data.sectorType==='settlement'){if(tab==='Overview')return ['description','image','notes','history','situation','defenses','resources','economy','population','leadership','arkUuid'].some(key=>text(data.settlement?.[key]));const key=SETTLEMENT_COLLECTIONS[tab]?.split('.')[1];return Boolean(data.settlement?.[key]?.length);}
   if(tab==='The Situation')return text(data.special?.situation);
   const specialKey={Inhabitants:'inhabitants','Gear & Artifacts':'gear',Events:'events',Images:'images'}[tab];if(specialKey)return Boolean(data.special?.[specialKey]?.some(entryContent));
   if(tab==='Overview'&&data.sectorType==='special'&&['sceneUuid','source','overview','situation','overlayImage'].some(key=>text(data.special?.[key])))return true;

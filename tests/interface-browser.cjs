@@ -709,7 +709,7 @@ const path=require('node:path');
     await page.evaluate(async()=>{await manager.navigate('sector1');});await page.evaluate(async id=>{await manager.navigate(id);},specialId);
     assert.deepEqual(await page.evaluate(()=>manager.draft.special),authored.special);assert.equal(await page.locator('[name="special.overview"]').inputValue(),longSpecialText);
     const specialBefore=await page.evaluate(()=>JSON.stringify(manager.draft));await page.evaluate(async()=>{await manager.randomizeSector();});assert.equal(await page.evaluate(()=>JSON.stringify(manager.draft)),specialBefore);
-    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>false;});await page.locator('[data-action="change-type"]').click();assert.equal(await page.evaluate(()=>manager.draft.sectorType),'special');
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async()=>manager.draft.sectorType==='special'?'normal':'special';foundry.applications.api.DialogV2.confirm=async()=>false;});await page.locator('[data-action="change-type"]').click();assert.equal(await page.evaluate(()=>manager.draft.sectorType),'special');
     await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>true;});await page.locator('[data-tab="Events"]').click();await page.locator('[data-action="change-type"]').click();await page.waitForFunction(()=>manager.draft.sectorType==='normal');
     assert.deepEqual(await tabs(),['Overview','Locations','Encounters','Loot','Effects','Find the Path','History']);assert.equal(await page.evaluate(()=>manager.tab),'Overview');assert.equal(await page.locator(`[data-open="${specialId}"].sm-sector-special`).count(),0);
     await page.evaluate(()=>{manager.draft.description='Preserved normal description';manager.draft.secrets=[{title:'Legacy secret'}];manager.draft.locations=[{title:'Normal ruin'}];manager.draft.encounters=[{title:'Normal encounter'}];manager.draft.loot=[{title:'Normal loot',quantity:2,type:'scrap'}];manager.draft.effects=[{title:'Normal effect'}];});await saveSpecial();
@@ -851,6 +851,103 @@ const path=require('node:path');
       const runOnceControl=page.locator('.sm-entry').first().locator('[name$=".macroRunOnce"]');assert.equal(await runOnceControl.isChecked(),true);assert.match(await page.locator('.sm-entry').first().innerText(),/Run Once \(First Entry Only\)/);await runOnceControl.uncheck();await saveSpecial();await page.locator('[data-tab="Overview"]').click();await page.locator('[data-tab="Effects"]').click();assert.equal(await page.locator('.sm-entry').first().locator('[name$=".macroRunOnce"]').isChecked(),false);await page.locator('.sm-entry').first().locator('[name$=".macroDisabled"]').check();await saveSpecial();assert.equal(await page.evaluate(()=>manager.journal.getFlag('myz-sector-manager','sector').effects[0].macroDisabled),true);assert.equal(await page.evaluate(()=>manager.journal.getFlag('myz-sector-manager','sector').effects[0].macroRunOnce),false);
       console.log('Special Locations blank authoring, exact Journal/Page/Scene references, save/reload and hidden Normal preservation; independent Overview accordions and optional Macro assignment/link/clear/enable persistence pass');
     }
+    // Settlement editor shares the real manager shell and handlers used above.
+    assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>notifyErrors),[]);
+    await page.evaluate(async()=>{
+      manager.dirty=false;globalThis.originalSectorSnapshot=JSON.stringify(records.get('sector1').flags);
+      foundry.applications.api.DialogV2.confirm=async()=>true;
+      foundry.applications.api.DialogV2.wait=async options=>{
+        const element=document.createElement('div');element.innerHTML=options.content;
+        if(options.window.title==='Create New Sector'){
+          element.querySelector('[name="newSectorType"][value="settlement"]').checked=true;element.querySelector('[name="newSectorCode"]').value='F6';
+          return options.buttons.find(b=>b.action==='create').callback(null,null,{element});
+        }
+        return null;
+      };
+      game.scenes.set('zone',lastZoneScene);game.system={id:'mutant-year-zero',version:'14.0.4'};
+      globalThis.projectSheets=[];globalThis.sourceMutations=[];
+      for(const uuid of ['Item.watchtower','Compendium.myz.projects.Item.watchtower'])docs.set(uuid,{uuid,pack:uuid.startsWith('Compendium')?'myz.projects':'',documentName:'Item',type:'project',name:'Watchtower',img:'/test-wide.svg',system:{description:'<p>Keep watch</p>',DEV_Requirement:'Warfare 10',other_requirements:'Scrap',skills:'Force',work_points:'20',DEV_Bonus:'Warfare +1',special:'Spot threats',food:0,culture:0,technology:0,warfare:1,completed:false},sheet:{render:async()=>projectSheets.push(uuid)},update:()=>sourceMutations.push('update'),delete:()=>sourceMutations.push('delete')});
+      docs.set('Actor.ark',{uuid:'Actor.ark',name:'Home Ark',documentName:'Actor',type:'ark',_onClickDocumentLink:async()=>nativeClicks.push('Actor.ark')});
+      globalThis.projectsSnapshot=JSON.stringify([...docs.values()].filter(d=>d.type==='project'));
+      await manager.promptNewSector('F6');globalThis.settlementId=manager.sectorId;
+    });
+    assert.deepEqual(await tabs(),['Overview','Projects','Inhabitants','Factions','Events','Threads','Shop']);
+    assert.equal(await page.locator('[data-action="randomize"]').count(),0);
+    assert.equal(await page.evaluate(()=>manager.journal.getFlag('myz-sector-manager','sector').sceneId),'zone');
+    assert.equal(await page.locator('[data-sector-name]').inputValue(),'');
+    await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>notifyErrors.length===1);assert.match(await page.evaluate(()=>notifyErrors.pop()),/Settlement Name/);
+    await page.locator('[data-sector-name]').fill('Harbor Ark');
+    await page.locator('[name="settlement.type"]').selectOption('Ark');await page.locator('[name="settlement.disposition"]').selectOption('Friendly');
+    await page.locator('[name="settlement.population"]').fill('About 40');await page.locator('[name="settlement.leadership"]').fill('The Council');await page.locator('[name="terrain"]').fill('Trading shore');
+    const settlementDescription=('First paragraph\n\nSecond paragraph\n').repeat(200);await page.locator('[name="settlement.description"]').fill(settlementDescription);
+    await page.locator('[name="settlement.notes"]').fill('Private settlement notes');await page.locator('summary').filter({hasText:'Additional overview'}).click();
+    for(const key of ['history','situation','defenses','resources','economy'])await page.locator(`[name="settlement.${key}"]`).fill('Saved '+key);
+    await dropSpecial(page.locator('[data-reference]').filter({has:page.locator('[name="settlement.arkUuid"]')}),'Actor.ark');
+    await page.evaluate(()=>{foundry.applications.apps.FilePicker.implementation=class{constructor(options){this.options=options;}async render(){this.options.callback('/test-wide.svg');}};});
+    await page.locator('[data-settlement-image="settlement.image"]').click();await page.waitForFunction(()=>manager.draft.settlement.image==='/test-wide.svg');await saveSpecial();
+    assert.equal(await page.locator(`[data-open="${await page.evaluate(()=>settlementId)}"].sm-sector-settlement`).count(),1);
+    await page.locator('[data-tab="Projects"]').click();
+    assert.match(await page.locator('.sm-content').innerText(),/No projects have been added/);
+    // Blank-area world/Compendium project drops remain draft-only until Save Sector.
+    for(const uuid of ['Item.watchtower','Compendium.myz.projects.Item.watchtower']){
+      await dropSpecial(page.locator('.sm-content'),uuid);await page.waitForFunction(()=>manager.draft.settlement.projects.length>0);
+    }
+    assert.equal(await page.locator('[data-project-view]').count(),2);
+    assert.match(await page.locator('[data-project-view]').first().innerText(),/Warfare 10/);assert.match(await page.locator('[data-project-view]').first().innerText(),/20/);
+    await page.locator('[data-project-view] button').first().click();assert.deepEqual(await page.evaluate(()=>projectSheets),['Item.watchtower']);
+    await page.locator('[name="settlement.projects.0.status"]').selectOption('Completed');await page.locator('[name="settlement.projects.0.progress"]').fill('20 of 20');await page.locator('[name="settlement.projects.0.completedAt"]').fill('Session 12');await page.locator('[name="settlement.projects.0.notes"]').fill('Built by guards');
+    assert.equal(await page.locator('[name="settlement.projects.1.status"]').inputValue(),'Planned');
+    const invalidProjectDrop=async target=>target.evaluate(el=>{const transfer=new DataTransfer();transfer.setData('text/plain',JSON.stringify({uuid:'Item.one'}));el.dispatchEvent(new DragEvent('drop',{dataTransfer:transfer,bubbles:true,cancelable:true}));});
+    const projectCount=await page.evaluate(()=>manager.draft.settlement.projects.length);await invalidProjectDrop(page.locator('.sm-content'));await page.waitForFunction(()=>notifyErrors.length===1);assert.match(await page.evaluate(()=>notifyErrors.pop()),/Ark Project Item/);assert.equal(await page.evaluate(()=>manager.draft.settlement.projects.length),projectCount);
+    // Invalid assignment into an existing card also leaves its UUID untouched.
+    await invalidProjectDrop(page.locator('[data-reference]').first());await page.waitForFunction(()=>notifyErrors.length===1);assert.match(await page.evaluate(()=>notifyErrors.pop()),/Ark Project Item/);assert.equal(await page.locator('[name="settlement.projects.0.uuid"]').inputValue(),'Item.watchtower');await saveSpecial();
+    await page.evaluate(async()=>{docs.delete('Item.watchtower');await manager.render();});assert.match(await page.locator('[data-project-view]').first().innerText(),/unavailable.*Assignment and progress retained/s);assert.equal(await page.locator('[name="settlement.projects.0.status"]').inputValue(),'Completed');
+    await page.locator('[data-tab="Factions"]').click();await page.locator('[data-action="add"]').click();
+    await page.locator('[name="settlement.factions.0.title"]').fill('The Guards');for(const key of ['leader','goals','resources','allies','rivals','tensions'])await page.locator(`[name="settlement.factions.0.${key}"]`).fill('Faction '+key);await page.locator('[name="settlement.factions.0.disposition"]').selectOption('Hostile');await page.locator('[name="settlement.factions.0.details"]').fill('Independent faction description');await page.locator('[name="settlement.factions.0.notes"]').fill('Faction GM notes');
+    const factionId=await page.evaluate(()=>manager.draft.settlement.factions[0].id);
+    await page.locator('[data-tab="Inhabitants"]').click();await page.locator('[data-action="add"]').click();await page.locator('[name="settlement.inhabitants.0.title"]').fill('Mara');await page.locator('[name="settlement.inhabitants.0.role"]').fill('Custom occupation');await page.locator('[name="settlement.inhabitants.0.factionId"]').selectOption(factionId);await page.locator('[name="settlement.inhabitants.0.disposition"]').selectOption('Unfriendly');await page.locator('[name="settlement.inhabitants.0.details"]').fill('Descriptive NPC without creating an Actor');await page.locator('[name="settlement.inhabitants.0.notes"]').fill('NPC private notes');
+    await page.locator('[data-settlement-image]').click();await dropSpecial(page.locator('[data-reference]'),'Actor.one');await saveSpecial();
+    await page.locator('[data-tab="Factions"]').click();await page.locator('[data-remove]').click();await page.waitForFunction(()=>manager.draft.settlement.factions.length===0);await page.locator('[data-tab="Inhabitants"]').click();assert.match(await page.locator('[name="settlement.inhabitants.0.factionId"] option:checked').innerText(),/Missing faction/);assert.equal(await page.locator('[name="settlement.inhabitants.0.title"]').inputValue(),'Mara');
+    for(const [tab,key,status,extra] of [['Events','events','Active',['trigger','outcomes','related']],['Threads','threads','In Progress',['npcs','factions','clues','developments','resolution']]]){
+      await page.locator(`[data-tab="${tab}"]`).click();await page.locator('[data-action="add"]').click();await page.locator(`[name="settlement.${key}.0.title"]`).fill('Authored '+tab);await page.locator(`[name="settlement.${key}.0.details"]`).fill(settlementDescription);await page.locator(`[name="settlement.${key}.0.status"]`).selectOption(status);await page.locator(`[name="settlement.${key}.0.notes"]`).fill('GM '+tab);for(const field of extra)await page.locator(`[name="settlement.${key}.0.${field}"]`).fill('Saved '+field);
+    }
+    await page.locator('[data-tab="Shop"]').click();
+    for(const [i,title] of ['Scrap Market','Water Trader'].entries()){
+      await page.locator('[data-action="add"]').click();await page.locator(`[name="settlement.shops.${i}.title"]`).fill(title);await page.locator(`[name="settlement.shops.${i}.proprietor"]`).fill('Merchant '+i);await page.locator(`[name="settlement.shops.${i}.details"]`).fill('A useful shop');await page.locator(`[name="settlement.shops.${i}.notes"]`).fill('Shop GM notes');
+      await page.locator('[data-settlement-inventory-add]').nth(i).click();await page.locator(`[name="settlement.shops.${i}.inventory.0.title"]`).fill('Scrap');await page.locator(`[name="settlement.shops.${i}.inventory.0.quantity"]`).fill('Several crates');await page.locator(`[name="settlement.shops.${i}.inventory.0.price"]`).fill('A favor for the merchant');await page.locator(`[name="settlement.shops.${i}.inventory.0.details"]`).fill('Useful parts');await page.locator(`[name="settlement.shops.${i}.inventory.0.notes"]`).fill('No automatic sale');
+    }
+    assert.deepEqual(await page.locator('[data-entry-title]').allTextContents(),['Scrap Market','Water Trader']);await dropSpecial(page.locator('[data-reference]').first(),'Item.one');await saveSpecial();
+    // Removal cancellation and confirmation only affect the selected nested record.
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>false;});await page.locator('[data-settlement-inventory-remove]').first().click();assert.equal(await page.locator('[data-inventory-id]').count(),2);
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>true;});await page.locator('[data-settlement-inventory-remove]').first().click();await page.waitForFunction(()=>manager.draft.settlement.shops[0].inventory.length===0);assert.equal(await page.evaluate(()=>manager.draft.settlement.shops[1].inventory.length),1);await saveSpecial();
+    const savedSettlement=await page.evaluate(()=>structuredClone(manager.journal.getFlag('myz-sector-manager','sector').settlement));
+    await page.locator('[data-tab="Overview"]').click();assert.equal(await page.locator('[name="settlement.description"]').inputValue(),settlementDescription);
+    await page.locator('[name="settlement.population"]').fill('Unsaved change');await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>false;});await page.evaluate(()=>manager.close());assert.equal(await page.evaluate(()=>manager.rendered),true);
+    await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>true;});await page.evaluate(()=>manager.close());await page.evaluate(async()=>{manager=await game.myzSectorManager.open(settlementId);});assert.deepEqual(await page.evaluate(()=>manager.draft.settlement),savedSettlement);
+    // Type conversion preserves both authored and inactive content through all three types.
+    for(const type of ['normal','special','settlement']){
+      await page.evaluate(type=>{foundry.applications.api.DialogV2.wait=async()=>type;},type);await page.locator('[data-action="change-type"]').click();await page.waitForFunction(type=>manager.draft.sectorType===type,type);await saveSpecial();assert.deepEqual(await page.evaluate(()=>manager.draft.settlement),savedSettlement);
+    }
+    // Switching the configured Zone Scene refreshes the sidebar scope without leaking same-coordinate content.
+    await page.evaluate(async()=>{globalThis.settlementZoneConfig=structuredClone(zoneState());const next={...structuredClone(settlementZoneConfig),sceneId:'combat',groups:[]};const doc=records.get(game.settings.get('myz-sector-manager','zoneConfigurationId'));await doc.setFlag('myz-sector-manager','zoneConfiguration',next);});
+    await page.waitForFunction(()=>!document.querySelector('[data-open="'+settlementId+'"]'));
+    await page.evaluate(async()=>{await manager.newSector('F6',()=>true,'settlement');globalThis.combatSettlementId=manager.sectorId;});await page.locator('[data-sector-name]').fill('Combat Scene Village');await saveSpecial();
+    assert.equal(await page.evaluate(()=>manager.draft.sceneId),'combat');
+    await page.evaluate(async()=>{await records.get(game.settings.get('myz-sector-manager','zoneConfigurationId')).setFlag('myz-sector-manager','zoneConfiguration',settlementZoneConfig);});
+    await page.waitForFunction(()=>Boolean(document.querySelector('[data-open="'+settlementId+'"]'))&&!document.querySelector('[data-open="'+combatSettlementId+'"]'));
+    await page.evaluate(async()=>{await manager.navigate(settlementId);});assert.deepEqual(await page.evaluate(()=>manager.draft.settlement),savedSettlement);
+    // A second Settlement can reference the same Compendium project independently.
+    await page.evaluate(async()=>{await manager.newSector('F7',()=>true,'settlement');});await page.locator('[data-sector-name]').fill('Outpost');await saveSpecial();const secondSettlementId=await page.evaluate(()=>manager.sectorId);await page.locator('[data-tab="Projects"]').click();await dropSpecial(page.locator('.sm-content'),'Compendium.myz.projects.Item.watchtower');assert.equal(await page.locator('[name="settlement.projects.0.status"]').inputValue(),'Planned');await saveSpecial();
+    await page.evaluate(async id=>{await manager.navigate(id);},await page.evaluate(()=>settlementId));await page.locator('[data-tab="Projects"]').click();assert.equal(await page.locator('[name="settlement.projects.0.status"]').inputValue(),'Completed');
+    await page.locator('[data-remove]').last().click();await page.waitForFunction(()=>manager.draft.settlement.projects.length===1);assert.deepEqual(await page.evaluate(()=>sourceMutations),[]);await saveSpecial();
+    // Long content and large lists stay within the same scrollable/resizable shell.
+    await page.evaluate(async()=>{manager.draft.settlement.inhabitants=Array.from({length:50},(_,i)=>({...manager.draft.settlement.inhabitants[0],id:'large-npc-'+i,title:'Resident '+i}));manager.dirty=true;manager.tab='Inhabitants';await manager.render();manager.element.style.width='760px';manager.element.style.height='420px';});
+    assert.equal(await page.locator('[data-entry]').count(),50);await page.locator('[data-collapse-all]').click();await page.locator('[data-expand-all]').click();assert.equal(await page.locator('[data-entry-toggle][aria-expanded="true"]').count(),50);
+    assert(await page.locator('.sm-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));await page.locator('.sm-content').hover();await page.mouse.wheel(0,500);assert(await page.locator('.sm-content').evaluate(el=>el.scrollTop>0));await saveSpecial();
+    await page.evaluate(async id=>{await manager.navigate(id);manager.journal.delete=async()=>{const i=records.indexOf(manager.journal);records.splice(i,1);};},secondSettlementId);await page.locator('[data-action="delete"]').click();await page.waitForFunction(()=>manager.sectorId===null);assert.equal(await page.evaluate(id=>Boolean(records.get(id)),secondSettlementId),false);
+    await page.evaluate(async()=>{await manager.navigate(settlementId);manager.tab='Overview';manager.element.style.width='920px';manager.element.style.height='730px';await manager.render();});await page.screenshot({path:'/tmp/myz-settlement-editor.png'});
+    assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector1').flags)===originalSectorSnapshot),true);assert.deepEqual(await page.evaluate(()=>sourceMutations),[]);
+    console.log('Settlement seven-tab authoring, world/Compendium Projects, independent progress, invalid/missing references, portraits, relationships, Shops/inventory, save/reopen, discard protection, lossless conversion, deletion and long-list layout pass');
     assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>notifyErrors),[]);
     console.log('Zone dialog units/tokens/Actor links persist; origin picking respects zoom; confirmed map creation, overlay isolation, closed-window tracking and missing references pass');
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

@@ -1,7 +1,9 @@
+import {SETTLEMENT_COLLECTIONS,SETTLEMENT_ACCENT,settlementAccent,normalizeSettlement,newSettlementEntry,requireProject,assignProject} from '../scripts/settlement.mjs';
+import {renderSettlement,hydrateSettlement,bindSettlement,renderProject} from '../scripts/settlement-ui.mjs';
 import {macroRunOnce} from '../scripts/zone/entry-triggers.mjs';
 import {safeImageSource} from '../scripts/zone/presentation.mjs';
 import {imagePath,journalImageSource} from '../scripts/sector-images.mjs';
-import {isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel} from '../scripts/sector-types.mjs';
+import {isSpecial,isSettlement,isAuthored,sectorOnScene,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel} from '../scripts/sector-types.mjs';
 import {generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES} from '../scripts/entry-generation.mjs';
 import {normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion} from '../scripts/sector-fields.mjs';
 import {LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected} from '../scripts/loot.mjs';
@@ -22,7 +24,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};}summary(){return '';}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({console,macroRunOnce,safeImageSource,imagePath,journalImageSource,isSpecial,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({SETTLEMENT_COLLECTIONS,SETTLEMENT_ACCENT,settlementAccent,normalizeSettlement,newSettlementEntry,requireProject,assignProject,renderSettlement,hydrateSettlement,bindSettlement,renderProject,console,macroRunOnce,safeImageSource,imagePath,journalImageSource,isSpecial,isSettlement,isAuthored,sectorOnScene,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -399,7 +401,7 @@ test('Special UI uses ordered tabs, shared fields and Scene references without N
 });
 test('confirmed conversions preserve both content sets, cancel safely and fall back from incompatible tabs',async()=>{
   const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='conversion';app.draft=context.normalizeSector({version:1,code:'A1',description:'Normal',secrets:[{title:'Keep'}],locations:[{title:'Ruin'}],special:{overview:'Special\n\nMore',inhabitants:[{title:'Group'}]},history:[{title:'Visit'}],pathStunts:{safePath:true}});app.capture=()=>{};
-  const before=structuredClone(app.draft);let confirm=false,options;context.foundry.applications.api.DialogV2={confirm:async value=>{options=value;return confirm;}};
+  const before=structuredClone(app.draft);let confirm=false,options;context.foundry.applications.api.DialogV2={wait:async()=>app.draft.sectorType==='special'?'normal':'special',confirm:async value=>{options=value;return confirm;}};
   app.tab='Locations';await app.changeSectorType();assert.deepEqual(structuredClone(app.draft),before);assert.match(options.content,/Special Zone Sector/);confirm=true;
   for(const type of ['special','normal','special']){await app.changeSectorType();assert.equal(app.draft.sectorType,type);assert.deepEqual({...structuredClone(app.draft),sectorType:'normal'},before);assert.equal(app.tab,'Locations');}
   app.tab='History';await app.changeSectorType();assert.equal(app.tab,'History');assert.equal(app.dirty,true);
@@ -418,8 +420,8 @@ test('creation dialog defaults Normal, confirms Special, and cancellation does n
 });
 
 test('conversion cannot apply a stale confirmation to changed drafts or another sector',async()=>{
-  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='a';app.draft=context.normalizeSector({version:1});app.capture=()=>{};let finish;context.foundry.applications.api.DialogV2={confirm:()=>new Promise(resolve=>finish=resolve)};
-  const pending=app.changeSectorType();app.draft.special.overview='Changed during confirmation';finish(true);await assert.rejects(pending,/selection or edits changed/);assert.equal(app.draft.sectorType,'normal');
+  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='a';app.draft=context.normalizeSector({version:1});app.capture=()=>{};let finish;context.foundry.applications.api.DialogV2={wait:async()=> 'special',confirm:()=>new Promise(resolve=>finish=resolve)};
+  const pending=app.changeSectorType();await new Promise(resolve=>setImmediate(resolve));app.draft.special.overview='Changed during confirmation';finish(true);await assert.rejects(pending,/selection or edits changed/);assert.equal(app.draft.sectorType,'normal');
 });
 test('shared History generation remains available for Special sectors and inactive Normal adds are blocked',async()=>{
   const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='history-special';app.draft=context.normalizeSector({sectorType:'special',history:[]});app.capture=()=>{};let eventFlag;context.generateEntry=async(key,data,options)=>{assert.equal(key,'history');assert.equal(data.sectorType,'special');eventFlag=options.event;return {title:'Ark or Zone event',uuid:'JournalEntry.parent.JournalEntryPage.page'};};
@@ -505,7 +507,7 @@ test('Special Locations creates blank nested records without Ruins rolls and pre
  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='special-locations';app.draft=context.normalizeSector({sectorType:'special',locations:[{title:'Hidden normal ruin',details:'Keep'}],special:{situation:'Old situation'}});app.capture=()=>{};context.generateEntry=()=>assert.fail('Special Locations must not roll');app.tab='Locations';
  await app.addContextEntry('special.locations');assert.equal(app.draft.special.locations.length,1);assert.equal(app.draft.special.locations[0].details,'');assert.equal(app.draft.locations[0].details,'Keep');assert.equal(app.entryState('special.locations').collapsed.size,1);
  const html=app.build();assert.match(html,/name="special.locations.0.title"/);assert.match(html,/data-type="Scene\|JournalEntry\|JournalEntryPage"/);assert.match(html,/Details \/ Rules \/ Notes/);
- context.foundry.applications.api.DialogV2={confirm:async()=>true};await app.changeSectorType();assert.equal(app.draft.locations[0].details,'Keep');await app.changeSectorType();assert.equal(app.draft.special.locations.length,1);
+ context.foundry.applications.api.DialogV2={wait:async()=>app.draft.sectorType==='special'?'normal':'special',confirm:async()=>true};await app.changeSectorType();assert.equal(app.draft.locations[0].details,'Keep');await app.changeSectorType();assert.equal(app.draft.special.locations.length,1);
 });
 test('Special Overview retains existing Situation field, independent expanded sections and correct order',()=>{
  const {app,context}=fixture();context.game.journal.get=()=>({name:'Sector'});app.sectorId='special-overview-collapse';app.draft=context.normalizeSector({sectorType:'special',special:{overview:'Overview text',situation:'Existing\n\nSituation'}});const original=JSON.stringify(app.draft);let html=app.build();
@@ -517,4 +519,22 @@ test('Effects Macro control preserves original Journal reference, independent op
 });
 test('Macro reference opens its editor without invoking executable native document links',async()=>{
  const {app,documents}=fixture();let opened=0;documents.set('Macro.one',{documentName:'Macro',sheet:{render:async force=>{assert.equal(force,true);opened++;}},_onClickDocumentLink:()=>assert.fail('Macro link would execute')});await app.openReference({querySelector:()=>({value:'Macro.one'})});assert.equal(opened,1);
+});
+
+test('Settlement UI uses the shared seven-tab shell, required name and authored sections without Normal generation controls',()=>{
+ const {app,context}=fixture();const record={version:1,sectorType:'settlement',sceneId:'zone',code:'B7',nameOverride:true,customName:'Harbor'};context.game.journal.get=()=>({id:'settlement',getFlag:()=>record});app.sectorId='settlement';app.draft=context.normalizeSector(record);
+ const html=app.build();assert.deepEqual([...html.matchAll(/data-tab="([^"]+)"/g)].map(m=>m[1]),['Overview','Projects','Inhabitants','Factions','Events','Threads','Shop']);assert.match(html,/Settlement Name/);assert.match(html,/name="settlement.population" type="text"/);assert.match(html,/name="settlement.arkUuid"/);assert.doesNotMatch(html,/data-action="randomize"|data-tab="Locations"|name="threatLevel"/);
+ for(const tab of ['Projects','Inhabitants','Factions','Events','Threads','Shop']){app.tab=tab;assert.match(app.build(),/No .* have been added to this settlement/);}
+});
+test('Settlement Add uses stable persistent IDs, never rolls, and rejects inactive Normal collections',async()=>{
+ const {app,context}=fixture();context.game.journal.get=()=>({id:'settlement'});app.sectorId='settlement-add';app.draft=context.normalizeSector({sectorType:'settlement'});app.capture=()=>{};context.generateEntry=()=>assert.fail('No generation');
+ for(const key of Object.values(SETTLEMENT_COLLECTIONS)){await app.addContextEntry(key);const item=sectorCollection(app.draft,key)[0];assert.equal(typeof item.id,'string');assert(item.id);assert(!app.entryState(key).collapsed.has(app.entryState(key).entries[0].id));}
+ const before=JSON.stringify(app.draft);await app.addContextEntry('loot');await app.randomizeSector();assert.equal(JSON.stringify(app.draft),before);
+});
+test('Settlement conversion requires chosen type and confirmation; cancellation/stale results cannot modify data',async()=>{
+ const {app,context}=fixture();context.game.journal.get=()=>({id:'convert'});app.sectorId='convert';app.draft=context.normalizeSector({version:1,sectorType:'special',special:{overview:'Original'}});app.capture=()=>{};let confirm=false;context.foundry.applications.api.DialogV2={wait:async()=> 'settlement',confirm:async()=>confirm};const before=JSON.stringify(app.draft);await app.changeSectorType();assert.equal(JSON.stringify(app.draft),before);
+ confirm=true;await assert.rejects(app.changeSectorType(),/Configure a Zone Scene/);assert.equal(JSON.stringify(app.draft),before);
+});
+test('Settlement saves require a name and valid coordinates before any Journal write',async()=>{
+ const {app,context,notices}=fixture();context.console={error(){}};const j={id:'settlement',update:()=>assert.fail('No writes for invalid metadata')};context.game.journal.get=()=>j;app.sectorId=j.id;app.capture=()=>{};app.draft=context.normalizeSector({sectorType:'settlement',code:'A1',nameOverride:false});await app.action('save');assert.match(notices.at(-1),/Settlement Name/);app.draft.nameOverride=true;app.draft.customName='Village';app.draft.code='';await app.action('save');assert.match(notices.at(-1),/Settlement coordinates/);
 });

@@ -550,3 +550,11 @@ See [Wandering Tokens setup, storage, movement protections and manual checks](do
 The abandoned Last Known Position feature has been removed. Wandering again uses the stable v0.1.27 implementation: NPCs move one Zone sector and preserve their current visibility, without creating Tiles, processing artwork or hiding tokens. The original eligibility, HUD toggle, bulk controls, Wander Now, frequency and Party-entry protections remain.
 
 Existing hidden tokens are **not** revealed automatically. Existing marker Tiles are **not** deleted on startup. GMs can use the [confirmed one-time legacy cleanup macro](https://github.com/paddirn/myz-sector-manager/blob/main/docs/legacy-marker-cleanup.md) on each affected Scene to remove only known module-owned markers and obsolete state, without moving or revealing tokens. Unknown/remaining legacy data is inert.
+
+## Settlement sectors
+
+Choose **Settlement** when creating a sector to track an inhabited community through **Overview, Projects, Inhabitants, Factions, Events, Threads, Shop**. It uses the existing editor window and GM-only Journal storage, with Scene-specific Settlement coordinates. Official MYZ Ark Project Items are linked, with independent progress per Settlement; Shops support multiple merchants and descriptive inventory/prices. No source Items, Ark statistics or character resources are modified.
+
+Settlements have a configurable map border and skip Normal sector Travel/weather/Macro entry checks. Wandering uses the shared Special/Settlement destination option. Normal and Special records remain intact; confirmed type changes preserve inactive content.
+
+See [Settlement instructions, data model and manual Foundry checks](https://github.com/paddirn/myz-sector-manager/blob/main/docs/settlement-sectors.md). All edits use **Save Sector**; no release is published by creating the feature PR.

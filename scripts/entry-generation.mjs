@@ -1,3 +1,4 @@
+import {isAuthored} from './sector-types.mjs';
 import {LEGACY_EVENT_UUIDS} from './document-references.mjs';
 import {locationDescription} from './location-text.mjs';
 import {ENVIRONMENTS,resolveGenerationTable,rollTable,rollThreat,resolveNamedDocument,mapEnvironment,boundedRoll} from './sector-randomizer.mjs';
@@ -28,7 +29,7 @@ async function requireDocument(result,expected,env){
 const one=result=>{if(result.entries.length!==1)throw new Error('Entry generation requires exactly one final table result.');return result.entries[0];};
 function entry(result,extra={}){return {...empty(),title:result.documentTitle||result.text,details:result.description||result.text,uuid:result.uuid||'',...extra,generation:{method:'add-entry',sources:result.sources}};}
 export async function generateEntry(kind,sector,{env=globalThis,arkCoordinate=null,event=false}={}){
-  if(sector?.sectorType==='special'&&kind!=='history')throw new Error('Special Zone Sector content is manually authored.');
+  if(isAuthored(sector)&&kind!=='history')throw new Error('Special and Settlement Sector content is manually authored.');
   if(!env.game.user.isGM)throw new Error('GM access required for entry generation.');
   const table=key=>resolveGenerationTable(`generation.${key}`,key,env);
   if(kind==='encounters'){
