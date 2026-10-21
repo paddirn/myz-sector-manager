@@ -1,3 +1,4 @@
+import {isAuthored} from '../sector-types.mjs';
 import {MODULE,TRAVEL_SETTING,ROSTER_SETTING,travelDefaults,rosterDefaults,validateTravelConfiguration,validateRoster,travelConfiguration,partyRoster,escapeHTML as esc} from './model.mjs';
 import {safeImageSource} from '../zone/presentation.mjs';
 const toggles=[['enabled','Enable Automatic Travel Events'],['normalEntry','Trigger on Normal Sector Entry'],['reduceExplored','Reduce Encounters in Explored Sectors'],['autoFindPath','Automatically Roll Find the Path'],['showDialog','Show GM-Only Event Dialog'],['recordHistory','Record events even when dialogs are off']];
@@ -15,7 +16,7 @@ export function createTravelSettingsClass(ApplicationV2,runtime,env=globalThis){
   static DEFAULT_OPTIONS={id:'myz-travel-settings',window:{title:'MYZ Sector Manager — Travel Events',resizable:true},position:{width:740,height:760},classes:['myz-travel-settings']};
   constructor(...args){super(...args);this.draft=travelConfiguration(env);this.baseline=JSON.stringify(this.draft);this.dirty=false;this.testResult='';this.testGroup='';this.testSector='';this.persistTests=false;this.sections=new Set(['weather']);}
   async _renderHTML(){if(!env.game.user.isGM)throw new Error('GM access only.');const root=env.document.createElement('div');root.className='tv-root';const state=runtime.travel.state,weather=state.weather,groups=runtime.store.config.groups;
-   const sectors=env.game.journal.filter(journal=>{const data=journal.getFlag(MODULE,'sector');return data?.version===1&&data.sectorType!=='special'&&!data.initialSavePending;});
+   const sectors=env.game.journal.filter(journal=>{const data=journal.getFlag(MODULE,'sector');return data?.version===1&&!isAuthored(data)&&!data.initialSavePending;});
    root.innerHTML=`${styles}<p>Automatic checks are private to the active GM. Only completed entry into an existing Normal sector qualifies. Travel events run before sector Macros; nothing automatically changes Actors, exploration, combat or weather mechanics.</p>
     ${toggles.map(([key,label])=>`<label><input type="checkbox" data-config="${key}" ${this.draft[key]?'checked':''}> ${label}</label>`).join('')}
     <div class="tv-grid">${[['weatherChance','Weather change'],['encounterChance','Random encounter'],['exploredChance','Explored sector encounter']].map(([key,label])=>`<label>${label}: 1 in N<input type="number" min="1" max="1000000" step="1" list="tv-probabilities" data-config="${key}" value="${this.draft[key]}"><small>One result on a uniform dN; d36 means 1–36, not d66.</small></label>`).join('')}</div><datalist id="tv-probabilities">${[6,12,20,36].map(n=>`<option value="${n}"></option>`).join('')}</datalist>

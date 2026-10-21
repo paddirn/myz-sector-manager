@@ -1,3 +1,4 @@
+import {isAuthored} from '../sector-types.mjs';
 import {resolveConfiguredDocument,referenceSelection,warnReferenceOnce} from '../document-references.mjs';
 import {rollThreat,rollTable,boundedRoll} from '../sector-randomizer.mjs';
 import {journalBodyText,locationDescription} from '../location-text.mjs';
@@ -39,7 +40,7 @@ export class TravelEvents {
  onEntry(context){return this.enqueue(()=>this.process(context));}
  async process({journal,token,group,entryId,coordinate=null,test=false,persist=!test,force=null}){
   this.assertAuthority();const config=travelConfiguration(this.env),sector=journal?.getFlag(MODULE,'sector');
-  if(!sector||sector.version!==1||sector.sectorType==='special'||sector.initialSavePending||(!test&&(!config.enabled||!config.normalEntry)))return null;
+  if(!sector||sector.version!==1||isAuthored(sector)||sector.initialSavePending||(!test&&(!config.enabled||!config.normalEntry)))return null;
   if(coordinate&&canonicalCoordinate(sector.code)!==coordinate)return null;
   if(!group||!this.store.config.groups.some(g=>g.id===group.id&&g.tokenId===token?.id&&g.sceneId===token.parent?.id))throw new Error('Select a registered expedition token.');
   const state=this.state,weatherBeforeTimestamp=state.weatherChangedAt||state.weather?.timestamp||null,weatherBeforeRevision=state.weatherRevision||0,id=entryId||this.env.foundry.utils.randomID();
@@ -92,7 +93,7 @@ export class TravelEvents {
     const valid=point=>point&&['x','y','width','height'].every(key=>Number.isFinite(point[key]))&&point.width>0&&point.height>0&&point.width<=100&&point.height<=100;
     if(typeof pending.id!=='string'||pending.id.length>200||!valid(pending.from)||!valid(pending.to))continue;
     const from=positionToCoordinate(tokenCenter(pending.from,this.store.scene),this.store.config.grid),to=positionToCoordinate(tokenCenter(pending.to,this.store.scene),this.store.config.grid);if(!from||!to||from===to)continue;
-    const journal=this.store.sectorRecords(to).find(doc=>doc.getFlag(MODULE,'sector')?.sectorType!=='special');if(journal)await this.process({journal,token,group,entryId:pending.id,coordinate:to});
+    const journal=this.store.sectorRecords(to).find(doc=>!isAuthored(doc.getFlag(MODULE,'sector')));if(journal)await this.process({journal,token,group,entryId:pending.id,coordinate:to});
    }
    if(this.store.authoritative){const latest=token.getFlag(MODULE,'pendingTravelEntries')||{entries:[]},ids=new Set(saved.entries.map(entry=>entry.id));await token.setFlag(MODULE,'pendingTravelEntries',{...latest,entries:(Array.isArray(latest.entries)?latest.entries:[]).filter(entry=>!ids.has(entry.id)),overflow:0});if(saved.overflow){const state=this.state;this.diagnostic(state,`${saved.overflow} additional offline movement updates exceeded the 50-entry recovery buffer for ${group.name}.`);await this.saveState(state);}}
   }

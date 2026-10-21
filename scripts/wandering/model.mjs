@@ -1,3 +1,4 @@
+import {isAuthored} from '../sector-types.mjs';
 import {coordinateToBounds,positionToCoordinate,tokenCenter,sceneCellSize,validateGrid} from '../zone/grid.mjs';
 export const MODULE='myz-sector-manager',SETTING='wanderingConfiguration',FLAG='wanderingEnabled';
 export const wanderingDefaults=()=>({version:1,enabled:true,maximum:2,frequency:'every',allowSpecial:false});
@@ -32,7 +33,7 @@ export function destinations(token,store,{allowSpecial=false}={}){
  return [[0,-1,'North'],[0,1,'South'],[1,0,'East'],[-1,0,'West']].flatMap(([dx,dy,direction])=>{
   const destination=positionToCoordinate({x:source.x+source.width/2+dx*source.width,y:source.y+source.height/2+dy*source.height},grid);
   const bounds=coordinateToBounds(destination,grid);if(!bounds)return [];
-  if(!allowSpecial&&store.sectorRecords(destination).some(doc=>doc.getFlag(MODULE,'sector')?.sectorType==='special'))return [];
+  if(!allowSpecial&&store.sectorRecords(destination).some(doc=>isAuthored(doc.getFlag(MODULE,'sector'))))return [];
   const x=bounds.x+offsetX,y=bounds.y+offsetY;
   if(x<rect.x||y<rect.y||x+width>rect.x+rect.width||y+height>rect.y+rect.height)return [];
   return [{x,y,coordinate:destination,direction}];

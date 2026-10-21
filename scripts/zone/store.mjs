@@ -1,3 +1,4 @@
+import {sectorOnScene} from '../sector-types.mjs';
 import {ensureJournalFolders} from '../journal-organization.mjs';
 import {canonicalCoordinate,validateGrid,locateToken,updateLocation,sectorDistance} from './grid.mjs';
 export const MODULE='myz-sector-manager';
@@ -124,7 +125,7 @@ export class ZoneStore {
     if(!this.isGM)return [];
     const canonical=canonicalCoordinate(coordinate);
     if(!canonical)return [];
-    return this.env.game.journal.filter(doc=>doc.getFlag(MODULE,'sector')?.version===1&&canonicalCoordinate(doc.getFlag(MODULE,'sector').code)===canonical);
+    return this.env.game.journal.filter(doc=>doc.getFlag(MODULE,'sector')?.version===1&&sectorOnScene(doc.getFlag(MODULE,'sector'),this.config.sceneId)&&canonicalCoordinate(doc.getFlag(MODULE,'sector').code)===canonical);
   }
   trackingRows(){
     if(!this.isGM)return [];

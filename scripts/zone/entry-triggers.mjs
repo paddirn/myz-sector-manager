@@ -1,3 +1,4 @@
+import {isAuthored} from '../sector-types.mjs';
 import {locateToken} from './grid.mjs';
 const MODULE='myz-sector-manager',FLAG='entryTriggers';
 // Legacy macroEnabled was the checkbox value; it now selects once/repeat, never enablement.
@@ -28,7 +29,7 @@ export class SectorEntryTriggers {
   const task=this.queue.then(async()=>{
    if(!this.store.authoritative||gridAtEntry!==JSON.stringify(this.store.config.grid)||!this.store.config.groups.some(group=>group.id===track.id&&group.sceneId===track.sceneId&&group.tokenId===token.id))return;
    try{
-    const normal=records.filter(journal=>{const sector=journal.getFlag(MODULE,'sector');return sector?.sectorType!=='special'&&!sector?.initialSavePending;});
+    const normal=records.filter(journal=>{const sector=journal.getFlag(MODULE,'sector');return !isAuthored(sector)&&!sector?.initialSavePending;});
     const context={journal:normal[0]||null,token,group:track,coordinate:to,entryId:this.env.foundry?.utils?.randomID?.()||`${Date.now()}-${Math.random()}`};
     if(normal.length&&this.beforeMacros)await this.beforeMacros(context);
     if(this.afterTravel){try{await this.afterTravel(context);}catch(error){this.env.console?.error('MYZ sector-entry wandering',error);}}

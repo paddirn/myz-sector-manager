@@ -1,3 +1,4 @@
+import {isAuthored} from './sector-types.mjs';
 import {resultFields,resultReference} from './rolltable-results.mjs';
 import {LEGACY_GENERATION_UUIDS,REFERENCE_DEFINITIONS,REFERENCE_BY_KEY,configuredUuid,resolveConfiguredDocument} from './document-references.mjs';
 import {terrainDescription} from './terrain-descriptions.mjs';
@@ -265,7 +266,7 @@ export async function rollBasePool(level,env=globalThis){
   return (pool.dice||[]).flatMap(die=>die.results.filter(result=>result.active!==false&&!result.discarded).map(result=>result.result));
 }
 export async function generateSector(existing,{env=globalThis,options=DEFAULT_GENERATION_OPTIONS,rollBaseDice=level=>rollBasePool(level,env),roll=async formula=>Number((await new env.Roll(formula).evaluate()).total)}={}){
-  if(existing?.sectorType==='special')throw new Error('Special Zone Sectors are manually authored and cannot be randomized.');
+  if(isAuthored(existing))throw new Error('Special and Settlement Sectors are manually authored and cannot be randomized.');
   options={...DEFAULT_GENERATION_OPTIONS,...options};
   if(!['core','individual-d3'].includes(options.threatMode))throw new Error('Unknown threat generation mode.');
   numericLevel(options.dangerousLevel);if(options.dangerousLevel<9)throw new Error('Unusually Dangerous category must use a numeric Threat Level of at least 9.');
@@ -323,7 +324,7 @@ export async function generateSector(existing,{env=globalThis,options=DEFAULT_GE
 }
 
 export async function saveGeneratedSector(journal,expected,next,env=globalThis){
-  if(expected?.sectorType==='special'||next?.sectorType==='special')throw new Error('Special Zone Sectors cannot receive randomized content.');
+  if(isAuthored(expected)||isAuthored(next))throw new Error('Special and Settlement Sectors cannot receive randomized content.');
   if(!env.game.user.isGM)throw new Error('Only a GM can randomize sectors.');
   if(JSON.stringify(journal.getFlag('myz-sector-manager','sector'))!==JSON.stringify(expected))throw new Error('This sector changed while generation was running. Nothing was saved; review it and try again.');
   if(expected?.initialSavePending===true)throw new Error('Save this sector before randomizing.');
