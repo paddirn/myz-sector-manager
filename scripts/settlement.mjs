@@ -1,3 +1,4 @@
+import {normalizeFaction} from './settlement-factions.mjs';
 import {normalizeShop} from './settlement-shop.mjs';
 // Versioned, JSON-safe authored content. Common name/coordinates/terrain stay on the sector.
 export const SETTLEMENT_TABS=Object.freeze(['Overview','Projects','Inhabitants','Factions','Events','Threads','Shop']);
@@ -28,7 +29,7 @@ export function normalizeSettlement(raw={}){
         if(next.inventory!==undefined&&!Array.isArray(next.inventory))throw new Error('Invalid Settlement inventory. Record was not changed.');
         next.inventory=(next.inventory||[]).map(normalizeEntry);
       }
-      return next;
+      return key==='factions'?normalizeFaction(next):next;
     });
   }
   result.shop=normalizeShop(raw.shop,result.shops);
@@ -38,7 +39,7 @@ export function newSettlementEntry(key){
   const entry={id:identity(),title:'',details:'',notes:''};
   if(key==='projects')Object.assign(entry,{uuid:'',status:'Planned',progress:'',completedAt:'',referenceName:''});
   if(key==='inhabitants')Object.assign(entry,{role:'',disposition:'Unknown',factionId:'',portrait:'',uuid:''});
-  if(key==='factions')Object.assign(entry,{leader:'',goals:'',resources:'',disposition:'Unknown',allies:'',rivals:'',tensions:''});
+  if(key==='factions')Object.assign(entry,{info:'',infoVersion:1,members:[],membersVersion:1});
   if(key==='events')Object.assign(entry,{status:'Planned',trigger:'',outcomes:'',related:''});
   if(key==='threads')Object.assign(entry,{status:'Open',npcs:'',factions:'',clues:'',developments:'',resolution:''});
   return entry;

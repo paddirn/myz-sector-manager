@@ -1,3 +1,4 @@
+import {sortEditorEntries} from './entry-order.mjs';
 import {inhabitantCollection,requireInhabitantActor,importInhabitant,safeNarrative} from './inhabitants.mjs';
 import {sectorCollection} from './sector-types.mjs';
 import {imagePath} from './sector-images.mjs';
@@ -24,7 +25,7 @@ export async function linkInhabitant(host,zone,doc,env=globalThis){
   if(host.draft!==draft||JSON.stringify(draft)!==signature||!host.element.contains(zone))throw new Error('Sector edits changed while importing Actor Info. Drop again.');
   Object.assign(entry,next);input.value=doc.uuid;
   const card=zone.closest('[data-entry]');for(const name of ['title','details','portrait']){const control=card?.querySelector(`[name$=".${name}"]`);if(control)control.value=entry[name]||'';}
-  const title=card?.querySelector('[data-entry-title]');if(title)title.textContent=entry.title||'Inhabitant';hydrateInhabitants(host,host.element,env);return true;
+  const title=card?.querySelector('[data-entry-title]');if(title)title.textContent=entry.title||'Inhabitant';hydrateInhabitants(host,host.element,env);sortEditorEntries(host);return true;
 }
 export async function dropInhabitant(host,event,key=inhabitantCollection(host.data,host.tab),env=globalThis){
   const {game,foundry,ui,fromUuid}=env;

@@ -1,3 +1,4 @@
+import {sortEditorEntries} from './entry-order.mjs';
 import {inhabitantCollection} from './inhabitants.mjs';
 import {hydrateInhabitants,bindInhabitantDrops,dropInhabitant,linkInhabitant} from './inhabitants-ui.mjs';
 import {SETTLEMENT_COLLECTIONS,SETTLEMENT_ACCENT,settlementAccent,normalizeSettlement,newSettlementEntry,requireProject,assignProject} from './settlement.mjs';
@@ -115,7 +116,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     root.innerHTML=this.build();
     await Promise.all(Array.from(root.querySelectorAll('[data-reference]'),zone=>this.renderReference(zone)));
     if(isSettlement(this.data))await hydrateSettlement(this,root);
-    hydrateInhabitants(this,root,globalThis);
+    hydrateInhabitants(this,root,globalThis);sortEditorEntries(this,root);
     return root;
   }
   _replaceHTML(result,content){
@@ -237,6 +238,15 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-loot-collected{display:flex;gap:6px;align-items:center}
       .myz-sector-manager .sm-loot-collected input{appearance:auto;flex:none;width:18px;height:18px;margin:0;accent-color:#3875b4}
       .myz-sector-manager .sm-entry{border:1px solid #777;border-radius:5px;margin:0 0 12px;min-width:0}
+      .myz-sector-manager .sm-entry-toggle.sm-faction-toggle{flex:0 0 auto;width:auto;padding:4px}
+      .myz-sector-manager .sm-entry-toggle.sm-faction-toggle [data-chevron]{margin-left:0}
+      .myz-sector-manager .sm-faction-name{flex:1;min-width:0;font:inherit;font-weight:bold;background:transparent;border:1px solid transparent;color:inherit}
+      .myz-sector-manager .sm-faction-gallery{display:flex;flex-wrap:wrap;align-items:start;gap:10px;padding:10px;border:1px dashed #888;min-height:120px}
+      .myz-sector-manager .sm-faction-member{margin:0;width:110px;text-align:center;overflow-wrap:anywhere}
+      .myz-sector-manager .sm-faction-member a{display:flex;flex-direction:column;align-items:center;gap:4px;white-space:normal;background:none;border:0}
+      .myz-sector-manager .sm-faction-member img,.myz-sector-manager [data-member-image]{display:flex;align-items:center;justify-content:center;width:100px;height:100px;object-fit:contain;border:1px solid #888}
+      .myz-sector-manager .sm-faction-member button{width:auto;font-size:.85em}
+      .myz-sector-manager .sm-faction-info{margin-top:14px;padding-top:10px;border-top:1px solid #888}
       .myz-sector-manager .sm-entry-head{display:flex;align-items:center;gap:8px;padding:8px;cursor:pointer}
       .myz-sector-manager .sm-entry-toggle{display:flex;justify-content:flex-start;align-items:center;gap:8px;flex:1;min-width:0;height:auto;text-align:left;white-space:normal;background:transparent;border:0;box-shadow:none;padding:4px}
       .myz-sector-manager .sm-entry-toggle strong{overflow-wrap:anywhere}
@@ -440,6 +450,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   }
   referenceEntry(zone){
     const name=zone.querySelector('input').name||'',parts=name.split('.');
+    const key=this.collectionKey(),card=zone.closest?.('[data-entry]');if(card?.dataset?.entry&&key&&(inhabitantCollection(this.data,this.tab)===key||key==='settlement.projects')&&name.startsWith(key+'.')){const record=this.entryState(key).entries.find(record=>record.id===card.dataset.entry);if(record)return record.item;}
     if(parts[0]==='settlement')return parts.slice(0,-1).reduce((value,key)=>value?.[key],this.draft);
     if(parts[0]==='encounters')return this.draft?.encounters?.[parts[1]];
     if(parts[0]==='special'&&parts.length===4)return this.draft?.special?.[parts[1]]?.[parts[2]];
@@ -493,7 +504,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     el.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>this.action(b.dataset.action,b.dataset.collection)));
     el.querySelectorAll('[data-remove]').forEach(b=>b.addEventListener('click',event=>{event.stopPropagation();const [key,id]=b.dataset.remove.split(':');this.removeEntry(key,id);}));
     el.querySelectorAll('[data-entry-header]').forEach(header=>header.addEventListener('click',event=>{
-      if(event.target.closest('[data-remove]'))return;
+      if(event.target.closest('[data-remove],input,textarea,select,a'))return;
       const key=this.collectionKey(), id=header.dataset.entryHeader;
       this.setCollapsed(key,id,!this.entryState(key).collapsed.has(id));
     }));
@@ -509,7 +520,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       if(e.name==='travel.difficult'&&e.checked){this.draft.travel.open=false;el.querySelector('[name="travel.open"]').checked=false;}
       if(/^(loot|special\.gear)\.\d+\.type$/.test(e.name)){const parts=e.name.split('.'),entry=parts[0]==='loot'?this.draft.loot[parts[1]]:this.draft.special.gear[parts[2]];entry.typeSource='manual';this.lootTypeRevisions.set(entry,(this.lootTypeRevisions.get(entry)||0)+1);}
       if(/^special\.(inhabitants|gear|events|images)\.\d+\.title$/.test(e.name)){const parts=e.name.split('.');this.draft.special[parts[1]][parts[2]].titleOverride=Boolean(e.value.trim());}
-      this.capture();if(e.name==='special.situation')this.sizeSituation();if(e.name?.startsWith('settlement.')&&e.name.endsWith('.title')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title&&!e.closest('[data-inventory-id]'))title.textContent=e.value||'Untitled Entry';}if(['terrain','code','status','rot'].includes(e.name))zone.overlay?.setDraft?.(this.sectorId,this.draft);if(e.name?.startsWith('pathStunts.')||LINKED_STUNTS[e.name])this.refreshStuntControls();if(e.name==='threatLevel')el.querySelector('[data-threat-descriptor]').textContent=threatDescriptor(this.draft.threatLevel);if(e.name?.startsWith('loot.'))this.refreshLootCards();if(e.name?.startsWith('special.'))this.refreshSpecialCards();if(e.name?.startsWith('travel.')||e.name?.startsWith('pathStunts.'))this.refreshTravelTimes();
+      this.capture();if(e.name?.endsWith('.title'))sortEditorEntries(this);if(e.name==='special.situation')this.sizeSituation();if(e.name?.startsWith('settlement.')&&e.name.endsWith('.title')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title&&!e.closest('[data-inventory-id]'))title.textContent=e.value||'Untitled Entry';}if(['terrain','code','status','rot'].includes(e.name))zone.overlay?.setDraft?.(this.sectorId,this.draft);if(e.name?.startsWith('pathStunts.')||LINKED_STUNTS[e.name])this.refreshStuntControls();if(e.name==='threatLevel')el.querySelector('[data-threat-descriptor]').textContent=threatDescriptor(this.draft.threatLevel);if(e.name?.startsWith('loot.'))this.refreshLootCards();if(e.name?.startsWith('special.'))this.refreshSpecialCards();if(e.name?.startsWith('travel.')||e.name?.startsWith('pathStunts.'))this.refreshTravelTimes();
       if(e.name?.startsWith('supplies.'))this.refreshConsumables();this.refreshTabIndicators();this.refreshSectorIcons();if(e.matches('[data-sector-name]')||['code','terrain'].includes(e.name)){this.refreshSectorLabels();this.refreshZoneSummary();}
       if(e.name?.endsWith('.title')&&!e.name.startsWith('loot.')&&!e.name.startsWith('special.gear.')&&!e.name.includes('.inventory.')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title)title.textContent=e.value||'Untitled Entry';}
     }));
@@ -559,7 +570,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   refreshTabIndicators(){
     for(const button of this.element.querySelectorAll('[data-tab]'))button.classList.toggle('sm-tab-empty',!tabHasContent(this.data,button.dataset.tab));
   }
-  capture(){if(!this.journal)return;const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){if(f.disabled)continue;if(f.type==='radio'&&!f.checked)continue;const parts=f.name.split('.');let target=this.draft;for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(/^special\.gear\.\d+\.quantity$/.test(f.name))v=specialQuantity(v);if(/^loot\.\d+\.quantity$/.test(f.name)){const quantity=Number(v);v=lootQuantity(v);}if(f.name==='threatLevel')v=normalizeThreatLevel(v,sectorThreatLevel(this.draft));if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;if(f.name==='travel.difficulty')v=travelOptions({difficulty:v}).difficulty;target[parts.at(-1)]=v;}this.draft.pathStunts=normalizePathStunts(this.draft.pathStunts);this.draft.travel=sectorTravelOptions(this.draft);for(const key of [...Object.values(COLLECTIONS),'special.locations'])this.entryState(key);}
+  capture(){if(!this.journal)return;const collection=this.collectionKey(),useIds=inhabitantCollection(this.data,this.tab)===collection||['settlement.projects','settlement.factions'].includes(collection),records=new Map(useIds&&collection?this.entryState(collection).entries.map(record=>[record.id,record.item]):[]);const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){if(f.disabled)continue;if(f.type==='radio'&&!f.checked)continue;let parts=f.name.split('.');let target=this.draft;const card=f.closest?.('[data-entry]'),item=records.get(card?.dataset?.entry);if(item&&collection&&f.name.startsWith(collection+'.')){target=item;parts=parts.slice(collection.split('.').length+1);}for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(/^special\.gear\.\d+\.quantity$/.test(f.name))v=specialQuantity(v);if(/^loot\.\d+\.quantity$/.test(f.name)){const quantity=Number(v);v=lootQuantity(v);}if(f.name==='threatLevel')v=normalizeThreatLevel(v,sectorThreatLevel(this.draft));if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;if(f.name==='travel.difficulty')v=travelOptions({difficulty:v}).difficulty;target[parts.at(-1)]=v;}this.draft.pathStunts=normalizePathStunts(this.draft.pathStunts);this.draft.travel=sectorTravelOptions(this.draft);for(const key of [...Object.values(COLLECTIONS),'special.locations'])this.entryState(key);}
   refreshZoneSummary(){
     const container=this.element?.querySelector('.sm-zone-summary');
     if(!container)return;
@@ -621,6 +632,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       // Identity survives edits/reorders in the current draft. Content matching
       // reconnects cloned Journal data on reopen, without persisting UI fields.
       const old=Array.from(available).find(entry=>entry.item===item)
+        ||Array.from(available).find(entry=>item.id&&entry.item.id===item.id)
         ||Array.from(available).find(entry=>entry.snapshot===snapshot);
       if(old)available.delete(old);
       const record={id:old?.id||`sm-entry-${++entrySequence}`,item,snapshot};if(!old&&key.startsWith('special.'))state.collapsed.add(record.id);if(!old&&key==='loot'&&(lootCollected(item)||item.generated?.method==='core'))state.collapsed.add(record.id);return record;
@@ -671,7 +683,9 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   loadDraft(data,journal=this.journal){
     this.resetSpecialBaseline(data,journal);
     this.lootContext={journal,baseline:JSON.stringify(data.loot||[])};
-    return normalize(data,journal?.name);
+    const draft=normalize(data,journal?.name);
+    for(const key of isSettlement(draft)?[]:[isSpecial(draft)?'special.inhabitants':'encounters']){const seen=new Set();for(const item of sectorCollection(draft,key)){if(!item.id||seen.has(item.id))item.id=foundry.utils.randomID();seen.add(item.id);}}
+    return draft;
   }
   refreshLootCards(){
     if(this.tab!=='Loot')return;
@@ -850,6 +864,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       this.capture();const draft=this.draft,sectorId=this.sectorId,signature=JSON.stringify(draft);
       const item=key.startsWith('special.')?(key==='special.gear'?normalizeSpecialGear({title:'',details:'',uuid:''}):{title:'',details:'',uuid:''}):await generateEntry(key,foundry.utils.deepClone(draft),{arkCoordinate:zone.store.config?.arkCoordinate,event});
       if(this.sectorId!==sectorId||this.draft!==draft||JSON.stringify(draft)!==signature||this.rendered===false)throw new Error('Sector selection or edits changed while generating. Nothing was added; try again.');
+      if(['encounters','special.inhabitants'].includes(key))item.id??=foundry.utils.randomID();
       if(!key.startsWith('special.'))this.draft[key]??=[];sectorCollection(this.draft,key).push(item);const state=this.entryState(key),record=state.entries.at(-1);state.collapsed.add(record.id);
       this.markDirty();await this.render();
     }finally{this.addingEntry=false;buttons.forEach(button=>button.disabled=false);this.element?.querySelectorAll('[data-action="add"],[data-action="add-event"]').forEach(button=>button.disabled=false);}
@@ -873,6 +888,13 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   }catch(err){this.busy=false;console.error(`${MOD} |`,err);ui.notifications.error(`Sector Manager: ${err.message}`);}}
 }
 let app;
+// Refresh current Project names/statistics without replacing cards or losing unsaved progress.
+Hooks.on('updateItem',doc=>{
+  if(!game.user.isGM||!app?.rendered||!isSettlement(app.data)||app.tab!=='Projects')return;
+  const targets=Array.from(app.element.querySelectorAll('[data-project-view]')).filter(target=>app.data.settlement.projects[Number(target.dataset.projectView)]?.uuid===doc.uuid);
+  if(!targets.length)return;app.capture();
+  void Promise.all(targets.map(async target=>{const entry=app.data.settlement.projects[Number(target.dataset.projectView)];await app.renderReference(target.closest('[data-entry]').querySelector('[data-reference]'));await renderProject(app,target,entry);})).catch(error=>ui.notifications.error(`Project refresh: ${error.message}`));
+});
 const organization=new JournalOrganization();
 const zone=new ZoneRuntime({
   onChange:()=>{if(app?.rendered){if(app.sceneScope!==zone.store.config?.sceneId){app.sceneScope=zone.store.config?.sceneId;app.capture();void app.render();}else app.refreshZoneSummary();}},

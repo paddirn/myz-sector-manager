@@ -576,3 +576,9 @@ Group headings are compact and inline editable. The heading and column labels st
 Shop column headings use white text against their dark backgrounds. Drops use the configured Foundry v14 Item document resolver, supporting world, Compendium and embedded Item sources and supported native payloads without a direct UUID. Missing/inaccessible references and save failures have separate messages. Repeated drops retain group targeting through rerenders; all Item types remain accepted.
 
 Before releasing, test in a backup Foundry v14 world: drop several world and Compendium Items into empty and populated groups, change group type, collapse/expand, close/reopen, and repeat. Check sticky white headings, fixed toolbar, source links and persistence. Automated tests simulate Foundry APIs; they do not constitute live Foundry testing.
+
+### Settlement purchases, sorting and Factions (0.1.35)
+
+Shop **Buy** announces an informational purchase to public Chat, using the existing Party Roster and source Item statistics/Cost. Integer price ranges roll once on confirmation; missing or barter-only prices prevent Buy. No resources or stock change. The default drop-group selector remains available without its redundant visible label.
+
+Projects and Inhabitants display alphabetically without rearranging stored records; the Project Reference link remains as the sheet-opening control. Factions now have editable headings, a linked Actor portrait gallery and multiline Faction Info. Legacy faction fields are consolidated once and retained for recovery. Save Sector persists faction changes. See [Settlement documentation](docs/settlement-sectors.md) for migration details and manual Foundry v14 checks.
