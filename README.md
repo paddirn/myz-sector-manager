@@ -570,3 +570,9 @@ All three Inhabitants interfaces accept world/Compendium Actors on their blank a
 Shop groups now support **General, Weapons, Armor, Vehicles, Services** layouts and accept any Item type. Choose a type independently of the group name; missing source fields remain blank. Vehicles track **Land/Water** per Shop entry without changing the Item. Existing groups default safely to General.
 
 Group headings are compact and inline editable. The heading and column labels stick together while the inventory scrolls; one bottom **Selection / Move / Replace / Remove** toolbar stays visible across every group. Delete appears only for empty groups. Item reorder arrows move existing rows in place, preserving selection, scroll position and collapsed groups. Smaller windows use a responsive toolbar. See the [field mapping and manual v14 checks](https://github.com/paddirn/myz-sector-manager/blob/main/docs/settlement-sectors.md).
+
+### Settlement Shop drop/header fixes
+
+Shop column headings use white text against their dark backgrounds. Drops use the configured Foundry v14 Item document resolver, supporting world, Compendium and embedded Item sources and supported native payloads without a direct UUID. Missing/inaccessible references and save failures have separate messages. Repeated drops retain group targeting through rerenders; all Item types remain accepted.
+
+Before releasing, test in a backup Foundry v14 world: drop several world and Compendium Items into empty and populated groups, change group type, collapse/expand, close/reopen, and repeat. Check sticky white headings, fixed toolbar, source links and persistence. Automated tests simulate Foundry APIs; they do not constitute live Foundry testing.

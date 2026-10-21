@@ -45,6 +45,22 @@ export function requireShopItem(doc){
   if(doc?.documentName!=='Item')throw new Error('Shop inventory requires a Foundry Item document from Items or a Compendium.');
   return doc;
 }
+// Resolve through the configured v14 Item class (world, embedded and Compendium sources).
+export async function resolveShopDrop(payload,env=globalThis){
+  if(!payload||typeof payload!=='object'||Array.isArray(payload)||(!payload.uuid&&payload.type!=='Item'))throw new Error('Invalid or unsupported drag data. Drop a Foundry Item document.');
+  if(payload.type&&payload.type!=='Item')throw new Error('Shop inventory requires a Foundry Item document.');
+  const ItemClass=env.CONFIG?.Item?.documentClass||env.Item?.implementation||env.Item;
+  let doc;
+  try{
+    if(typeof ItemClass?.fromDropData==='function')doc=await ItemClass.fromDropData(payload);
+    else if(payload.uuid)doc=await env.fromUuid(payload.uuid);
+    else throw new Error('The Foundry Item drop resolver is unavailable.');
+  }catch(error){throw new Error(`Unable to resolve dropped Item${payload.uuid?` (${payload.uuid})`:''}. Check the source document and Compendium access: ${error.message}`);}
+  if(!doc)throw new Error(`Dropped Item${payload.uuid?` (${payload.uuid})`:''} is missing or inaccessible. Check the source document and Compendium access.`);
+  requireShopItem(doc);
+  if(!doc.uuid)throw new Error('The dropped Item has no stable UUID; save it before adding it to the Shop.');
+  return doc;
+}
 const scalar=value=>typeof value==='string'||typeof value==='number'&&Number.isFinite(value)?value:'';
 const pair=value=>value&&typeof value==='object'?(scalar(value.value)!==''?`${scalar(value.value)}${scalar(value.max)!==''?' / '+scalar(value.max):''}`:''):scalar(value);
 const RANGE_KEYS={range_arm:'MYZ.RANGE_ARM',range_near:'MYZ.RANGE_NEAR',range_short:'MYZ.RANGE_SHORT',range_long:'MYZ.RANGE_LONG',range_distant:'MYZ.RANGE_DISTANT'};
