@@ -1,4 +1,4 @@
-import {sceneCellSize,canonicalCoordinate} from './grid.mjs';
+import {sceneCellSize,canonicalCoordinate,displayGridCounts,storedGridCounts} from './grid.mjs';
 export const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const number=(label,name,value,extra='')=>`<label>${label}<input type="number" name="${name}" value="${escapeHTML(value)}" step="any" ${extra}></label>`;
 const option=(value,label,selected)=>`<option value="${escapeHTML(value)}" ${String(value)===String(selected)?'selected':''}>${escapeHTML(label)}</option>`;
@@ -15,7 +15,7 @@ export function createZoneConfigClass(ApplicationV2) {
     }
     async _renderHTML(){
       const root=document.createElement('div');root.className='zm-config';
-      const grid=this.draft.grid, size=this.unit==='cells'?sceneCellSize(this.scene):{width:1,height:1};
+      const grid=this.draft.grid,counts=displayGridCounts(grid), size=this.unit==='cells'?sceneCellSize(this.scene):{width:1,height:1};
       const sectors=game.journal.filter(doc=>doc.getFlag('myz-sector-manager','sector')?.version===1).filter(doc=>canonicalCoordinate(doc.getFlag('myz-sector-manager','sector').code));
       const scenes=Array.from(game.scenes.values()).sort((a,b)=>a.name.localeCompare(b.name));
       root.innerHTML=`<style>
@@ -24,11 +24,11 @@ export function createZoneConfigClass(ApplicationV2) {
       </style><p>Optional single-Scene integration. Sector records remain in their existing Journals. All controls are GM-only.</p>
       <label>Designated Zone Scene<select name="sceneId">${option('','Not configured',this.draft.sceneId)}${scenes.map(scene=>option(scene.id,scene.name,this.draft.sceneId)).join('')}</select></label>
       ${this.draft.sceneId&&!this.scene?'<p role="alert">The designated Scene is missing. Select a replacement or disconnect the map. Last-known positions are retained until then.</p>':''}
-      <fieldset><legend>Reconfigure Grid</legend><p>Origin is the reference sector’s top-left corner in Scene canvas pixels (including Scene padding), independent of pan/zoom. Grid bounds run from A1 through the configured column/row counts.</p>
+      <fieldset><legend>Reconfigure Grid</legend><p>Origin is the reference sector’s top-left corner in Scene canvas pixels (including Scene padding), independent of pan/zoom. Columns count horizontal squares; Rows count vertical squares. Letter/number orientation is configured separately; existing map coordinates are preserved.</p>
       <div class="zm-grid"><label>Reference sector<input name="reference" value="${escapeHTML(grid.reference)}" placeholder="A1"></label><label>Dimension units<select name="unit">${option('pixels','Scene pixels',this.unit)}${option('cells','Foundry grid cells',this.unit)}</select></label>
       ${number('Origin X','originX',grid.originX)}${number('Origin Y','originY',grid.originY)}
       ${number('Sector width','width',grid.width/(size.width||1),'min="0.001"')}${number('Sector height','height',grid.height/(size.height||1),'min="0.001"')}
-      ${number('Columns (A=1, AA=27)','columns',grid.columns,'min="1" max="1000"')}${number('Rows (1-based)','rows',grid.rows,'min="1" max="1000"')}
+      ${number('Columns (horizontal squares)','columns',counts.columns,'min="1" max="1000"')}${number('Rows (vertical squares)','rows',counts.rows,'min="1" max="1000"')}
       <label>Lettered columns run<select name="columnAxis">${option('x','Horizontally',grid.columnAxis)}${option('y','Vertically (swap axes)',grid.columnAxis)}</select></label>
       <label>Columns increase<select name="columnDirection">${option(1,'Right / down',grid.columnDirection)}${option(-1,'Left / up',grid.columnDirection)}</select></label><label>Rows increase<select name="rowDirection">${option(1,'Down / right',grid.rowDirection)}${option(-1,'Up / left',grid.rowDirection)}</select></label></div>
       <div class="zm-buttons"><button type="button" data-view-scene>View selected Scene</button><button type="button" data-calibrate-grid>Calibrate Grid</button><button type="button" data-pick-origin>Pick reference corner on canvas</button></div><p>Move this dialog aside and click once on the selected Scene; Escape cancels. Three-click calibration previews an axis-aligned rectangle; Confirm applies it to this form. Configuration is saved only with Save. Viewing another Scene never rescales this grid.</p></fieldset>
@@ -43,7 +43,8 @@ export function createZoneConfigClass(ApplicationV2) {
     _replaceHTML(result,content){content.replaceChildren(result);}
     readForm(){
       const root=this.element, grid=this.draft.grid, scale=this.unit==='cells'?sceneCellSize(this.scene):{width:1,height:1};
-      for(const key of ['originX','originY','width','height','columns','rows','columnDirection','rowDirection'])grid[key]=Number(root.querySelector(`[name="${key}"]`).value)*(key==='width'?scale.width||1:key==='height'?scale.height||1:1);
+      for(const key of ['originX','originY','width','height','columnDirection','rowDirection'])grid[key]=Number(root.querySelector(`[name="${key}"]`).value)*(key==='width'?scale.width||1:key==='height'?scale.height||1:1);
+      Object.assign(grid,storedGridCounts(Number(root.querySelector('[name="columns"]').value),Number(root.querySelector('[name="rows"]').value),root.querySelector('[name="columnAxis"]').value));
       if(this.scene)this.draft.calibration={sceneWidth:this.scene.width,sceneHeight:this.scene.height,cellWidth:sceneCellSize(this.scene).width,cellHeight:sceneCellSize(this.scene).height};
       grid.reference=root.querySelector('[name="reference"]').value;grid.columnAxis=root.querySelector('[name="columnAxis"]').value;
       for(const key of ['enabled','boundaries','labels','status'])this.draft.overlay[key]=root.querySelector(`[name="overlay.${key}"]`).checked;

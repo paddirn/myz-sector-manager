@@ -1,0 +1,4031 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MYZ Sector Manager single-sector export",
+  "type": "object",
+  "required": [
+    "format",
+    "formatVersion",
+    "schemaVersion",
+    "sector"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "format": {
+      "const": "myz-sector-manager"
+    },
+    "formatVersion": {
+      "const": 1
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "exportedBy": {
+      "type": "object",
+      "properties": {
+        "module": {
+          "const": "myz-sector-manager"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      },
+      "additionalProperties": true
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "coordinates": {
+          "type": "string",
+          "maxLength": 1000000
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 1000000
+        }
+      },
+      "additionalProperties": true
+    },
+    "sector": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "sectorType": {
+          "enum": [
+            "normal",
+            "special",
+            "settlement"
+          ]
+        },
+        "nameOverride": {
+          "type": "boolean"
+        },
+        "customName": {
+          "type": "string",
+          "maxLength": 1000000
+        },
+        "terrain": {
+          "type": "string",
+          "maxLength": 1000000
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 1000000
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000000
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1000000
+        },
+        "mood": {
+          "type": "string",
+          "maxLength": 1000000
+        },
+        "rot": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "threatLevel": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "details": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "notes": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "status": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "type": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyStatus": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceTitle": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceName": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referencePack": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceWarning": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "detailsFormat": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "uuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "portrait": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "imageSrc": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "titleOverride": {
+                "type": "boolean"
+              },
+              "quantity": {
+                "type": "number",
+                "minimum": 0
+              },
+              "collected": {
+                "type": "boolean"
+              },
+              "typeSource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "resource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "generated": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatCategory": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatSeverity": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "threatMode": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "generation": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "actorImport": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "const": 1
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "role": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "disposition": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "factionId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "duration": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "category": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroUuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "triggerId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroRunOnce": {
+                "type": "boolean"
+              },
+              "macroEnabled": {
+                "type": "boolean"
+              },
+              "macroDisabled": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          },
+          "maxItems": 2000
+        },
+        "encounters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "details": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "notes": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "status": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "type": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyStatus": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceTitle": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceName": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referencePack": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceWarning": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "detailsFormat": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "uuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "portrait": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "imageSrc": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "titleOverride": {
+                "type": "boolean"
+              },
+              "quantity": {
+                "type": "number",
+                "minimum": 0
+              },
+              "collected": {
+                "type": "boolean"
+              },
+              "typeSource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "resource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "generated": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatCategory": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatSeverity": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "threatMode": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "generation": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "actorImport": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "const": 1
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "role": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "disposition": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "factionId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "duration": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "category": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroUuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "triggerId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroRunOnce": {
+                "type": "boolean"
+              },
+              "macroEnabled": {
+                "type": "boolean"
+              },
+              "macroDisabled": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          },
+          "maxItems": 2000
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "details": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "notes": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "status": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "type": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyStatus": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceTitle": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceName": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referencePack": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceWarning": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "detailsFormat": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "uuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "portrait": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "imageSrc": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "titleOverride": {
+                "type": "boolean"
+              },
+              "quantity": {
+                "type": "number",
+                "minimum": 0
+              },
+              "collected": {
+                "type": "boolean"
+              },
+              "typeSource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "resource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "generated": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatCategory": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatSeverity": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "threatMode": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "generation": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "actorImport": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "const": 1
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "role": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "disposition": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "factionId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "duration": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "category": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroUuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "triggerId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroRunOnce": {
+                "type": "boolean"
+              },
+              "macroEnabled": {
+                "type": "boolean"
+              },
+              "macroDisabled": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          },
+          "maxItems": 2000
+        },
+        "loot": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "details": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "notes": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "status": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "type": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyStatus": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceTitle": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceName": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referencePack": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceWarning": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "detailsFormat": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "uuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "portrait": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "imageSrc": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "titleOverride": {
+                "type": "boolean"
+              },
+              "quantity": {
+                "type": "number",
+                "minimum": 0
+              },
+              "collected": {
+                "type": "boolean"
+              },
+              "typeSource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "resource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "generated": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatCategory": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatSeverity": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "threatMode": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "generation": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "actorImport": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "const": 1
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "role": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "disposition": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "factionId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "duration": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "category": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroUuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "triggerId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroRunOnce": {
+                "type": "boolean"
+              },
+              "macroEnabled": {
+                "type": "boolean"
+              },
+              "macroDisabled": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          },
+          "maxItems": 2000
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "details": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "notes": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "status": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "type": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyStatus": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceTitle": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceName": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referencePack": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceWarning": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "detailsFormat": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "uuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "portrait": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "imageSrc": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "titleOverride": {
+                "type": "boolean"
+              },
+              "quantity": {
+                "type": "number",
+                "minimum": 0
+              },
+              "collected": {
+                "type": "boolean"
+              },
+              "typeSource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "resource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "generated": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatCategory": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatSeverity": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "threatMode": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "generation": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "actorImport": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "const": 1
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "role": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "disposition": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "factionId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "duration": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "category": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroUuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "triggerId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroRunOnce": {
+                "type": "boolean"
+              },
+              "macroEnabled": {
+                "type": "boolean"
+              },
+              "macroDisabled": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          },
+          "maxItems": 2000
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "details": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "notes": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "status": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "type": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyStatus": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "legacyType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceTitle": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceName": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referencePack": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceType": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "referenceWarning": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "detailsFormat": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "uuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "portrait": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "imageSrc": {
+                "type": "string",
+                "maxLength": 1000000,
+                "format": "image-path"
+              },
+              "titleOverride": {
+                "type": "boolean"
+              },
+              "quantity": {
+                "type": "number",
+                "minimum": 0
+              },
+              "collected": {
+                "type": "boolean"
+              },
+              "typeSource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "resource": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "generated": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatCategory": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "threatSeverity": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "threatMode": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "generation": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "sources": {
+                    "type": "array",
+                    "items": {},
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "actorImport": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "const": 1
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "role": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "disposition": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "factionId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "duration": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "category": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroUuid": {
+                "type": "string",
+                "maxLength": 512,
+                "pattern": "^[A-Za-z0-9_.-]*$"
+              },
+              "triggerId": {
+                "type": "string",
+                "maxLength": 1000000
+              },
+              "macroRunOnce": {
+                "type": "boolean"
+              },
+              "macroEnabled": {
+                "type": "boolean"
+              },
+              "macroDisabled": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          },
+          "maxItems": 2000
+        },
+        "supplies": {
+          "type": "object",
+          "properties": {
+            "cleanGrub": {
+              "type": "object",
+              "properties": {
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "collected": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            },
+            "rotGrub": {
+              "type": "object",
+              "properties": {
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "collected": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            },
+            "cleanWater": {
+              "type": "object",
+              "properties": {
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "collected": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            },
+            "rotWater": {
+              "type": "object",
+              "properties": {
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "collected": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            },
+            "bullets": {
+              "type": "object",
+              "properties": {
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "collected": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            },
+            "booze": {
+              "type": "object",
+              "properties": {
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "collected": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            },
+            "components": {
+              "type": "object",
+              "properties": {
+                "quantity": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "collected": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "pathStunts": {
+          "type": "object",
+          "properties": {
+            "safePath": {
+              "type": "boolean"
+            },
+            "artifact": {
+              "type": "boolean"
+            },
+            "assessRot": {
+              "type": "boolean"
+            },
+            "bullets": {
+              "type": "boolean"
+            },
+            "grub": {
+              "type": "boolean"
+            },
+            "water": {
+              "type": "boolean"
+            },
+            "halfTime": {
+              "type": "boolean"
+            },
+            "rush": {
+              "type": "boolean"
+            },
+            "saferRoute": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        },
+        "travel": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": [
+                "foot",
+                "vehicle"
+              ]
+            },
+            "rushed": {
+              "type": "boolean"
+            },
+            "stalker": {
+              "type": "boolean"
+            },
+            "open": {
+              "type": "boolean"
+            },
+            "difficult": {
+              "type": "boolean"
+            },
+            "night": {
+              "type": "boolean"
+            },
+            "difficulty": {
+              "type": "number",
+              "minimum": 2
+            }
+          },
+          "additionalProperties": true
+        },
+        "special": {
+          "type": "object",
+          "properties": {
+            "overlayImage": {
+              "type": "string",
+              "maxLength": 1000000,
+              "format": "image-path"
+            },
+            "sceneUuid": {
+              "type": "string",
+              "maxLength": 512,
+              "pattern": "^[A-Za-z0-9_.-]*$"
+            },
+            "source": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "overview": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "situation": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "images": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "duration": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "category": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "macroUuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "triggerId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "macroRunOnce": {
+                    "type": "boolean"
+                  },
+                  "macroEnabled": {
+                    "type": "boolean"
+                  },
+                  "macroDisabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            },
+            "locations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "duration": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "category": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "macroUuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "triggerId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "macroRunOnce": {
+                    "type": "boolean"
+                  },
+                  "macroEnabled": {
+                    "type": "boolean"
+                  },
+                  "macroDisabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            },
+            "inhabitants": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            },
+            "gear": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "duration": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "category": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "macroUuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "triggerId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "macroRunOnce": {
+                    "type": "boolean"
+                  },
+                  "macroEnabled": {
+                    "type": "boolean"
+                  },
+                  "macroDisabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            },
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "duration": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "category": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "macroUuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "triggerId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "macroRunOnce": {
+                    "type": "boolean"
+                  },
+                  "macroEnabled": {
+                    "type": "boolean"
+                  },
+                  "macroDisabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            }
+          },
+          "additionalProperties": true
+        },
+        "settlement": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "type": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "disposition": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "population": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "leadership": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "description": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "notes": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "history": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "situation": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "defenses": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "resources": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "economy": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "image": {
+              "type": "string",
+              "maxLength": 1000000,
+              "format": "image-path"
+            },
+            "arkUuid": {
+              "type": "string",
+              "maxLength": 512,
+              "pattern": "^[A-Za-z0-9_.-]*$"
+            },
+            "projects": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "progress": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "completedAt": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            },
+            "inhabitants": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            },
+            "factions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "info": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "leader": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "goals": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resources": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "relationship": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "allies": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "rivals": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "tensions": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "infoVersion": {
+                    "const": 1
+                  },
+                  "membersVersion": {
+                    "const": 1
+                  },
+                  "members": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512,
+                          "pattern": "^[A-Za-z0-9_.-]*$"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^[A-Za-z0-9_-]+$"
+                            },
+                            "uuid": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "pattern": "^[A-Za-z0-9_.-]*$"
+                            },
+                            "actorUuid": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "pattern": "^[A-Za-z0-9_.-]*$"
+                            }
+                          },
+                          "additionalProperties": true
+                        }
+                      ]
+                    },
+                    "maxItems": 2000
+                  },
+                  "actors": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512,
+                          "pattern": "^[A-Za-z0-9_.-]*$"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^[A-Za-z0-9_-]+$"
+                            },
+                            "uuid": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "pattern": "^[A-Za-z0-9_.-]*$"
+                            },
+                            "actorUuid": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "pattern": "^[A-Za-z0-9_.-]*$"
+                            }
+                          },
+                          "additionalProperties": true
+                        }
+                      ]
+                    },
+                    "maxItems": 2000
+                  },
+                  "actorUuids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 512,
+                      "pattern": "^[A-Za-z0-9_.-]*$"
+                    },
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            },
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "trigger": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "outcomes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "related": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            },
+            "threads": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "npcs": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factions": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "clues": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "developments": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resolution": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            },
+            "shops": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "details": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "status": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "type": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyStatus": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "legacyType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceTitle": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceName": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referencePack": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceType": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "referenceWarning": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "detailsFormat": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "uuid": {
+                    "type": "string",
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9_.-]*$"
+                  },
+                  "portrait": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "imageSrc": {
+                    "type": "string",
+                    "maxLength": 1000000,
+                    "format": "image-path"
+                  },
+                  "titleOverride": {
+                    "type": "boolean"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "collected": {
+                    "type": "boolean"
+                  },
+                  "typeSource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "resource": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "generated": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatCategory": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "threatSeverity": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "threatMode": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "generation": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {},
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "actorImport": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "const": 1
+                      },
+                      "uuid": {
+                        "type": "string",
+                        "maxLength": 512,
+                        "pattern": "^[A-Za-z0-9_.-]*$"
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "role": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "factionId": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "proprietor": {
+                    "type": "string",
+                    "maxLength": 1000000
+                  },
+                  "inventory": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^[A-Za-z0-9_-]+$"
+                        },
+                        "title": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "details": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "status": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "type": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "legacyStatus": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "legacyType": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "referenceTitle": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "referenceName": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "referencePack": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "referenceType": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "referenceWarning": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "detailsFormat": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "uuid": {
+                          "type": "string",
+                          "maxLength": 512,
+                          "pattern": "^[A-Za-z0-9_.-]*$"
+                        },
+                        "portrait": {
+                          "type": "string",
+                          "maxLength": 1000000,
+                          "format": "image-path"
+                        },
+                        "imageSrc": {
+                          "type": "string",
+                          "maxLength": 1000000,
+                          "format": "image-path"
+                        },
+                        "titleOverride": {
+                          "type": "boolean"
+                        },
+                        "quantity": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 1000000
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "collected": {
+                          "type": "boolean"
+                        },
+                        "typeSource": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "resource": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "generated": {
+                          "type": "object",
+                          "properties": {
+                            "method": {
+                              "type": "string",
+                              "maxLength": 1000000
+                            },
+                            "threatCategory": {
+                              "type": "string",
+                              "maxLength": 1000000
+                            },
+                            "threatSeverity": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "threatMode": {
+                              "type": "string",
+                              "maxLength": 1000000
+                            },
+                            "sources": {
+                              "type": "array",
+                              "items": {},
+                              "maxItems": 2000
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "generation": {
+                          "type": "object",
+                          "properties": {
+                            "method": {
+                              "type": "string",
+                              "maxLength": 1000000
+                            },
+                            "sources": {
+                              "type": "array",
+                              "items": {},
+                              "maxItems": 2000
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "actorImport": {
+                          "type": "object",
+                          "properties": {
+                            "version": {
+                              "const": 1
+                            },
+                            "uuid": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "pattern": "^[A-Za-z0-9_.-]*$"
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "role": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "disposition": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "factionId": {
+                          "type": "string",
+                          "maxLength": 1000000
+                        },
+                        "price": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 1000000
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        }
+                      },
+                      "additionalProperties": true
+                    },
+                    "maxItems": 2000
+                  }
+                },
+                "additionalProperties": true
+              },
+              "maxItems": 2000
+            },
+            "shop": {
+              "type": "object",
+              "properties": {
+                "version": {
+                  "const": 1
+                },
+                "groups": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "pattern": "^[A-Za-z0-9_-]+$"
+                      },
+                      "name": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "type": {
+                        "type": "string",
+                        "maxLength": 1000000
+                      },
+                      "entries": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^[A-Za-z0-9_-]+$"
+                            },
+                            "uuid": {
+                              "type": "string",
+                              "maxLength": 512,
+                              "pattern": "^[A-Za-z0-9_.-]*$"
+                            },
+                            "legacyEntryId": {
+                              "type": "string",
+                              "maxLength": 1000000
+                            },
+                            "travelType": {
+                              "enum": [
+                                "Land",
+                                "Water"
+                              ]
+                            }
+                          },
+                          "additionalProperties": true
+                        },
+                        "maxItems": 2000
+                      }
+                    },
+                    "additionalProperties": true
+                  },
+                  "maxItems": 2000
+                },
+                "migration": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "const": 1
+                    },
+                    "source": {
+                      "type": "string",
+                      "maxLength": 1000000
+                    },
+                    "unlinked": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "duplicates": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "randomization": {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "threatLevel": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "numericThreatLevel": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "levelSelection": {},
+            "environment": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "maxLength": 1000000
+                },
+                "ruins": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 1000000
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "threats": {
+                  "type": "boolean"
+                },
+                "artifacts": {
+                  "type": "boolean"
+                },
+                "manual": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            },
+            "baseDice": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 6
+              },
+              "maxItems": 2000
+            },
+            "rolledOnes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rolledSixes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "threatSeverity": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "threatCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "artifactCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "threatMode": {
+              "type": "string",
+              "maxLength": 1000000
+            },
+            "sources": {
+              "type": "array",
+              "items": {},
+              "maxItems": 2000
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "sectorType"
+      ]
+    },
+    "extensions": {
+      "type": "object",
+      "properties": {
+        "unknown": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 1000000
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  ]
+                },
+                "maxItems": 2000
+              },
+              "value": {}
+            },
+            "additionalProperties": true
+          },
+          "maxItems": 2000
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

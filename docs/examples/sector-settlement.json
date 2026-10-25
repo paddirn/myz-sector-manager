@@ -1,0 +1,95 @@
+{
+  "format": "myz-sector-manager",
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "sector": {
+    "sectorType": "settlement",
+    "nameOverride": true,
+    "customName": "Harbor Market",
+    "terrain": "Marina",
+    "settlement": {
+      "version": 1,
+      "type": "Trading Post",
+      "disposition": "Neutral",
+      "population": "About forty",
+      "leadership": "The Council",
+      "description": "A settlement built among dry docks.",
+      "projects": [
+        {
+          "id": "tower",
+          "uuid": "Item.ReplaceWithActualProjectUuid",
+          "referenceName": "Watchtower",
+          "status": "In Progress",
+          "progress": "7 / 20",
+          "notes": "Replace the illustrative UUID with a real Item UUID, or leave this assignment out."
+        }
+      ],
+      "inhabitants": [
+        {
+          "id": "mara",
+          "title": "Mara",
+          "details": "A quiet trader.",
+          "factionId": "council"
+        }
+      ],
+      "factions": [
+        {
+          "id": "council",
+          "title": "Harbor Council",
+          "info": "Oversees the market.",
+          "infoVersion": 1,
+          "membersVersion": 1,
+          "members": [
+            {
+              "id": "council-member",
+              "uuid": "Actor.ReplaceWithActualActorUuid"
+            }
+          ]
+        }
+      ],
+      "events": [
+        {
+          "id": "market",
+          "title": "Market day",
+          "status": "Planned",
+          "trigger": "Arrival",
+          "outcomes": "Trade",
+          "related": "Council"
+        }
+      ],
+      "threads": [
+        {
+          "id": "water",
+          "title": "Water dispute",
+          "status": "Open",
+          "npcs": "Mara",
+          "factions": "Council",
+          "clues": "Empty barrels"
+        }
+      ],
+      "shop": {
+        "version": 1,
+        "groups": [
+          {
+            "id": "boats",
+            "name": "Boats",
+            "type": "vehicles",
+            "entries": [
+              {
+                "id": "boat",
+                "uuid": "Item.ReplaceWithActualVehicleUuid",
+                "travelType": "Water"
+              }
+            ]
+          },
+          {
+            "id": "supplies",
+            "name": "Supplies",
+            "type": "general",
+            "entries": []
+          }
+        ]
+      }
+    }
+  }
+}

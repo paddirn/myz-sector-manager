@@ -97,3 +97,7 @@ export function gridFromCorners(topLeft,topRight,bottomLeft,base) {
   if(Math.abs(topRight.y-topLeft.y)>Math.max(1,width*.005)||Math.abs(bottomLeft.x-topLeft.x)>Math.max(1,height*.005))throw new Error('This grid appears rotated or skewed. Only axis-aligned rectangular sectors are supported; retry with aligned corners or use an aligned map.');
   return validateGrid({...base,reference:canonicalCoordinate(base.reference)||'A1',originX:topLeft.x,originY:topLeft.y,width,height});
 }
+
+// Physical form dimensions are independent of the map's letter/number orientation.
+export const displayGridCounts=grid=>({columns:grid.columnAxis==='y'?grid.rows:grid.columns,rows:grid.columnAxis==='y'?grid.columns:grid.rows});
+export const storedGridCounts=(columns,rows,columnAxis)=>columnAxis==='y'?{columns:rows,rows:columns}:{columns,rows};
