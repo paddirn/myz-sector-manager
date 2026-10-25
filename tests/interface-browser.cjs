@@ -72,7 +72,7 @@ const path=require('node:path');
       records.get=id=>records.find(j=>j.id===id);
       const settings=new Map(),settingOptions=new Map();
       const journalFolders=[];globalThis.Folder={create:async data=>{const folder={...data,id:'folder'+journalFolders.length};journalFolders.push(folder);return folder;}};
-      globalThis.game={folders:journalFolders,keybindings:{actions:new Map([['core.undo',{editable:[{key:'KeyZ',modifiers:['Control']}],reservedModifiers:['Shift']}]]),bindings:new Map(),register(module,id,options){this.actions.set(module+'.'+id,options);this.bindings.set(module+'.'+id,options.editable);},get(module,id){return this.bindings.get(module+'.'+id)||[];}},journal:records,user:{id:'gm',isGM:true},users:{activeGM:{id:'gm'}},scenes:new Map(),settings:{registerMenu:(mod,key,options)=>{globalThis.referenceMenu=options;},register:(mod,key,options)=>{settingOptions.set(key,options);if(!settings.has(key))settings.set(key,options.default);},get:(mod,key)=>settings.get(key),set:async(mod,key,value)=>{settings.set(key,value);settingOptions.get(key)?.onChange?.(value);}}};
+      globalThis.game={modules:new Map([['myz-sector-manager',{version:'0.1.36'}]]),folders:journalFolders,keybindings:{actions:new Map([['core.undo',{editable:[{key:'KeyZ',modifiers:['Control']}],reservedModifiers:['Shift']}]]),bindings:new Map(),register(module,id,options){this.actions.set(module+'.'+id,options);this.bindings.set(module+'.'+id,options.editable);},get(module,id){return this.bindings.get(module+'.'+id)||[];}},journal:records,user:{id:'gm',isGM:true},users:{activeGM:{id:'gm'}},scenes:new Map(),settings:{registerMenu:(mod,key,options)=>{globalThis.referenceMenu=options;},register:(mod,key,options)=>{settingOptions.set(key,options);if(!settings.has(key))settings.set(key,options.default);},get:(mod,key)=>settings.get(key),set:async(mod,key,value)=>{settings.set(key,value);settingOptions.get(key)?.onChange?.(value);}}};
       globalThis.JournalEntry={create:async data=>{
         const doc={id:'created'+(++identity),name:data.name,ownership:data.ownership,value:data.flags||{},getFlag(mod,key){return this.value[mod]?.[key];},async setFlag(mod,key,value){this.value[mod]??={};this.value[mod][key]=structuredClone(value);Hooks.call('updateJournalEntry',this);},async update(update){if(update.name)this.name=update.name;if(update.folder)this.folder=update.folder;if(update['flags.myz-sector-manager.sector']){this.value['myz-sector-manager'].sector=structuredClone(update['flags.myz-sector-manager.sector']);}Hooks.call('updateJournalEntry',this);}};
         records.push(doc);Hooks.call('createJournalEntry',doc);return doc;
@@ -245,8 +245,8 @@ const path=require('node:path');
 
 
     // Configure one Scene with multi-cell sectors and two different tracked tokens.
-    await page.locator('.sm-zone-summary summary').click();
-    await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
+    await page.locator('[data-sm-settings]').click();
+    if(!await page.locator('[data-sm-settings-menu]').isVisible())await page.locator('[data-sm-settings]').click();await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
     const dialog=page.locator('.myz-zone-configuration');
     await dialog.locator('[name="sceneId"]').selectOption('zone');
     await dialog.locator('[name="unit"]').selectOption('cells');
@@ -263,9 +263,9 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>records.get(game.settings.get('myz-sector-manager','zoneConfigurationId')).ownership.default),0);
     assert.equal(await page.evaluate(()=>game.myzSectorManager.zone.tracking()[1].coordinate),'B1');
     assert.equal(await page.evaluate(()=>game.myzSectorManager.zone.tracking()[1].live),false);
-    await page.locator('[data-zone-view]').click();await page.waitForFunction(()=>canvas.scene?.id==='zone');
+    if(!await page.locator('[data-sm-settings-menu]').isVisible())await page.locator('[data-sm-settings]').click();await page.locator('[data-zone-view]').click();await page.waitForFunction(()=>canvas.scene?.id==='zone');
     await page.waitForFunction(()=>game.myzSectorManager.zone.tracking()[1].live);
-    await page.locator('[data-zone-overlay]').click();await page.waitForFunction(()=>canvas.stage.children.some(child=>child.name==='myz-zone-overlay'));
+    if(!await page.locator('[data-sm-settings-menu]').isVisible())await page.locator('[data-sm-settings]').click();await page.locator('[data-zone-overlay]').click();await page.waitForFunction(()=>canvas.stage.children.some(child=>child.name==='myz-zone-overlay'));
     assert(await page.evaluate(()=>canvas.stage.children.every(child=>child.eventMode==='none'&&!child.interactiveChildren)));
 
     // Shortcut choice uses the loaded action registry (Ctrl+Shift+Z conflicts
@@ -580,7 +580,7 @@ const path=require('node:path');
 
     // Three clicks preview in Scene coordinates under zoom without saving.
     await page.evaluate(()=>{canvas.stage.zoom=2;canvas.stage.pan={x:100,y:100};});
-    await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
+    if(!await page.locator('[data-sm-settings-menu]').isVisible())await page.locator('[data-sm-settings]').click();await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
     await dialog.locator('[data-calibrate-grid]').click();await page.waitForSelector('.myz-zone-calibration');
     await page.mouse.click(100,780);await page.mouse.click(300,780);await page.mouse.click(100,850);
     await page.locator('[data-calibration-confirm]').waitFor({state:'visible'});
@@ -593,23 +593,23 @@ const path=require('node:path');
     assert.equal(await page.evaluate(()=>zoneState().grid.width),500); // Confirm applies only to unsaved form.
     assert.equal(await page.locator('.myz-zone-calibration').count(),0);
     await dialog.locator('[data-cancel-zone]').click();
-    await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
+    if(!await page.locator('[data-sm-settings-menu]').isVisible())await page.locator('[data-sm-settings]').click();await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
     await dialog.locator('[data-calibrate-grid]').click();await page.waitForSelector('.myz-zone-calibration');
     await page.mouse.click(100,780);await page.keyboard.press('Escape');
     await dialog.locator('[name="width"]').waitFor({state:'visible'});assert.equal(await page.locator('.myz-zone-calibration').count(),0);
     assert.equal(await page.evaluate(()=>zoneState().overlay.enabled),true);assert.equal(await page.evaluate(()=>canvas.stage.children.length),1);
     await dialog.locator('[data-cancel-zone]').click();
-    await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
+    if(!await page.locator('[data-sm-settings-menu]').isVisible())await page.locator('[data-sm-settings]').click();await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
     await dialog.locator('[data-calibrate-grid]').click();await page.waitForSelector('.myz-zone-calibration');
     await page.mouse.click(100,780);await page.evaluate(async()=>{await game.scenes.get('combat').view();});
     await dialog.locator('[name="width"]').waitFor({state:'visible'});assert.equal(await page.locator('.myz-zone-calibration').count(),0);assert.equal(await page.evaluate(()=>canvas.stage.children.length),0);
-    await dialog.locator('[data-cancel-zone]').click();await page.locator('[data-zone-view]').click();await page.waitForFunction(()=>canvas.scene?.id==='zone');
+    await dialog.locator('[data-cancel-zone]').click();if(!await page.locator('[data-sm-settings-menu]').isVisible())await page.locator('[data-sm-settings]').click();await page.locator('[data-zone-view]').click();await page.waitForFunction(()=>canvas.scene?.id==='zone');
     console.log('Calibration preview/retry/confirm/Escape/Scene teardown restores visibility and leaves saved grid unchanged');
 
     // One-shot point selection uses canvas transforms, leaves normal controls alone,
     // and creates only the confirmed map cell rather than filling the whole map.
     await page.evaluate(()=>{canvas.stage.zoom=2;canvas.stage.pan={x:100,y:100};});
-    await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
+    if(!await page.locator('[data-sm-settings-menu]').isVisible())await page.locator('[data-sm-settings]').click();await page.locator('[data-zone-config]').click();await page.waitForSelector('.zm-config');
     await dialog.locator('[data-pick-origin]').click();
     await page.mouse.click(1300,850); // outside both windows; local point is (600,375)
     assert.equal(await dialog.locator('[name="originX"]').inputValue(),'600');assert.equal(await dialog.locator('[name="originY"]').inputValue(),'375');
@@ -617,7 +617,7 @@ const path=require('node:path');
     // Pick cleanup was already one-shot; restore the configured origin and scale.
     await page.evaluate(()=>{canvas.stage.zoom=1;canvas.stage.pan={x:0,y:0};});
     await page.evaluate(()=>{foundry.applications.api.DialogV2.wait=async options=>{if(options.window.title!=='Create New Sector')throw new Error('Expected New Sector dialog');if(!options.content.includes('value="C3"'))throw new Error('Coordinates not prefilled');return options.buttons.find(b=>b.action==='create').callback(null,null,{element:{querySelector:selector=>({value:selector.includes('newSectorType')?'normal':'C3'})}});};});
-    await page.locator('[data-zone-select]').click();await page.mouse.click(1300,850); // C3: no existing record
+    if(!await page.locator('[data-sm-settings-menu]').isVisible())await page.locator('[data-sm-settings]').click();await page.locator('[data-zone-select]').click();await page.mouse.click(1300,850); // C3: no existing record
     await page.waitForFunction(()=>manager.draft?.code==='C3');
     assert.equal(await page.evaluate(()=>records.filter(j=>j.getFlag('myz-sector-manager','sector')?.code==='C3').length),1);
     assert.equal(await page.evaluate(()=>records.filter(j=>j.getFlag('myz-sector-manager','sector')?.version===1).length),71);
@@ -1108,6 +1108,50 @@ const path=require('node:path');
     const stockBefore=await page.evaluate(()=>JSON.stringify(manager.draft.settlement.shop));await page.locator('[data-shop-buy]').click();await purchase.locator('[name="purchaser"]').selectOption('Actor.infoImport');await page.screenshot({path:'/tmp/myz-shop-buy.png'});await purchase.locator('[data-action="buy"]').click();await page.waitForFunction(()=>!manager.buyingShop);assert.equal(await page.evaluate(()=>purchaseMessages.length),1);assert.equal(await page.evaluate(()=>purchaseRolls.length),1);assert.deepEqual(await page.evaluate(()=>purchaseMessages[0].whisper),[]);assert.match(await page.evaluate(()=>purchaseMessages[0].content),/4 Bullets/);assert.match(await page.evaluate(()=>purchaseMessages[0].content),/clean Grub.*Scrap/);assert.equal(await page.evaluate(()=>JSON.stringify(manager.draft.settlement.shop)),stockBefore);
     await page.evaluate(()=>docs.get('Item.long-weapons-0').system.cost='Barter only');await page.locator('[data-shop-buy]').click();assert.match(await purchase.innerText(),/Barter only.*integer Bullet cost/);await purchase.locator('[name="purchaser"]').selectOption('Actor.infoImport');assert.equal(await purchase.locator('[data-action="buy"]').isDisabled(),true);await purchase.locator('[data-action="cancel"]').click();await page.waitForFunction(()=>!manager.buyingShop);
     console.log('Settlement enhancement checks pass: presentation-only Project/Inhabitant sorting with stable edit/delete identity, Faction legacy migration/gallery/collapse/native links/removal/reopen, and roster-driven public Buy dialog with Cancel/X, single price roll, invalid-cost protection and unchanged inventory');
+
+    // Settings popover uses the browser's top layer, native dismissal, scoped keyboard navigation.
+    await saveSpecial();await page.evaluate(async()=>{await game.scenes.get('zone').view();});
+    const gear=page.locator('[data-sm-settings]'),settingsMenu=page.locator('[data-sm-settings-menu]');
+    assert.equal(await page.locator('.sm-header-buttons [data-action="new"]').evaluate(el=>el.nextElementSibling?.classList.contains('sm-settings')),true);assert.equal(await page.locator('.sm-zone-summary details').count(),0);
+    await gear.click();assert.equal(await settingsMenu.isVisible(),true);assert.deepEqual(await settingsMenu.locator('button').allTextContents(),['Configure / Tracking','View Zone','Select on map','Hide overlay','Wander Now','Wandering Tokens','Enable Wandering for Selected Tokens','Disable Wandering for Selected Tokens','Import Sector','Export Sector']);
+    await page.waitForFunction(()=>document.activeElement.hasAttribute('data-zone-config'));await page.keyboard.press('End');assert.equal(await page.evaluate(()=>document.activeElement.hasAttribute('data-sector-export')),true);await page.keyboard.press('Home');assert.equal(await page.evaluate(()=>document.activeElement.hasAttribute('data-zone-config')),true);await page.keyboard.press('Escape');assert.equal(await settingsMenu.isVisible(),false);
+    await gear.click();await gear.click();assert.equal(await settingsMenu.isVisible(),false);await gear.click();await page.mouse.click(500,30);assert.equal(await settingsMenu.isVisible(),false);
+    await gear.click();await page.evaluate(()=>{manager.element.style.left='70px';manager._onPosition({});});const menuBox=await settingsMenu.boundingBox(),gearBox=await gear.boundingBox();assert(menuBox.x>=0&&menuBox.x+menuBox.width<=1400);assert(menuBox.y>=gearBox.y+gearBox.height);await page.keyboard.press('Escape');await page.evaluate(()=>manager.element.style.left='20px');
+    // Correct physical Columns/Rows under vertical letter orientation; save/reopen retains stored meaning.
+    await gear.click();await page.locator('[data-zone-config]').click();await page.locator('.zm-config').waitFor();
+    await dialog.locator('[name="columns"]').fill('12');await dialog.locator('[name="rows"]').fill('8');await dialog.locator('[name="columnAxis"]').selectOption('y');await dialog.locator('[data-save-zone]').click();await page.waitForFunction(()=>zoneState().grid.columnAxis==='y'&&zoneState().grid.columns===8&&zoneState().grid.rows===12);
+    const savedGrid=await page.evaluate(()=>structuredClone(zoneState().grid));await gear.click();await page.locator('[data-zone-config]').click();await dialog.waitFor();assert.equal(await dialog.locator('[name="columns"]').inputValue(),'12');assert.equal(await dialog.locator('[name="rows"]').inputValue(),'8');assert.match(await dialog.locator('label').filter({has:page.locator('[name="columns"]')}).innerText(),/horizontal squares/);await dialog.locator('[data-save-zone]').click();await page.waitForFunction(()=>!document.querySelector('.myz-zone-configuration'));assert.deepEqual(await page.evaluate(()=>zoneState().grid),savedGrid);
+    // Simulated DialogV2 with real local file inputs, preview buttons, and explicit replacement confirmation.
+    await page.evaluate(()=>{
+      foundry.applications.api.DialogV2.wait=options=>{
+        if(options.window?.title==='Create New Sector')return Promise.resolve(null);
+        return new Promise(resolve=>{
+          const frame=document.createElement('div');frame.className='application myz-test-transfer '+(options.classes||[]).join(' ');frame.style.width=(options.position?.width||460)+'px';frame.style.height='auto';frame.innerHTML='<header class="window-header"><strong>'+options.window.title+'</strong><button data-dialog-x>X</button></header><section class="window-content">'+options.content+'</section><footer></footer>';document.body.append(frame);const dialog={element:frame},close=value=>{frame.remove();resolve(value);};frame.querySelector('[data-dialog-x]').onclick=()=>close(options.close?.());
+          for(const definition of options.buttons){const button=document.createElement('button');button.dataset.action=definition.action;button.textContent=definition.label;button.disabled=!!definition.disabled;button.addEventListener('click',async event=>{try{close(await definition.callback(event,button,dialog));}catch(error){notifyErrors.push(error.message);}});frame.querySelector('footer').append(button);}options.render?.(null,dialog);
+        });
+      };
+      foundry.applications.api.DialogV2.confirm=options=>foundry.applications.api.DialogV2.wait({...options,buttons:[{action:'cancel',label:'Cancel',default:true,callback:()=>false},{action:'replace',label:'Replace Existing Sector',callback:()=>true}],close:()=>false});
+    });
+    // Export reads persisted content and produces a real downloadable versioned JSON file.
+    const exportPromise=page.waitForEvent('download');await gear.click();await page.locator('[data-sector-export]').click();const exportedDownload=await exportPromise;await page.waitForFunction(()=>!manager.transferringSector);const exportedFile=JSON.parse(readFileSync(await exportedDownload.path(),'utf8'));assert.equal(exportedFile.format,'myz-sector-manager');assert.equal(exportedFile.exportedBy.version,'0.1.36');assert.equal(exportedFile.sector.sectorType,'settlement');assert.equal(exportedFile.sector.code,undefined);assert.equal(exportedFile.sector.settlement.shop.groups.length,5);assert.equal(exportedFile.sector.settlement.factions[0].info,'Edited Faction Info\nSecond line');
+    const sourceBefore=await page.evaluate(()=>JSON.stringify(manager.journal.getFlag('myz-sector-manager','sector')));await page.locator('[data-tab="Overview"]').click();await page.locator('[name="settlement.notes"]').fill('UNSAVED EXPORT NOTE');await gear.click();await page.locator('[data-sector-export]').click();await page.locator('.myz-test-transfer [data-action="cancel"]').click();await page.waitForFunction(()=>!manager.transferringSector);assert.equal(await page.evaluate(()=>JSON.stringify(manager.journal.getFlag('myz-sector-manager','sector'))),sourceBefore);await saveSpecial();
+    // Select an empty Zone square through the existing map tool. Cancel new creation, then import there.
+    await page.evaluate(()=>{canvas.stage.zoom=.1;canvas.stage.pan={x:1000,y:700};});const destinationPoint=await page.evaluate(()=>{const b=game.myzSectorManager.zone.sectorBounds('E3');return {x:1000+(b.x+b.width/2)*.1,y:700+(b.y+b.height/2)*.1};});await gear.click();await page.locator('[data-zone-select]').click();await page.mouse.click(destinationPoint.x,destinationPoint.y);await page.waitForFunction(()=>document.querySelector('[data-zone-selection]')?.textContent==='E3');
+    const transfer=page.locator('.myz-test-transfer');const startImport=async value=>{await gear.click();await page.locator('[data-sector-import]').click();await transfer.locator('input[type=file]').setInputFiles({name:'sector.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(value))});await transfer.locator('[data-action="preview"]').click();await transfer.locator('[data-action="import"]').waitFor();};
+    await startImport(exportedFile);assert.match(await transfer.innerText(),/Empty square/);assert.match(await transfer.innerText(),/E3/);await transfer.locator('[data-action="cancel"]').click();await page.waitForFunction(()=>!manager.transferringSector);assert.equal(await page.evaluate(()=>game.journal.filter(j=>j.getFlag('myz-sector-manager','sector')?.code==='E3').length),0);
+    await startImport(exportedFile);await transfer.locator('[data-action="import"]').click();await page.waitForFunction(()=>!manager.transferringSector&&manager.draft.code==='E3');const importedId=await page.evaluate(()=>manager.sectorId);assert.equal(await page.evaluate(()=>manager.draft.placement.sceneId),'zone');assert.equal(await page.locator('[data-tab]').count(),7);assert.equal(await page.evaluate(()=>manager.draft.settlement.factions[0].info),'Edited Faction Info\nSecond line');
+    // Existing Journal mock models Foundry's recursive merge/deletion operators for replacement.
+    await page.evaluate(()=>{
+      const merge=(prior,next)=>{const result=structuredClone(prior||{});for(const [key,value] of Object.entries(next)){if(key.startsWith('-=')){delete result[key.slice(2)];continue;}result[key]=value&&typeof value==='object'&&!Array.isArray(value)?merge(result[key],value):structuredClone(value);}return result;};
+      const journal=manager.journal;globalThis.importOriginalUpdate=journal.update.bind(journal);journal.update=async data=>{if(!data['flags.myz-sector-manager.lastSectorImport'])return importOriginalUpdate(data);journal.name=data.name;journal.value['myz-sector-manager'].sector=merge(journal.getFlag('myz-sector-manager','sector'),data['flags.myz-sector-manager.sector']);journal.value['myz-sector-manager'].lastSectorImport=merge(journal.getFlag('myz-sector-manager','lastSectorImport'),data['flags.myz-sector-manager.lastSectorImport']);delete journal.value['myz-sector-manager'].entryTriggers;Hooks.call('updateJournalEntry',journal);};
+    });
+    const importedBefore=await page.evaluate(()=>JSON.stringify(manager.journal.getFlag('myz-sector-manager','sector'))),replacementFile={format:'myz-sector-manager',formatVersion:1,schemaVersion:1,sector:{sectorType:'normal',nameOverride:true,customName:'Replacement & <safe>',description:'<script>globalThis.importExecuted=true</script><p>Descriptive content.</p>',encounters:[{id:'missing-actor',title:'Missing guard',uuid:'Actor.importMissing'}],customFuture:{keep:'unknown'}}};
+    await startImport(replacementFile);assert.match(await transfer.innerText(),/Occupied/);assert.match(await transfer.innerText(),/Actor.importMissing/);assert.match(await transfer.innerText(),/unknown field/);assert.equal(await transfer.locator('script').count(),0);await transfer.locator('[data-action="import"]').click();await transfer.locator('[data-action="cancel"]').click();await page.waitForFunction(()=>!manager.transferringSector);assert.equal(await page.evaluate(()=>JSON.stringify(manager.journal.getFlag('myz-sector-manager','sector'))),importedBefore);
+    await startImport(replacementFile);await transfer.locator('[data-action="import"]').click();await transfer.locator('[data-action="replace"]').click();await page.waitForFunction(()=>!manager.transferringSector&&manager.draft.sectorType==='normal');assert.equal(await page.evaluate(()=>manager.sectorId),importedId);assert.equal(await page.evaluate(()=>manager.journal.getFlag('myz-sector-manager','sector').settlement),undefined);assert.equal(await page.evaluate(()=>manager.journal.getFlag('myz-sector-manager','lastSectorImport').sector.sectorType),'settlement');assert.equal(await page.evaluate(()=>manager.draft.encounters[0].uuid),'Actor.importMissing');assert.equal(await page.evaluate(()=>manager.draft.customFuture),undefined);assert.equal(await page.evaluate(()=>manager.draft.portableExtensions.unknown[0].value.keep),'unknown');assert.equal(await page.evaluate(()=>Boolean(globalThis.importExecuted)),false);
+    // A changed destination cancels the final commit, even after a valid preview.
+    await startImport(exportedFile);await page.evaluate(async()=>{await game.scenes.get('combat').view();});await transfer.locator('[data-action="import"]').click();await page.waitForFunction(()=>!manager.transferringSector);assert.match(await page.evaluate(()=>notifyErrors.pop()),/changed/);assert.equal(await page.evaluate(()=>manager.journal.getFlag('myz-sector-manager','sector').sectorType),'normal');await page.evaluate(async()=>{await game.scenes.get('zone').view();});
+    await gear.click();await page.screenshot({path:'/tmp/myz-settings-portable.png'});await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>sourceMutations),[]);
+    console.log('Settings gear/top-layer dismissal/keyboard/movement, preserved Zone actions, physical Columns/Rows in vertical orientation, real JSON download/file-input preview, all Settlement tabs, empty import, Cancel/explicit atomic replacement, missing/unknown preservation, inert HTML and Scene-change guards pass');
 
     assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>notifyErrors),[]);
     console.log('Zone dialog units/tokens/Actor links persist; origin picking respects zoom; confirmed map creation, overlay isolation, closed-window tracking and missing references pass');

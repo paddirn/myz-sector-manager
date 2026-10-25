@@ -582,3 +582,9 @@ Before releasing, test in a backup Foundry v14 world: drop several world and Com
 Shop **Buy** announces an informational purchase to public Chat, using the existing Party Roster and source Item statistics/Cost. Integer price ranges roll once on confirmation; missing or barter-only prices prevent Buy. No resources or stock change. The default drop-group selector remains available without its redundant visible label.
 
 Projects and Inhabitants display alphabetically without rearranging stored records; the Project Reference link remains as the sheet-opening control. Factions now have editable headings, a linked Actor portrait gallery and multiline Faction Info. Legacy faction fields are consolidated once and retained for recovery. Save Sector persists faction changes. See [Settlement documentation](docs/settlement-sectors.md) for migration details and manual Foundry v14 checks.
+
+### Settings gear and portable sectors (0.1.36)
+
+The **Sector Manager Settings** gear beside **+ New Sector** replaces the collapsible Zone tools section and keeps all its actions. Use **Export Sector** for a saved Normal, Special or Settlement record, or **Import Sector** to preview a local versioned JSON file at the currently selected Zone square. Occupied squares require explicit replacement confirmation; missing UUIDs are warned about and retained, and safe unknown fields are preserved separately. Only one sector is transferred at a time. No Actors/Items are created, resources changed, tokens moved or Macros executed.
+
+Configure / Tracking now labels **Columns** as horizontal squares and **Rows** as vertical squares, including maps with vertically lettered coordinates; existing stored grid values and coordinate math are preserved. See [portable format, examples, migration behavior and manual Foundry checklist](docs/sector-portability.md) and the [JSON Schema](docs/sector-portable.schema.json).

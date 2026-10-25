@@ -6,7 +6,7 @@ export const NORMAL_TABS=['Overview','Locations','Encounters','Loot','Effects','
 export const SPECIAL_TABS=['Overview','Locations','Inhabitants','Gear & Artifacts','Events','Images','Find the Path','History'];
 export const isSpecial=data=>data?.sectorType==='special';
 export const isSettlement=data=>data?.sectorType==='settlement';
-export const sectorOnScene=(data,sceneId)=>!isSettlement(data)||!data.sceneId||data.sceneId===sceneId;
+export const sectorOnScene=(data,sceneId)=>data?.placement?.sceneId?data.placement.sceneId===sceneId:!isSettlement(data)||!data.sceneId||data.sceneId===sceneId;
 export const isAuthored=data=>isSpecial(data)||isSettlement(data);
 export const sectorTabs=data=>isSettlement(data)?SETTLEMENT_TABS:isSpecial(data)?SPECIAL_TABS:NORMAL_TABS;
 export const sectorCollection=(data,key)=>key.split('.').reduce((value,part)=>value?.[part],data)||[];

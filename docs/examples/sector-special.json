@@ -1,0 +1,47 @@
+{
+  "format": "myz-sector-manager",
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "sector": {
+    "sectorType": "special",
+    "nameOverride": true,
+    "customName": "The Glass Observatory",
+    "terrain": "Unscathed Ruins",
+    "description": "A landmark overlooking the Zone.",
+    "special": {
+      "source": "Campaign notes",
+      "overview": "An observatory with intact windows.",
+      "situation": "Two scavenger groups are negotiating.",
+      "locations": [
+        {
+          "id": "dome",
+          "title": "Observation dome",
+          "details": "The telescope points toward the Ark."
+        }
+      ],
+      "inhabitants": [
+        {
+          "id": "caretaker",
+          "title": "The Caretaker",
+          "details": "Keeps the dome clean."
+        }
+      ],
+      "gear": [
+        {
+          "id": "lens",
+          "title": "Polished lens",
+          "type": "scrap",
+          "quantity": 1
+        }
+      ],
+      "events": [
+        {
+          "id": "light",
+          "title": "Strange light",
+          "details": "A distant light appears at dusk."
+        }
+      ],
+      "images": []
+    }
+  }
+}

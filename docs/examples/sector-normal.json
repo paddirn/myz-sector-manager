@@ -1,0 +1,56 @@
+{
+  "format": "myz-sector-manager",
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "sector": {
+    "sectorType": "normal",
+    "nameOverride": true,
+    "customName": "The Rust Bridge",
+    "terrain": "Ruined Bridge",
+    "rot": 1,
+    "threatLevel": 2,
+    "status": "Unexplored",
+    "description": "A broken bridge spans the river.",
+    "notes": "GM notes.",
+    "locations": [
+      {
+        "id": "bridge",
+        "title": "Bridge camp",
+        "details": "A sheltered camp below the bridge."
+      }
+    ],
+    "encounters": [
+      {
+        "id": "guard",
+        "title": "Toll keeper",
+        "details": "A descriptive Inhabitant; no Actor is required.",
+        "status": "Active",
+        "type": "Humanoid"
+      }
+    ],
+    "effects": [
+      {
+        "id": "fog",
+        "title": "Morning fog",
+        "category": "Phenomenon",
+        "duration": "Until noon",
+        "details": "Thick fog blankets the river."
+      }
+    ],
+    "loot": [
+      {
+        "id": "rope",
+        "title": "Rope",
+        "type": "gear",
+        "quantity": 2,
+        "collected": false
+      }
+    ],
+    "supplies": {
+      "cleanWater": {
+        "quantity": 2.5,
+        "collected": false
+      }
+    }
+  }
+}
