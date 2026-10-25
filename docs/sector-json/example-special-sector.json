@@ -1,0 +1,115 @@
+{
+  "format": "myz-sector-manager",
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "source": {
+    "name": "Fictional demonstration — not sourcebook rules"
+  },
+  "sector": {
+    "version": 1,
+    "nameOverride": true,
+    "terrain": "Radio Station",
+    "rot": 0,
+    "threatLevel": 1,
+    "status": "Unexplored",
+    "description": "A silent transmission station overlooks the plain.",
+    "notes": "GM secret: the backup generator can power the signal lamp. All demonstration mechanics are fictional.",
+    "sectorType": "special",
+    "customName": "The Echo Station",
+    "special": {
+      "source": "Fictional demonstration",
+      "overview": "The main hall, equipment room and water tank form a small compound.\n\nSupplies (fictional demonstration): 2 clean Grub, 3 clean Water; no Bullets.",
+      "situation": "A stranded group is deciding whether to repair the transmitter or leave.",
+      "sceneUuid": "",
+      "overlayImage": "",
+      "locations": [
+        {
+          "id": "s-location-hall",
+          "title": "Main hall",
+          "details": "Tables and empty lockers line the walls.",
+          "uuid": ""
+        },
+        {
+          "id": "s-location-equipment",
+          "title": "Equipment room",
+          "details": "A sealed cabinet holds spare components.",
+          "uuid": ""
+        }
+      ],
+      "inhabitants": [
+        {
+          "id": "s-inhabitant-nara",
+          "title": "Nara",
+          "titleOverride": true,
+          "details": "<p>Nara repairs the station.</p><p><strong>Motivation:</strong> restore contact with her family.</p><p>No numerical attributes, skills or mutations are supplied.</p>",
+          "detailsFormat": "html",
+          "uuid": "",
+          "portrait": ""
+        },
+        {
+          "id": "s-inhabitant-oss",
+          "title": "Oss",
+          "details": "Keeps watch. Equipment: a patched coat and a lantern. No combat statistics are specified.",
+          "uuid": "",
+          "portrait": ""
+        }
+      ],
+      "gear": [
+        {
+          "id": "s-gear-component",
+          "title": "Spare component",
+          "details": "A single replacement part; no source Item is linked.",
+          "uuid": "",
+          "type": "scrap",
+          "typeSource": "manual",
+          "quantity": 1
+        },
+        {
+          "id": "s-gear-map",
+          "title": "Annotated route map",
+          "details": "An artifact in the fictional story; no mechanical powers are specified.",
+          "uuid": "",
+          "type": "artifact",
+          "quantity": 1
+        }
+      ],
+      "events": [
+        {
+          "id": "s-event-knock",
+          "title": "A visitor at dusk",
+          "details": "A traveler asks whether the station has spare water.",
+          "uuid": ""
+        },
+        {
+          "id": "s-event-signal",
+          "title": "An intermittent signal",
+          "details": "The receiver briefly picks up a distant voice.",
+          "uuid": ""
+        }
+      ],
+      "images": [
+        {
+          "id": "s-image-compound",
+          "title": "Compound illustration",
+          "details": "No image page has been provided; this is a removable placeholder.",
+          "uuid": "",
+          "imageSrc": ""
+        }
+      ]
+    },
+    "supplies": {
+      "cleanGrub": {
+        "quantity": 2,
+        "collected": false
+      },
+      "cleanWater": {
+        "quantity": 3,
+        "collected": false
+      },
+      "bullets": {
+        "quantity": 0,
+        "collected": false
+      }
+    }
+  }
+}

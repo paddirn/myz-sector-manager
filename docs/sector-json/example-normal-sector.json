@@ -1,0 +1,153 @@
+{
+  "format": "myz-sector-manager",
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "source": {
+    "name": "Fictional demonstration — not sourcebook rules"
+  },
+  "sector": {
+    "version": 1,
+    "nameOverride": true,
+    "terrain": "Ruined Bridge",
+    "rot": 1,
+    "threatLevel": 2,
+    "status": "Scouted",
+    "description": "A patched metal crossing spans a dry canal. Two shelters stand at the western end.",
+    "notes": "GM secret: a maintenance tunnel bypasses the toll. Numbers in this file are fictional demonstration values.",
+    "sectorType": "normal",
+    "customName": "The Tin Crossing",
+    "mood": "Wind whistles through loose metal.",
+    "locations": [
+      {
+        "id": "n-location-bridge",
+        "title": "The crossing",
+        "details": "Metal panels cover a narrow walkway.",
+        "uuid": ""
+      },
+      {
+        "id": "n-location-tunnel",
+        "title": "Maintenance tunnel",
+        "details": "GM secret: its entrance is hidden behind the lower shelter.",
+        "uuid": ""
+      }
+    ],
+    "encounters": [
+      {
+        "id": "n-inhabitant-tollkeeper",
+        "title": "Vela, toll keeper",
+        "details": "Vela wants food for her shelter. No numerical attributes or skills have been specified.",
+        "uuid": "",
+        "status": "Active",
+        "type": "Humanoid",
+        "portrait": ""
+      },
+      {
+        "id": "n-inhabitant-traveler",
+        "title": "An exhausted traveler",
+        "details": "Will trade news for shelter.",
+        "uuid": "",
+        "status": "Hidden",
+        "type": "Encounter"
+      }
+    ],
+    "loot": [
+      {
+        "id": "n-loot-rope",
+        "title": "Braided rope",
+        "details": "A serviceable length of rope.",
+        "uuid": "",
+        "quantity": 1,
+        "type": "gear",
+        "typeSource": "manual",
+        "collected": false
+      },
+      {
+        "id": "n-loot-scrap",
+        "title": "Loose metal panels",
+        "details": "Fictional demonstration stock; no Item document is linked.",
+        "uuid": "",
+        "quantity": 2,
+        "type": "scrap",
+        "collected": false
+      }
+    ],
+    "effects": [
+      {
+        "id": "n-effect-wind",
+        "title": "Crosswind",
+        "details": "Strong gusts rattle the crossing. No mechanical penalty is specified.",
+        "category": "Phenomenon",
+        "status": "Active",
+        "duration": "While the wind persists",
+        "uuid": "",
+        "macroUuid": "",
+        "macroDisabled": true,
+        "macroRunOnce": false
+      }
+    ],
+    "secrets": [
+      {
+        "id": "n-secret",
+        "title": "Hidden route",
+        "details": "Legacy storage example: see GM Notes for the editor-visible account."
+      }
+    ],
+    "history": [
+      {
+        "id": "n-history",
+        "title": "Scouts arrive",
+        "details": "The scouts examined the shelters but did not claim the stored supplies.",
+        "status": "Active"
+      }
+    ],
+    "supplies": {
+      "cleanGrub": {
+        "quantity": 2,
+        "collected": false
+      },
+      "rotGrub": {
+        "quantity": 0,
+        "collected": false
+      },
+      "cleanWater": {
+        "quantity": 1.5,
+        "collected": false
+      },
+      "rotWater": {
+        "quantity": 0,
+        "collected": false
+      },
+      "bullets": {
+        "quantity": 0,
+        "collected": false
+      },
+      "booze": {
+        "quantity": 0,
+        "collected": false
+      },
+      "components": {
+        "quantity": 1,
+        "collected": false
+      }
+    },
+    "pathStunts": {
+      "safePath": false,
+      "artifact": false,
+      "assessRot": false,
+      "bullets": false,
+      "grub": false,
+      "water": false,
+      "halfTime": false,
+      "rush": false,
+      "saferRoute": false
+    },
+    "travel": {
+      "mode": "foot",
+      "open": false,
+      "difficult": false,
+      "difficulty": 2,
+      "night": false
+    },
+    "randomization": {}
+  }
+}
