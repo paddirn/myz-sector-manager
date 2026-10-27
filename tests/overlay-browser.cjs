@@ -93,6 +93,25 @@ const path=require('node:path');
     await page.evaluate(()=>{store.config.overlay.enabled=true;overlay.draw();canvas.scene={id:'combat'};overlay.draw();});await page.mouse.click(300,130);assert.equal(await page.evaluate(()=>selected.length),4);
     await page.evaluate(()=>{canvas.scene=game.scenes.get('zone');overlay.draw();overlay.stop();});await page.mouse.click(300,130);assert.equal(await page.evaluate(()=>selected.length),4);assert.equal(await page.evaluate(()=>app.stage.children.length),0);
     const native=await page.evaluate(()=>nativeEvents);assert(native.down>=7&&native.up>=7&&native.right>=1);assert.deepEqual(await page.evaluate(()=>notifyErrors),[]);assert.deepEqual(errors,[]);
+    // Actual browser display scaling and PIXI textures, without global renderer changes.
+    for(const dpr of [1,1.5,2]){
+      const context=await browser.newContext({deviceScaleFactor:dpr,viewport:{width:900,height:650}}),scaled=await context.newPage();
+      await scaled.goto(`http://127.0.0.1:${server.address().port}`);await scaled.addScriptTag({url:'/pixi.js'});
+      const measurements=await scaled.evaluate(async()=>{
+        const {overlayTextResolution}=await import('/scripts/zone/overlay.mjs');
+        const app=new PIXI.Application({width:800,height:600,resolution:devicePixelRatio});document.body.append(app.view);
+        const baseline=new PIXI.Text('Sector A1',{fontSize:18});app.stage.addChild(baseline);app.renderer.render(app.stage);
+        const defaultResolution=baseline.resolution,originalRenderer=app.renderer.resolution,rows=[];
+        for(const zoom of [.5,1,1.5,2,4]){
+          app.stage.scale.set(zoom);const label=new PIXI.Text('Sector A1',{fontSize:18});label.resolution=overlayTextResolution({canvas:{app,stage:app.stage},devicePixelRatio});app.stage.addChild(label);app.renderer.render(app.stage);
+          rows.push({zoom,resolution:label.resolution,physical:label.texture.baseTexture.realWidth,logical:label.texture.width});app.stage.removeChild(label);label.destroy({texture:true,baseTexture:true});
+        }
+        const unchanged=app.renderer.resolution===originalRenderer;app.destroy(true,{children:true});return {dpr:devicePixelRatio,defaultResolution,unchanged,rows};
+      });
+      assert.equal(measurements.dpr,dpr);assert.equal(measurements.defaultResolution,dpr);assert(measurements.unchanged);
+      for(const m of measurements.rows){assert.equal(m.resolution,Math.min(4,Math.max(2,Math.ceil(dpr*Math.max(1,m.zoom)*2)/2)));assert(Math.abs(m.physical-m.logical*m.resolution)<2);}
+      await context.close();
+    }
     console.log('Real PIXI/WebGL rendering, masks, shared vector icons, hover pixels/tooltips, transformed navigation, token/UI/drag/right-click safeguards, native events, live updates and cleanup pass. Foundry itself was not loaded.');
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

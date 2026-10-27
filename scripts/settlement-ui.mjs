@@ -1,3 +1,4 @@
+import {hydrateArk} from './settlement-ark.mjs';
 import {sortEditorEntries} from './entry-order.mjs';
 import {renderFaction,hydrateFactions,bindFactions} from './settlement-factions-ui.mjs';
 import {renderShop,hydrateShop,bindShop} from './settlement-shop-ui.mjs';
@@ -12,9 +13,9 @@ export function renderSettlement(host,{field,area,select,reference,terrainField}
   const d=host.data,s=d.settlement;
   const text=(label,key,value,rows=5)=>area(label,key,value,rows);
   const choice=(label,key,value,options)=>select(label,key,value,values(value,options));
-  const ref=(type,key,uuid)=>reference(`settlement.${type}`,0,uuid,key);
+  const ref=(type,key,uuid)=>{const html=reference(`settlement.${type}`,0,uuid,key);return type==='ark'?html.replace('type="hidden"','type="text" aria-label="Linked Ark Actor UUID"'):html;};
   const image=(label,key,value)=>`${field(label,key,value)}<button type="button" data-settlement-image="${key}">Choose ${esc(label)}</button><div class="sm-image-preview" data-settlement-preview="${key}" data-image-path="${esc(value)}"></div>`;
-  if(host.tab==='Overview')return `<div class="sm-overview-grid"><label class="sm-field"><span>Settlement Name</span><input data-sector-name value="${esc(d.nameOverride?d.customName:'')}" placeholder="Name this settlement"></label>${field('Coordinates','code',d.code)}${choice('Settlement Type','settlement.type',s.type,SETTLEMENT_TYPES)}${choice('Disposition Toward the Party','settlement.disposition',s.disposition,DISPOSITIONS)}${field('Population','settlement.population',s.population)}${field('Leadership','settlement.leadership',s.leadership)}${terrainField(d)}</div>${host.overviewSection('Description','settlement.description',s.description)}${image('Settlement Image','settlement.image',s.image)}${text('GM Notes','settlement.notes',s.notes)}<details><summary>Additional overview information (optional)</summary>${[['History / Background','history'],['Current Situation','situation'],['Defenses / Security','defenses'],['Resources and Shortages','resources'],['Trade and Economy','economy']].map(([label,key])=>text(label,`settlement.${key}`,s[key],3)).join('')}${ref('ark','settlement.arkUuid',s.arkUuid)}<small>Optional Ark Actor reference; no statistics are copied or synchronized.</small></details>`;
+  if(host.tab==='Overview')return `<div class="sm-overview-grid"><label class="sm-field"><span>Settlement Name</span><input data-sector-name value="${esc(d.nameOverride?d.customName:'')}" placeholder="Name this settlement"></label>${field('Coordinates','code',d.code)}${choice('Settlement Type','settlement.type',s.type,SETTLEMENT_TYPES)}${choice('Disposition Toward the Party','settlement.disposition',s.disposition,DISPOSITIONS)}${field('Population','settlement.population',s.population)}${field('Leadership','settlement.leadership',s.leadership)}${terrainField(d)}</div><section><h3>Linked Ark Sheet</h3>${ref('ark','settlement.arkUuid',s.arkUuid)}<div data-ark-information></div></section>${host.overviewSection('Description','settlement.description',s.description)}${image('Settlement Image','settlement.image',s.image)}${text('GM Notes','settlement.notes',s.notes)}<details><summary>Additional overview information (optional)</summary>${[['History / Background','history'],['Current Situation','situation'],['Defenses / Security','defenses'],['Resources and Shortages','resources'],['Trade and Economy','economy']].map(([label,key])=>text(label,`settlement.${key}`,s[key],3)).join('')}</details>`;
   if(host.tab==='Shop')return renderShop(host);
   const key=SETTLEMENT_COLLECTIONS[host.tab],entries=sectorCollection(d,key),state=host.entryState(key),kind=key.split('.')[1];
   const fields=(item,p,i)=>{
@@ -54,6 +55,7 @@ export async function renderProject(host,target,entry){
 }
 
 export async function hydrateSettlement(host,root){
+  if(host.tab==='Overview')await hydrateArk(host,root);
   if(host.tab==='Shop')await hydrateShop(host,root);
   if(host.tab==='Factions')await hydrateFactions(host,root);
   for(const target of root.querySelectorAll('[data-settlement-preview]'))host.showImage(target,imagePath(target.dataset.imagePath),'Settlement image','No image selected');
