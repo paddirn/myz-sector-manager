@@ -741,6 +741,12 @@
         },
         "migration": {
           "$ref": "#/$defs/ShopMigration"
+        },
+        "playerAccess": {
+          "type": "boolean"
+        },
+        "trading": {
+          "$ref": "#/$defs/ShopTrading"
         }
       },
       "additionalProperties": true
@@ -1861,6 +1867,39 @@
           }
         }
       ]
+    },
+    "ShopTrading": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "values": {
+          "$ref": "#/$defs/ShopResourceValues"
+        }
+      },
+      "additionalProperties": true
+    },
+    "ShopResourceValues": {
+      "type": "object",
+      "properties": {
+        "bullets": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "cleanGrub": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "cleanWater": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        }
+      },
+      "additionalProperties": true
     }
   }
 }

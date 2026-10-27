@@ -3,7 +3,7 @@
   "formatVersion": 1,
   "schemaVersion": 1,
   "source": {
-    "name": "Fictional demonstration — not sourcebook rules"
+    "name": "Fictional demonstration \u2014 not sourcebook rules"
   },
   "sector": {
     "version": 1,
@@ -151,7 +151,16 @@
             "type": "services",
             "entries": []
           }
-        ]
+        ],
+        "playerAccess": false,
+        "trading": {
+          "enabled": false,
+          "values": {
+            "bullets": 1,
+            "cleanGrub": 1,
+            "cleanWater": 1
+          }
+        }
       },
       "shops": []
     }
