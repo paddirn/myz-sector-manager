@@ -589,14 +589,6 @@ The **Sector Manager Settings** gear beside **+ New Sector** replaces the collap
 
 Configure / Tracking now labels **Columns** as horizontal squares and **Rows** as vertical squares, including maps with vertically lettered coordinates; existing stored grid values and coordinate math are preserved. See [portable format, examples, migration behavior and manual Foundry checklist](docs/sector-portability.md) and the [JSON Schema](docs/sector-portable.schema.json).
 
-### Linked Arks, standalone Player Shops and resource trades (0.1.37)
+### Generate sector JSON with external AI tools
 
-Settlement Overview now has a read-only **Linked Ark Sheet** panel. Drop an official MYZ Ark Actor or paste its UUID; open its native sheet to edit it.
-
-On the GM Shop tab, expand **Player Shop and Resource Trading**, explicitly enable Player Shop access, and Save Sector. Copy the displayed Script Macro for players. It calls `game.myzSectorManager.openPlayerShop("JournalEntry.YOUR_SETTLEMENT_JOURNAL_ID")` and opens only that Shop, without granting access to the GM sector Journal. An active GM is required. Players can request purchases in chat; purchases never transfer Items or spend resources. Stock quantities are not tracked by the existing reference-only Shop.
-
-Optional, per-Settlement resource trading exchanges Bullets, Clean Grub and Clean Water on owned characters. The GM configures relative values (default 1:1:1 is a house setting, not official rules). Players preview and confirm exact whole-unit trades; the active GM validates and updates native MYZ character resources. Trading and player access default to disabled.
-
-Selected-sector tracking uses one coordinate button spanning the distance rows. Overlay text textures now account for canvas zoom and display resolution without changing global Foundry rendering.
-
-See [setup, example macro, verified MYZ field mappings, JSON fields, transaction limits and manual tests](docs/settlement-player-shop.md). Run the additional browser check with `node tests/player-shop-browser.cjs` when Playwright and Chromium are available. No release is published until the PR is reviewed, merged, and its matching version tag is explicitly pushed.
+Use the [authoritative field guide](docs/sector-json/SECTOR-JSON-GUIDE.md), [standalone Draft 2020-12 Schema](docs/sector-json/sector.schema.json), and [AI conversion instructions](docs/sector-json/AI-SECTOR-CONVERSION-INSTRUCTIONS.md). Complete fictional, document-free examples are available for [Normal](docs/sector-json/example-normal-sector.json), [Special](docs/sector-json/example-special-sector.json), and [Settlement](docs/sector-json/example-settlement-sector.json). The guide distinguishes validation from visible UI behavior, documents defaults and missing references, and explains why live Shop stock/Faction galleries need actual UUIDs. This documentation does not change the importer or module version.

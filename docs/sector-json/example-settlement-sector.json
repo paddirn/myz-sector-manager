@@ -1,0 +1,159 @@
+{
+  "format": "myz-sector-manager",
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "source": {
+    "name": "Fictional demonstration — not sourcebook rules"
+  },
+  "sector": {
+    "version": 1,
+    "nameOverride": true,
+    "terrain": "Settlement",
+    "rot": 0,
+    "threatLevel": 1,
+    "status": "Unexplored",
+    "description": "An inhabited former dry dock.",
+    "notes": "GM secret: the council is concealing a damaged reservoir.",
+    "sectorType": "settlement",
+    "customName": "Canal Haven",
+    "settlement": {
+      "version": 1,
+      "type": "Trading Post",
+      "disposition": "Neutral",
+      "population": "About forty residents",
+      "leadership": "A council of traders",
+      "description": "Walkways connect shelters built inside disused barges.",
+      "image": "",
+      "notes": "GM secret: a council member wants to abandon the Haven.",
+      "history": "Families established the Haven after finding the reservoir.",
+      "situation": "Trade is steady, but water storage needs repair.",
+      "defenses": "A fence and a lookout platform.",
+      "resources": "Water storage; spare cloth is scarce.",
+      "economy": "Food, water and repairs are bartered. A handcart and rope are discussed here because no Foundry Item references have been supplied.",
+      "arkUuid": "",
+      "projects": [
+        {
+          "id": "t-project-platform",
+          "title": "Lookout platform",
+          "uuid": "",
+          "referenceName": "",
+          "status": "In Progress",
+          "progress": "Foundation completed; no work-point total is specified.",
+          "completedAt": "",
+          "notes": "Descriptive assignment only. Link a real MYZ Project Item later to display its statistics."
+        },
+        {
+          "id": "t-project-reservoir",
+          "title": "Reservoir repair",
+          "uuid": "",
+          "status": "Planned",
+          "progress": "",
+          "notes": "A repair proposal without a linked Project Item."
+        }
+      ],
+      "inhabitants": [
+        {
+          "id": "t-inhabitant-isha",
+          "title": "Isha",
+          "details": "A trader who advocates repairing the reservoir.",
+          "uuid": "",
+          "portrait": "",
+          "role": "Trader",
+          "disposition": "Friendly",
+          "factionId": "t-faction-council",
+          "notes": "GM secret: Isha knows a bypass channel."
+        },
+        {
+          "id": "t-inhabitant-bren",
+          "title": "Bren",
+          "details": "A mechanic who distrusts the council.",
+          "uuid": "",
+          "portrait": "",
+          "role": "Mechanic",
+          "disposition": "Neutral",
+          "factionId": "t-faction-workers"
+        }
+      ],
+      "factions": [
+        {
+          "id": "t-faction-council",
+          "title": "The Haven Council",
+          "infoVersion": 1,
+          "info": "Oversees trade.\nMembers described in text: Isha and two unnamed traders.\nGM secret: conceals the reservoir damage.",
+          "membersVersion": 1,
+          "members": []
+        },
+        {
+          "id": "t-faction-workers",
+          "title": "Dock Workers",
+          "infoVersion": 1,
+          "info": "Repair crews led informally by Bren. Actor portraits cannot be populated without actual Actor UUIDs.",
+          "membersVersion": 1,
+          "members": []
+        }
+      ],
+      "events": [
+        {
+          "id": "t-event-market",
+          "title": "Market meeting",
+          "details": "Residents gather to discuss repairs.",
+          "status": "Planned",
+          "trigger": "The next trading day",
+          "outcomes": "The GM determines whether the council agrees to repairs.",
+          "related": "Isha, Bren and both factions",
+          "notes": "Keep the hidden reservoir damage in GM notes until revealed."
+        }
+      ],
+      "threads": [
+        {
+          "id": "t-thread-water",
+          "title": "The reservoir dispute",
+          "details": "Water storage needs repair.",
+          "status": "Open",
+          "npcs": "Isha; Bren",
+          "factions": "Haven Council; Dock Workers",
+          "clues": "Damp ground behind the tank",
+          "developments": "A repair meeting may uncover the damage.",
+          "resolution": "Unresolved",
+          "notes": "No automatic event executes."
+        }
+      ],
+      "shop": {
+        "version": 1,
+        "groups": [
+          {
+            "id": "t-shop-general",
+            "name": "Supplies",
+            "type": "general",
+            "entries": []
+          },
+          {
+            "id": "t-shop-weapons",
+            "name": "Weapons",
+            "type": "weapons",
+            "entries": []
+          },
+          {
+            "id": "t-shop-armor",
+            "name": "Protection",
+            "type": "armor",
+            "entries": []
+          },
+          {
+            "id": "t-shop-vehicles",
+            "name": "Canal transport",
+            "type": "vehicles",
+            "entries": []
+          },
+          {
+            "id": "t-shop-services",
+            "name": "Repairs",
+            "type": "services",
+            "entries": []
+          }
+        ]
+      },
+      "shops": []
+    }
+  }
+}

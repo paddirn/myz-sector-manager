@@ -1,5 +1,7 @@
 # Single-sector JSON import and export (0.1.36)
 
+For a complete source-audited field catalog, standalone Schema and AI-ready examples, use the [authoritative sector JSON documentation bundle](sector-json/SECTOR-JSON-GUIDE.md). This page describes the operational workflow.
+
 The **Sector Manager Settings** gear sits immediately to the right of **+ New Sector**. It replaces the old collapsible Zone tools section. Configure / Tracking, View Zone, Select on map, Show/Hide overlay, Wander Now, Wandering Tokens, and both selected-token wandering actions retain their behavior. Import Sector and Export Sector are GM-only. The browser's native popover opens in the top layer, closes outside/on Escape or after a choice, and supports Up/Down/Home/End. It follows the application when moved or resized; no document-wide menu listeners are installed.
 
 ## Export
