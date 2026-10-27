@@ -474,7 +474,7 @@ const path=require('node:path');
     await page.locator('[name="effects.0.title"]').fill('Meaningful effect');assert.equal(await page.locator('[data-tab="Effects"]').evaluate(el=>el.classList.contains('sm-tab-empty')),false);
     await page.locator('[data-action="save"]').click();await page.waitForFunction(()=>!manager.dirty);
     await page.locator('[data-zone-coordinate]').first().click();await page.waitForFunction(()=>lastPan?.x===250&&lastPan?.y===600);
-    assert.equal(await page.locator('.zm-selected button').first().innerText(),'A2');
+    assert.equal(await page.locator('.zm-shared-selected').innerText(),'A2');assert.equal(await page.locator('[data-zone-coordinate]').count(),1);
     console.log('Generation cancellation/preview/persistence, preserved notes, live tab indicators, and selected-sector coordinate navigation pass');
     assert.match(await page.locator('.zm-ark .zm-original-distance').innerText(),/Party is 1 sector \(1.6 km\) from the Ark/);
     assert.match(await page.locator('.zm-ark .zm-selected').innerText(),/1 sector \(1.6 km\) from the Ark/);
@@ -489,9 +489,9 @@ const path=require('node:path');
       const layout=await page.evaluate(()=>{
         const summary=document.querySelector('.sm-zone-summary'),ark=summary.querySelector('.zm-ark'),party=summary.querySelector('.zm-positions .zm-expedition');
         const selected=Array.from(summary.querySelectorAll('.zm-selected'));const labels=selected.map(el=>el.querySelector('span').getBoundingClientRect());
-        return {overflow:summary.scrollWidth>summary.clientWidth+1,first:ark.children[1].getBoundingClientRect().width,central:ark.querySelector('.zm-original-distance').getBoundingClientRect(),labels:labels.map(rect=>({height:rect.height})),aligned:Math.abs(ark.querySelector('.zm-selected').getBoundingClientRect().left-party.querySelector('.zm-selected').getBoundingClientRect().left)<1};
+        return {overflow:summary.scrollWidth>summary.clientWidth+1,first:ark.children[1].getBoundingClientRect().width,central:ark.querySelector('.zm-original-distance').getBoundingClientRect(),labels:labels.map(rect=>({height:rect.height})),shared:summary.querySelector('.zm-shared-selected').getBoundingClientRect().height,span:Math.max(...labels.map(r=>r.bottom))-Math.min(...labels.map(r=>r.top)),aligned:Math.abs(ark.querySelector('.zm-selected').getBoundingClientRect().left-party.querySelector('.zm-selected').getBoundingClientRect().left)<1};
       });
-      assert.equal(layout.overflow,false,'tracking horizontal overflow at '+width);assert(layout.aligned);
+      assert.equal(layout.overflow,false,'tracking horizontal overflow at '+width);assert(layout.aligned);assert(layout.shared>=layout.span-1);
       if(width>=920){assert(layout.first<=88);assert(layout.central.width>layout.first);assert(layout.central.height<24);assert(layout.labels.every(label=>label.height<24));}
     }
     await page.evaluate(()=>{manager.element.style.width='1100px';});
@@ -982,7 +982,7 @@ const path=require('node:path');
     // Long content and large lists stay within the same scrollable/resizable shell.
     await page.evaluate(async()=>{manager.draft.settlement.inhabitants=Array.from({length:50},(_,i)=>({...manager.draft.settlement.inhabitants[0],id:'large-npc-'+i,title:'Resident '+i}));manager.dirty=true;manager.tab='Inhabitants';await manager.render();manager.element.style.width='760px';manager.element.style.height='420px';});
     assert.equal(await page.locator('[data-entry]').count(),50);await page.locator('[data-collapse-all]').click();await page.locator('[data-expand-all]').click();assert.equal(await page.locator('[data-entry-toggle][aria-expanded="true"]').count(),50);
-    assert(await page.locator('.sm-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));await page.locator('.sm-content').hover();await page.mouse.wheel(0,500);assert(await page.locator('.sm-content').evaluate(el=>el.scrollTop>0));await saveSpecial();
+    assert(await page.locator('.sm-content').evaluate(el=>el.scrollWidth<=el.clientWidth+1));await page.locator('.sm-content').hover();await page.mouse.wheel(0,500);await page.waitForFunction(()=>document.querySelector('.sm-content').scrollTop>0);await saveSpecial();
     await page.evaluate(async id=>{await manager.navigate(id);manager.journal.delete=async()=>{const i=records.indexOf(manager.journal);records.splice(i,1);};},secondSettlementId);await page.locator('[data-action="delete"]').click();await page.waitForFunction(()=>manager.sectorId===null);assert.equal(await page.evaluate(id=>Boolean(records.get(id)),secondSettlementId),false);
     await page.evaluate(async()=>{await manager.navigate(settlementId);manager.tab='Overview';manager.element.style.width='920px';manager.element.style.height='730px';await manager.render();});await page.screenshot({path:'/tmp/myz-settlement-editor.png'});
     assert.equal(await page.evaluate(()=>JSON.stringify(records.get('sector1').flags)===originalSectorSnapshot),true);assert.deepEqual(await page.evaluate(()=>sourceMutations),[]);

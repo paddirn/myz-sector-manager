@@ -5,7 +5,7 @@ import {fixture} from './helpers/zone-fixture.mjs';
 const row=(html,kind)=>html.match(kind==='ark'?/<div class="zm-ark[\s\S]*?(?=<div class="zm-positions">|$)/:/<div class="zm-positions">[\s\S]*/)?.[0]||'';
 test('selected sector distances reuse eight-neighbor units and Ark-party distance appears only on the Ark row',()=>{
   const f=fixture(),runtime=new ZoneRuntime({},f.env);runtime.store.reload();const html=runtime.summary({code:'D1'});
-  assert.match(row(html,'ark'),/1 sector \(1.6 km\)/);assert.match(row(html,'ark'),/3 sectors \(4.8 km\)/);assert.match(row(html,'party'),/2 sectors \(3.2 km\)/);assert.doesNotMatch(row(html,'party'),/1 sector \(1.6 km\)/);assert.equal((html.match(/data-zone-coordinate="D1"/g)||[]).length,2);
+  assert.match(row(html,'ark'),/1 sector \(1.6 km\)/);assert.match(row(html,'ark'),/3 sectors \(4.8 km\)/);assert.match(row(html,'party'),/2 sectors \(3.2 km\)/);assert.doesNotMatch(row(html,'party'),/1 sector \(1.6 km\)/);assert.equal((html.match(/data-zone-coordinate="D1"/g)||[]).length,1);
 });
 test('selected distances recalculate for selection, Ark, party, and kilometer settings changes',()=>{
   const f=fixture(),runtime=new ZoneRuntime({},f.env);runtime.store.reload();
@@ -29,3 +29,5 @@ test('distance labels state both origins and use singular/plural with configured
   html=runtime.summary({code:'D1'});assert.match(row(html,'ark'),/Party is 1 sector \(2 km\) from the Ark/);assert.match(row(html,'ark'),/2 sectors \(4 km\) from the Ark/);assert.match(row(html,'party'),/1 sector \(2 km\) from the Party/);
   html=runtime.summary({code:'C1'});assert.match(row(html,'party'),/0 sectors \(0 km\) from the Party/);
 });
+
+test('one selected coordinate control spans Ark and all Party rows',()=>{const f=fixture(),runtime=new ZoneRuntime({},f.env);runtime.store.reload();const html=runtime.summary({code:'D1'});assert.equal((html.match(/data-zone-coordinate=/g)||[]).length,1);assert.match(html,/zm-shared-selected/);assert.match(html,/grid-row:1 \/ span 2/);});

@@ -5,6 +5,15 @@ import {gridBounds,coordinateToBounds,positionToCoordinate,canonicalCoordinate} 
 import {MODULE} from './store.mjs';
 import {sectorIndicators,drawSectorIcon} from '../sector-icons.mjs';
 
+// PIXI.Text defaults to the global text texture resolution, independent of stage
+// zoom and sometimes below the canvas renderer/DPR. Magnifying that texture
+// softens labels; small/fractional font sizes also downsample from thin textures.
+// Use at least 2× texture sampling locally, with bounded half-step
+// buckets, and regenerate on bucket changes; leave Foundry renderer untouched.
+export function overlayTextResolution(env){
+ const renderer=Number(env.canvas?.app?.renderer?.resolution)||1,dpr=Number(env.devicePixelRatio)||1,zoom=Number(env.canvas?.stage?.scale?.x)||1;
+ return Math.min(4,Math.max(2,Math.ceil(Math.max(renderer,dpr)*Math.max(1,zoom)*2)/2));
+}
 // Passive PIXI objects; board listeners observe background gestures without
 // cancelling Foundry events. One-shot calibration remains explicitly armed.
 export class ZoneOverlay {
@@ -31,7 +40,7 @@ export class ZoneOverlay {
       const a=canvas.stage.toLocal(new PIXI.Point(0,0)),b=canvas.stage.toLocal(new PIXI.Point(canvas.app.screen.width,canvas.app.screen.height));
       labelClip={x:Math.max(clip.x,Math.min(a.x,b.x)-config.grid.width),y:Math.max(clip.y,Math.min(a.y,b.y)-config.grid.height),right:Math.min(clip.right,Math.max(a.x,b.x)+config.grid.width),bottom:Math.min(clip.bottom,Math.max(a.y,b.y)+config.grid.height)};
     }
-    const signature=JSON.stringify([config.sceneId,config.grid,config.overlay,config.arkCoordinate,clip,labelClip,Boolean(this.preview)]);
+    const signature=JSON.stringify([config.sceneId,config.grid,config.overlay,config.arkCoordinate,clip,labelClip,Boolean(this.preview),overlayTextResolution(this.env)]);
     if(this.root&&this.signature===signature&&this.root.parent===canvas.stage){this.refreshSectors();return;}
     this.destroy();this.signature=signature;this.clip=clip;this.labelClip=labelClip;this.config=config;
     const root=this.root=new PIXI.Container();root.eventMode='none';root.interactiveChildren=false;root.name='myz-zone-overlay';canvas.stage.addChild(root);
@@ -45,7 +54,7 @@ export class ZoneOverlay {
     const ark=coordinateToBounds(config.arkCoordinate,config.grid);
     if(ark){
       graphics.lineStyle(2,0xe7b85c,.9).beginFill(0xe7b85c,.22).drawRect(ark.x,ark.y,ark.width,ark.height).endFill();
-      const label=new PIXI.Text('⌂ Ark',{fontFamily:'Arial',fontSize:Math.max(10,Math.min(20,ark.width/5,ark.height/5)),fill:0xffd77d,stroke:0x111111,strokeThickness:3});label.anchor?.set(.5,.5);label.position.set(ark.x+ark.width/2,ark.y+ark.height/2);label.eventMode='none';root.addChild(label);
+      const label=new PIXI.Text('⌂ Ark',{fontFamily:'Arial',fontSize:Math.max(10,Math.min(20,ark.width/5,ark.height/5)),fill:0xffd77d,stroke:0x111111,strokeThickness:3});label.resolution=overlayTextResolution(this.env);label.anchor?.set(.5,.5);label.position.set(ark.x+ark.width/2,ark.y+ark.height/2);label.eventMode='none';root.addChild(label);
     }
     this.hover=new PIXI.Graphics();this.hover.eventMode='none';root.addChild(this.hover);
     this.refreshSectors();
@@ -90,7 +99,7 @@ export class ZoneOverlay {
     const mask=new PIXI.Graphics().beginFill(0xffffff).drawRect(special?b.x:b.x+1,special?b.y:b.y+1,special?b.width:b.width-2,special?b.height:b.height-2).endFill();root.addChild(mask);root.mask=mask;
     const font=Math.max(1,Math.min(18,b.width/7,b.height/7)),padding=Math.min(4,b.width*.04,b.height*.04),available=b.width-padding*2;
     const text=(value,x,y,size=font,fill=0xfaf0d4)=>{
-      const label=new PIXI.Text(String(value),{fontFamily:'Arial',fontSize:size,fill,stroke:0x111111,strokeThickness:Math.min(3,font/5),wordWrap:true,wordWrapWidth:available,breakWords:true});label.eventMode='none';label.position.set(x,y);root.addChild(label);return label;
+      const label=new PIXI.Text(String(value),{fontFamily:'Arial',fontSize:size,fill,stroke:0x111111,strokeThickness:Math.min(3,font/5),wordWrap:true,wordWrapWidth:available,breakWords:true});label.resolution=overlayTextResolution(this.env);label.eventMode='none';label.position.set(x,y);root.addChild(label);return label;
     };
     if(special&&imagePath(data.special?.overlayImage))this.addImage(cell,root,data.special.overlayImage,{x:b.x+b.width*2/3,y:b.y,width:b.width/3,height:b.height/3});
     if(settlement&&imagePath(data.settlement?.image))this.addImage(cell,root,data.settlement.image,{x:b.x+b.width*2/3,y:b.y,width:b.width/3,height:b.height/3});
