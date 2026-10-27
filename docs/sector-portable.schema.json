@@ -3821,6 +3821,39 @@
                 "version": {
                   "const": 1
                 },
+                "playerAccess": {
+                  "type": "boolean"
+                },
+                "trading": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "values": {
+                      "type": "object",
+                      "properties": {
+                        "bullets": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000
+                        },
+                        "cleanGrub": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000
+                        },
+                        "cleanWater": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000
+                        }
+                      },
+                      "additionalProperties": true
+                    }
+                  },
+                  "additionalProperties": true
+                },
                 "groups": {
                   "type": "array",
                   "items": {

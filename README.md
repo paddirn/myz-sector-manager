@@ -588,3 +588,15 @@ Projects and Inhabitants display alphabetically without rearranging stored recor
 The **Sector Manager Settings** gear beside **+ New Sector** replaces the collapsible Zone tools section and keeps all its actions. Use **Export Sector** for a saved Normal, Special or Settlement record, or **Import Sector** to preview a local versioned JSON file at the currently selected Zone square. Occupied squares require explicit replacement confirmation; missing UUIDs are warned about and retained, and safe unknown fields are preserved separately. Only one sector is transferred at a time. No Actors/Items are created, resources changed, tokens moved or Macros executed.
 
 Configure / Tracking now labels **Columns** as horizontal squares and **Rows** as vertical squares, including maps with vertically lettered coordinates; existing stored grid values and coordinate math are preserved. See [portable format, examples, migration behavior and manual Foundry checklist](docs/sector-portability.md) and the [JSON Schema](docs/sector-portable.schema.json).
+
+### Linked Arks, standalone Player Shops and resource trades (0.1.37)
+
+Settlement Overview now has a read-only **Linked Ark Sheet** panel. Drop an official MYZ Ark Actor or paste its UUID; open its native sheet to edit it.
+
+On the GM Shop tab, expand **Player Shop and Resource Trading**, explicitly enable Player Shop access, and Save Sector. Copy the displayed Script Macro for players. It calls `game.myzSectorManager.openPlayerShop("JournalEntry.YOUR_SETTLEMENT_JOURNAL_ID")` and opens only that Shop, without granting access to the GM sector Journal. An active GM is required. Players can request purchases in chat; purchases never transfer Items or spend resources. Stock quantities are not tracked by the existing reference-only Shop.
+
+Optional, per-Settlement resource trading exchanges Bullets, Clean Grub and Clean Water on owned characters. The GM configures relative values (default 1:1:1 is a house setting, not official rules). Players preview and confirm exact whole-unit trades; the active GM validates and updates native MYZ character resources. Trading and player access default to disabled.
+
+Selected-sector tracking uses one coordinate button spanning the distance rows. Overlay text textures now account for canvas zoom and display resolution without changing global Foundry rendering.
+
+See [setup, example macro, verified MYZ field mappings, JSON fields, transaction limits and manual tests](docs/settlement-player-shop.md). Run the additional browser check with `node tests/player-shop-browser.cjs` when Playwright and Chromium are available. No release is published until the PR is reviewed, merged, and its matching version tag is explicitly pushed.

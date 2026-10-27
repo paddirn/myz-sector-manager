@@ -83,3 +83,7 @@ Automated tests simulate Foundry APIs; these live checks have **not** been perfo
 6. Try malformed/unsupported files, change the Scene or selected square during preview, and verify no destination write. Confirm no Travel Events, wandering movement, table rolls or Macros occur during import.
 7. Configure a non-square grid in each letter orientation; check physical Columns/Rows, overlay size, unchanged known coordinates and Party tracking. Reopen the form without editing and verify values are retained.
 8. Reopen imported records after switching tabs, Scenes and reloading the world. Verify GM-only access, native drag-and-drop and correct image asset availability.
+
+## Linked Ark and Player Shop additions (0.1.37)
+
+The existing `settlement.arkUuid` reference now powers a read-only live Ark panel. New `settlement.shop.playerAccess` and `settlement.shop.trading` configuration round trip through the v1 format without changing sector/schema versions. Existing records default to unpublished Shops and disabled trading. See the [complete field/default and official MYZ source mapping](settlement-player-shop.md#persistence-and-portable-json); the published [JSON Schema](sector-portable.schema.json) includes all new fields. Import preserves explicit enabled states: review player publication before sharing the imported Settlement's macro. User request flags and Actor transaction receipts are runtime state and are not portable sector fields.

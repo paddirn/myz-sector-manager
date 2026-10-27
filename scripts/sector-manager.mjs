@@ -1,3 +1,6 @@
+import {PlayerShopService} from './player-shop-service.mjs';
+import {createPlayerShopClass} from './player-shop-ui.mjs';
+import {hydrateArk,requireArk} from './settlement-ark.mjs';
 import {settingsMenu,bindSettingsMenu,refreshSettingsMenu} from './settings-menu.mjs';
 import {importSector,exportSector} from './portable/ui.mjs';
 import {sortEditorEntries} from './entry-order.mjs';
@@ -528,7 +531,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       if(e.name==='travel.difficult'&&e.checked){this.draft.travel.open=false;el.querySelector('[name="travel.open"]').checked=false;}
       if(/^(loot|special\.gear)\.\d+\.type$/.test(e.name)){const parts=e.name.split('.'),entry=parts[0]==='loot'?this.draft.loot[parts[1]]:this.draft.special.gear[parts[2]];entry.typeSource='manual';this.lootTypeRevisions.set(entry,(this.lootTypeRevisions.get(entry)||0)+1);}
       if(/^special\.(inhabitants|gear|events|images)\.\d+\.title$/.test(e.name)){const parts=e.name.split('.');this.draft.special[parts[1]][parts[2]].titleOverride=Boolean(e.value.trim());}
-      this.capture();if(e.name?.endsWith('.title'))sortEditorEntries(this);if(e.name==='special.situation')this.sizeSituation();if(e.name?.startsWith('settlement.')&&e.name.endsWith('.title')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title&&!e.closest('[data-inventory-id]'))title.textContent=e.value||'Untitled Entry';}if(['terrain','code','status','rot'].includes(e.name))zone.overlay?.setDraft?.(this.sectorId,this.draft);if(e.name?.startsWith('pathStunts.')||LINKED_STUNTS[e.name])this.refreshStuntControls();if(e.name==='threatLevel')el.querySelector('[data-threat-descriptor]').textContent=threatDescriptor(this.draft.threatLevel);if(e.name?.startsWith('loot.'))this.refreshLootCards();if(e.name?.startsWith('special.'))this.refreshSpecialCards();if(e.name?.startsWith('travel.')||e.name?.startsWith('pathStunts.'))this.refreshTravelTimes();
+      this.capture();if(e.name?.endsWith('.title'))sortEditorEntries(this);if(e.name==='special.situation')this.sizeSituation();if(e.name?.startsWith('settlement.')&&e.name.endsWith('.title')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title&&!e.closest('[data-inventory-id]'))title.textContent=e.value||'Untitled Entry';}if(['terrain','code','status','rot'].includes(e.name))zone.overlay?.setDraft?.(this.sectorId,this.draft);if(e.name?.startsWith('pathStunts.')||LINKED_STUNTS[e.name])this.refreshStuntControls();if(e.name==='settlement.arkUuid'){void hydrateArk(this);void this.renderReference(e.closest('[data-reference]'));}if(e.name==='threatLevel')el.querySelector('[data-threat-descriptor]').textContent=threatDescriptor(this.draft.threatLevel);if(e.name?.startsWith('loot.'))this.refreshLootCards();if(e.name?.startsWith('special.'))this.refreshSpecialCards();if(e.name?.startsWith('travel.')||e.name?.startsWith('pathStunts.'))this.refreshTravelTimes();
       if(e.name?.startsWith('supplies.'))this.refreshConsumables();this.refreshTabIndicators();this.refreshSectorIcons();if(e.matches('[data-sector-name]')||['code','terrain'].includes(e.name)){this.refreshSectorLabels();this.refreshZoneSummary();}
       if(e.name?.endsWith('.title')&&!e.name.startsWith('loot.')&&!e.name.startsWith('special.gear.')&&!e.name.includes('.inventory.')){const title=e.closest('[data-entry]')?.querySelector('[data-entry-title]');if(title)title.textContent=e.value||'Untitled Entry';}
     }));
@@ -578,7 +581,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   refreshTabIndicators(){
     for(const button of this.element.querySelectorAll('[data-tab]'))button.classList.toggle('sm-tab-empty',!tabHasContent(this.data,button.dataset.tab));
   }
-  capture(){if(!this.journal)return;const collection=this.collectionKey(),useIds=inhabitantCollection(this.data,this.tab)===collection||['settlement.projects','settlement.factions'].includes(collection),records=new Map(useIds&&collection?this.entryState(collection).entries.map(record=>[record.id,record.item]):[]);const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){if(f.disabled)continue;if(f.type==='radio'&&!f.checked)continue;let parts=f.name.split('.');let target=this.draft;const card=f.closest?.('[data-entry]'),item=records.get(card?.dataset?.entry);if(item&&collection&&f.name.startsWith(collection+'.')){target=item;parts=parts.slice(collection.split('.').length+1);}for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(/^special\.gear\.\d+\.quantity$/.test(f.name))v=specialQuantity(v);if(/^loot\.\d+\.quantity$/.test(f.name)){const quantity=Number(v);v=lootQuantity(v);}if(f.name==='threatLevel')v=normalizeThreatLevel(v,sectorThreatLevel(this.draft));if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;if(f.name==='travel.difficulty')v=travelOptions({difficulty:v}).difficulty;target[parts.at(-1)]=v;}this.draft.pathStunts=normalizePathStunts(this.draft.pathStunts);this.draft.travel=sectorTravelOptions(this.draft);for(const key of [...Object.values(COLLECTIONS),'special.locations'])this.entryState(key);}
+  capture(){if(!this.journal)return;const collection=this.collectionKey(),useIds=inhabitantCollection(this.data,this.tab)===collection||['settlement.projects','settlement.factions'].includes(collection),records=new Map(useIds&&collection?this.entryState(collection).entries.map(record=>[record.id,record.item]):[]);const fields=this.element.querySelectorAll('.sm-content [name]');for(const f of fields){if(f.disabled)continue;if(f.type==='radio'&&!f.checked)continue;let parts=f.name.split('.');let target=this.draft;const card=f.closest?.('[data-entry]'),item=records.get(card?.dataset?.entry);if(item&&collection&&f.name.startsWith(collection+'.')){target=item;parts=parts.slice(collection.split('.').length+1);}for(let i=0;i<parts.length-1;i++){target[parts[i]] ??= {};target=target[parts[i]];}let v=f.type==='checkbox'?f.checked:f.value;if(f.name.startsWith('supplies.')&&f.type==='number'){const n=Number(f.value);v=Number.isFinite(n)?Math.max(0,n):0;}if(/^special\.gear\.\d+\.quantity$/.test(f.name))v=specialQuantity(v);if(/^loot\.\d+\.quantity$/.test(f.name)){const quantity=Number(v);v=lootQuantity(v);}if(f.name.startsWith('settlement.shop.trading.values.'))v=Number(v);if(f.name==='threatLevel')v=normalizeThreatLevel(v,sectorThreatLevel(this.draft));if(f.name==='rot')v=ROT_LEVELS.some(entry=>String(entry.level)===String(v))?Number(v):this.draft.rot;if(f.name==='travel.difficulty')v=travelOptions({difficulty:v}).difficulty;target[parts.at(-1)]=v;}this.draft.pathStunts=normalizePathStunts(this.draft.pathStunts);this.draft.travel=sectorTravelOptions(this.draft);for(const key of [...Object.values(COLLECTIONS),'special.locations'])this.entryState(key);}
   refreshZoneSummary(){
     refreshSettingsMenu(this,zone);
     const container=this.element?.querySelector('.sm-zone-summary');
@@ -780,7 +783,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   clearReference(zone){
     zone.querySelector('input').value='';
     this.capture();this.clearReferenceWarning(zone);this.markDirty();
-    const rendering=this.renderReference(zone);
+    const rendering=this.renderReference(zone);if(zone.querySelector('input').name==='settlement.arkUuid')void hydrateArk(this);
     if(isSettlement(this.data)&&zone.querySelector('input').name.startsWith('settlement.projects.')){const target=zone.closest('[data-entry]').querySelector('[data-project-view]');void renderProject(this,target,this.referenceEntry(zone));}
     return rendering;
   }
@@ -797,13 +800,13 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       if(!doc)throw new Error('Reference could not be found.');
       if(zone.dataset.type && !zone.dataset.type.split('|').includes(doc.documentName)){ui.notifications.warn(`This entry expects a ${zone.dataset.type.replaceAll('|',' or ').replaceAll('JournalEntryPage','Journal Entry Page').replaceAll('JournalEntry','Journal Entry')}.`);return;}
       if(input.name?.startsWith('settlement.projects.'))requireProject(doc,game.system?.id||'mutant-year-zero');
-      if(input.name==='settlement.arkUuid'&&doc.type!=='ark')throw new Error('Choose an MYZ Ark Actor.');
+      if(input.name==='settlement.arkUuid')requireArk(doc);
       if(input.name?.startsWith('special.images.')&&!journalImageSource(doc))throw new Error('An Image-type Journal page with an available image source is required.');
       if(inhabitantCollection(this.data,this.tab)&&doc.documentName==='Actor'&&!await linkInhabitant(this,zone,doc,globalThis))return;
       const changed=zone.querySelector('input').value!==doc.uuid;
       if(input.name?.startsWith('settlement.projects.')&&entry)Object.assign(entry,assignProject(entry,doc,game.system?.id));zone.querySelector('input').value=doc.uuid;
       this.capture();if(input.name?.endsWith('.macroUuid')){const effect=this.draft.effects[Number(input.name.split('.')[1])];effect.triggerId||=foundry.utils.randomID();}if(!entry||(this.lootTypeRevisions.get(entry)||0)===revision)this.assignLootType(zone,doc,changed);this.assignSpecialTitle(zone,doc,changed);this.clearReferenceWarning(zone);this.markDirty();
-      await this.renderReference(zone);
+      await this.renderReference(zone);if(input.name==='settlement.arkUuid')await hydrateArk(this);
       if(input.name?.startsWith('settlement.projects.')){const target=zone.closest('[data-entry]').querySelector('[data-project-view]');await renderProject(this,target,entry);const title=zone.closest('[data-entry]').querySelector('[data-entry-title]');title.textContent=entry.referenceName;}
     }catch(err){ui.notifications.error(`Unable to attach reference: ${err.message}`);}
   }
@@ -891,12 +894,14 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     }
     if(which==='new'){await this.promptNewSector();return;}
     if(which==='add'||which==='add-event'){await this.addContextEntry(key,{event:which==='add-event'});return;}
-    if(which==='save'){if(isSettlement(this.data)){this.capture();if(!this.draft.nameOverride||!this.draft.customName?.trim())throw new Error('Enter a Settlement Name before saving.');if(!canonicalCoordinate(this.draft.code))throw new Error('Enter Settlement coordinates such as A1 or AA10 before saving.');this.draft.settlement=normalizeSettlement(this.draft.settlement);}const pendingStunts=this.stuntWrite,pendingLoot=this.lootWrite;await Promise.all([pendingStunts?.catch(()=>{}),pendingLoot?.catch(()=>{}),this.specialWrite?.catch(()=>{}),this.inhabitantWrite?.catch(()=>{}),this.shopWrite?.catch(()=>{})]);this.capture();if(this.draft.code&&!canonicalCoordinate(this.draft.code))throw new Error('Enter coordinates such as A1 or AA10.');this.busy=true;const j=this.journal;if(!j)return;const name=sectorName(this.draft);delete this.draft.journalName;const stored=cleanThreatRecord(this.draft);stored.travel=storedTravel(stored.travel);if(stored.initialSavePending===true)stored.initialSavePending=false;await j.update({...(j.name===name?{}:{name}),[`flags.${MOD}.${KEY}`]:stored,...threatDeletion(j.getFlag(MOD,KEY))});if(this.stuntWrite===pendingStunts)this.stuntWrite=undefined;if(this.lootWrite===pendingLoot)this.lootWrite=undefined;this.lootContext={journal:j,baseline:JSON.stringify(stored.loot||[])};this.resetSpecialBaseline(stored,j);if(this.draft.initialSavePending===true)this.draft.initialSavePending=false;this.dirty=false;this.busy=false;zone.setSelection(this.draft.code);await this.render();ui.notifications.info('Sector saved.');return;}
+    if(which==='save'){if(isSettlement(this.data)){this.capture();if(!this.draft.nameOverride||!this.draft.customName?.trim())throw new Error('Enter a Settlement Name before saving.');if(!canonicalCoordinate(this.draft.code))throw new Error('Enter Settlement coordinates such as A1 or AA10 before saving.');if(this.draft.settlement.arkUuid){const linked=await fromUuid(this.draft.settlement.arkUuid);if(linked)requireArk(linked);}this.draft.settlement=normalizeSettlement(this.draft.settlement);}const pendingStunts=this.stuntWrite,pendingLoot=this.lootWrite;await Promise.all([pendingStunts?.catch(()=>{}),pendingLoot?.catch(()=>{}),this.specialWrite?.catch(()=>{}),this.inhabitantWrite?.catch(()=>{}),this.shopWrite?.catch(()=>{})]);this.capture();if(this.draft.code&&!canonicalCoordinate(this.draft.code))throw new Error('Enter coordinates such as A1 or AA10.');this.busy=true;const j=this.journal;if(!j)return;const name=sectorName(this.draft);delete this.draft.journalName;const stored=cleanThreatRecord(this.draft);stored.travel=storedTravel(stored.travel);if(stored.initialSavePending===true)stored.initialSavePending=false;await j.update({...(j.name===name?{}:{name}),[`flags.${MOD}.${KEY}`]:stored,...threatDeletion(j.getFlag(MOD,KEY))});if(this.stuntWrite===pendingStunts)this.stuntWrite=undefined;if(this.lootWrite===pendingLoot)this.lootWrite=undefined;this.lootContext={journal:j,baseline:JSON.stringify(stored.loot||[])};this.resetSpecialBaseline(stored,j);if(this.draft.initialSavePending===true)this.draft.initialSavePending=false;this.dirty=false;this.busy=false;zone.setSelection(this.draft.code);await this.render();ui.notifications.info('Sector saved.');return;}
     if(which==='journal'){this.journal?.sheet?.render(true);return;}
     if(which==='delete'){if(!await foundry.applications.api.DialogV2.confirm({window:{title:'Delete Sector'},content:`Permanently delete the Journal Entry for ${escapeHTML(this.journal.name)}? This cannot be undone.`}))return;await this.journal.delete();ENTRY_UI.delete(this.sectorId);CONSUMABLE_UI.delete(this.sectorId);OVERVIEW_UI.delete(this.sectorId);this.sectorId=null;this.draft=null;this.dirty=false;await this.render();return;}
   }catch(err){this.busy=false;console.error(`${MOD} |`,err);ui.notifications.error(`Sector Manager: ${err.message}`);}}
 }
 let app;
+const refreshArk=doc=>{if(game.user.isGM&&app?.rendered&&isSettlement(app.data)&&app.tab==='Overview'&&app.data.settlement.arkUuid===(doc.documentName==='Actor'?doc.uuid:doc.parent?.uuid))void hydrateArk(app);};
+for(const hook of ['updateActor','deleteActor','createItem','updateItem','deleteItem'])Hooks.on(hook,refreshArk);
 // Refresh current Project names/statistics without replacing cards or losing unsaved progress.
 Hooks.on('updateItem',doc=>{
   if(!game.user.isGM||!app?.rendered||!isSettlement(app.data)||app.tab!=='Projects')return;
@@ -905,6 +910,7 @@ Hooks.on('updateItem',doc=>{
   void Promise.all(targets.map(async target=>{const entry=app.data.settlement.projects[Number(target.dataset.projectView)];await app.renderReference(target.closest('[data-entry]').querySelector('[data-reference]'));await renderProject(app,target,entry);})).catch(error=>ui.notifications.error(`Project refresh: ${error.message}`));
 });
 const organization=new JournalOrganization();
+const playerShops=new PlayerShopService();
 const zone=new ZoneRuntime({
   onChange:()=>{if(app?.rendered){if(app.sceneScope!==zone.store.config?.sceneId){app.sceneScope=zone.store.config?.sceneId;app.capture();void app.render();}else app.refreshZoneSummary();}},
   openSector:async id=>{const manager=await game.myzSectorManager.open(id);if(manager?.sectorId===id){manager.capture();manager.tab='Overview';await manager.render();}},
@@ -918,7 +924,10 @@ Hooks.once('init',()=>{
 });
 Hooks.once('ready',async()=>{
   const referencesReady=ensureReferenceMigration().catch(error=>{console.error(`${MOD} | Document References migration`,error);ui.notifications.error(`Document References migration: ${error.message}. Open Module Settings → Document References to review/retry.`);});
+  playerShops.start();
+  const PlayerShop=createPlayerShopClass(foundry.applications.api.ApplicationV2,playerShops);
   game.myzSectorManager={
+    openPlayerShop:async journalUuid=>{try{const shop=new PlayerShop(journalUuid);await shop.refresh();return shop;}catch(error){ui.notifications.error(`Player Shop: ${error.message}`);throw error;}},
     zone:zone.api(),
     travel:{weather:()=>game.user.isGM?zone.travel.state.weather:null,history:()=>game.user.isGM?zone.travel.state.history:[],configure:async()=>{if(game.user.isGM)return new zone.TravelClass().render(true);},roster:async()=>{if(game.user.isGM)return new zone.RosterClass().render(true);}},
     migrateJournals:()=>organization.run(),

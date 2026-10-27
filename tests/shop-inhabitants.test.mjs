@@ -28,7 +28,7 @@ test('Shop groups and entries reorder by stable identity; replacement/removal ne
 });
 test('Shop validation preserves source on malformed arrays, unknown versions and duplicate UUIDs; unknown properties survive reloads',()=>{
  for(const raw of [null,{version:2,groups:[]},{version:1,groups:'bad'},{version:1,groups:[{entries:'bad'}]},{version:1,groups:[{entries:[{uuid:'Item.same'},{uuid:'Item.same'}]}]}]){const before=structuredClone(raw);assert.throws(()=>normalizeShop(raw),/Record was not changed/);assert.deepEqual(raw,before);}
- const raw={version:1,custom:{keep:true},groups:[{id:'group',type:'general',name:'Manual heading',custom:'keep',entries:[{id:'entry',uuid:'Item.missing',future:'keep'}]}]};assert.deepEqual(normalizeShop(JSON.parse(JSON.stringify(raw))),raw);
+ const raw={version:1,custom:{keep:true},groups:[{id:'group',type:'general',name:'Manual heading',custom:'keep',entries:[{id:'entry',uuid:'Item.missing',future:'keep'}]}]};assert.deepEqual(normalizeShop(JSON.parse(JSON.stringify(raw))),{...raw,playerAccess:false,trading:{enabled:false,values:{bullets:1,cleanGrub:1,cleanWater:1}}});
 });
 test('Actor Info extraction follows character Info narrative sections, keeps headings/formatting, excludes mechanical fields and uses native enrichment safely',async()=>{
  const doc=actor('Actor.mutant','mutant'),before=structuredClone(doc),html=await actorInfo(doc,env),text=journalBodyText(html,{});for(const word of ['Relationships','Finn (Buddy)','Hate','Slavers','Protect','The village','Dream','My Home','Tower','Description','watchful','Former scout','Notes','Secret plans'])assert(text.includes(word),word);assert.match(html,/<strong>watchful<\/strong>/);assert.doesNotMatch(text,/strength|Do not copy|attributes/);assert.deepEqual(doc,before);

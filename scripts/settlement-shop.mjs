@@ -1,3 +1,4 @@
+import {normalizeTrading} from './settlement-trading.mjs';
 // The single Shop stores references only. Legacy merchant data stays in settlement.shops as a recovery archive.
 const id=()=>globalThis.foundry?.utils?.randomID?.()||globalThis.crypto.randomUUID();
 export const SHOP_GROUP_TYPES=Object.freeze({general:'General',weapons:'Weapons',armor:'Armor',vehicles:'Vehicles',services:'Services'});
@@ -39,7 +40,8 @@ export function normalizeShop(raw,legacy=[]){
       if(uuids.has(entry.uuid))throw new Error('Duplicate Settlement Shop UUID. Record was not changed.');uuids.add(entry.uuid);return entry;
     });return group;
   });
-  return {...next,groups};
+  if(next.playerAccess!==undefined&&typeof next.playerAccess!=='boolean')throw new Error('Player Shop access must be boolean.');
+  return {...next,groups,playerAccess:next.playerAccess??false,trading:normalizeTrading(next.trading)};
 }
 export function requireShopItem(doc){
   if(doc?.documentName!=='Item')throw new Error('Shop inventory requires a Foundry Item document from Items or a Compendium.');
