@@ -47,3 +47,9 @@ test('Ark source metadata round trips through real import/export and incomplete 
  const imported=deserializeSector(file,{code:'C3',sceneId:'zone'});assert.deepEqual(imported.settlement.projects,settlement.projects);assert.equal(synchronizeArkProjects(imported.settlement,ark()).changed,false);
  const invalid=structuredClone(file);delete invalid.sector.settlement.projects[0].arkSource.projectUuid;assert.throws(()=>validatePortable(invalid),/required/);
 });
+
+test('Project presentation keeps Not completed order and sorts Completed names without mutating stored order',async()=>{
+ const {projectDisplayCompare}=await import('../scripts/entry-order.mjs');
+ const entries=[{title:'Zebra',status:'Completed'},{title:'Zulu',status:'Not completed'},{title:'Alpha',status:'Completed'},{title:'Beta',status:'Not completed'}],before=structuredClone(entries);
+ const displayed=entries.map((entry,index)=>({entry,index})).sort((a,b)=>projectDisplayCompare(a.entry,b.entry,a.entry.title,b.entry.title,a.index,b.index));assert.deepEqual(displayed.map(row=>row.entry.title),['Zulu','Beta','Alpha','Zebra']);assert.deepEqual(entries,before);
+});

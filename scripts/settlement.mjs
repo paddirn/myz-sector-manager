@@ -7,7 +7,7 @@ export const SETTLEMENT_ACCENT='#47aeb3';
 export const settlementAccent=value=>/^#[0-9a-f]{6}$/i.test(value||'')?value:SETTLEMENT_ACCENT;
 export const DISPOSITIONS=['Unknown','Friendly','Neutral','Unfriendly','Hostile'];
 export const SETTLEMENT_TYPES=['Ark','Village','Town','Trading Post','Outpost','Fortress','Industrial Facility','Mobile Settlement','Other'];
-export const PROJECT_STATUSES=['Planned','In Progress','Completed','Abandoned'];
+export const PROJECT_STATUSES=['Not completed','Planned','In Progress','Completed','Abandoned'];
 // shops is the read-only legacy recovery archive; active inventory lives in shop.groups.
 const listKeys=['projects','inhabitants','factions','events','threads','shops'];
 const identity=()=>globalThis.foundry?.utils?.randomID?.()||globalThis.crypto.randomUUID();

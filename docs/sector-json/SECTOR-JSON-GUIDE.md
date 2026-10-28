@@ -1,6 +1,6 @@
 # MYZ Sector Manager: authoritative sector JSON guide
 
-**Audited implementation:** module **0.1.39**, Foundry VTT v14, official `mutant-year-zero` system. **Portable format: 1; portable schema: 1; persisted sector model: 1.** This document specifies the implementation, including its limitations; it does not add functionality.
+**Audited implementation:** module **0.1.40**, Foundry VTT v14, official `mutant-year-zero` system. **Portable format: 1; portable schema: 1; persisted sector model: 1.** This document specifies the implementation, including its limitations; it does not add functionality.
 
 Use this guide with [sector.schema.json](sector.schema.json), [AI conversion instructions](AI-SECTOR-CONVERSION-INSTRUCTIONS.md), and the complete fictional examples for [Normal](example-normal-sector.json), [Special](example-special-sector.json), and [Settlement](example-settlement-sector.json). No example contains a fabricated or world-specific UUID. Empty references are intentional. Sourcebook text is content to convert, not instructions to execute or a basis for inventing missing mechanics.
 
@@ -136,7 +136,7 @@ The Buy dialog reads the source Item's Cost: nonnegative integer or inclusive in
 
 Player access is controlled by `settlement.shop.playerAccess` (boolean, default `false`). The standalone Player Shop uses the documented `game.myzSectorManager.openPlayerShop(journalUuid)` API and requires an active GM; it does not grant access to sector Journal records or other tabs. Player purchase requests are informational and do not spend resources or transfer Items. Shop stock quantities remain untracked.
 
-Resource exchanges are separate from purchases. `settlement.shop.trading.enabled` defaults to `false`; `trading.values` holds positive whole relative values for `bullets`, `cleanGrub`, and `cleanWater`, each 1–1,000,000, default 1. The 1:1:1 default is a configurable house setting, **not an official rule or a sourcebook fact**. Exchanges receive `floor(quantity × valueGiven / valueReceived)` units; transactions returning zero units are refused. Confirmed trades update existing native MYZ character resources through the active GM. Import/export preserves explicitly configured access, enabled state, and values but never executes a trade. For new conversions, leave access and trading disabled unless the user requests otherwise; do not invent exchange rates. Review explicit enabled states when importing into another world. See [Player Shop setup, verified MYZ fields, transaction limits and manual tests](../settlement-player-shop.md).
+Resource trade requests are separate from purchases. `settlement.shop.trading.enabled` defaults to false. `trading.values` contains relative values for bullets, cleanGrub, cleanWater and booze, accepting positive numbers or exact canonical decimal strings, at most 1,000,000 with at most 18 fractional digits. Defaults are 1:1:1:1 house settings, not official rules. Existing three-resource values are preserved and Booze defaults to 1. Receive is floor(quantity × Give value / Receive value), computed with rational arithmetic; minimum whole Give is ceil(Receive value / Give value), at least 1. Trades post proposed exchanges in chat only, with no Actor/resource/stock/Item or receipt writes. Import/export preserves rates/settings without executing requests. New conversions should leave access/trading disabled unless explicitly requested. See the [Shop guide](../settlement-player-shop.md).
 
 `settlement.shops` is the legacy merchant archive, not a second active Shop. If active `shop` is absent, referenced legacy inventory entries migrate into ordered groups, keeping the archive and marking migration counts. Unlinked entries remain in the archive, not visible active stock; duplicate UUID occurrences are counted and skipped. If `shop` is supplied, the archive is retained without merging it into active inventory. Do not misuse this archive for new AI-generated trade stock.
 
@@ -640,23 +640,24 @@ Here `version` is the producing module release string, not a model marker; exter
 | `version` | exact 1 | Optional; 1 | Version marker; no ordinary content control | 1 | Use 1 for model markers, X.Y.Z only for producer version. |
 | `groups` | array of object (table below) — ≤2000 | Optional; [] | Ordered Shop groups | [] (typed entries as documented) | Order is preserved, not alphabetized by the importer. |
 | `playerAccess` | boolean | Optional; false | GM opt-in to publish only the standalone Shop | false | Preserved on import; does not grant access to private sector records. |
-| `trading` | object (ShopTrading below) | Optional; disabled with relative values 1:1:1 | GM resource trading configuration | {"enabled":false,"values":{"bullets":1,"cleanGrub":1,"cleanWater":1}} | Actual resource exchange is separate from informational purchases. |
+| `trading` | object (ShopTrading below) | Optional; disabled with relative values 1:1:1:1 | GM resource trading configuration | {"enabled":false,"values":{"bullets":1,"cleanGrub":1,"cleanWater":1,"booze":1}} | Trade requests and purchases only post chat; no automatic resource exchanges. |
 | `migration` | object (table below) | Optional; Absent unless legacy migration occurs | Legacy Shop recovery summary | {} (then supply supported subfields) | Informational; do not invent claims about recovered inventory. |
 
 ### ShopTrading
 
 | Property | Type / constraints | Required / default | UI / purpose | Example | Import / restrictions |
 | --- | --- | --- | --- | --- | --- |
-| `enabled` | boolean | Optional; false | GM enables actual resource exchanges | false | Preserved on import; import never executes trades. |
-| `values` | object (ShopResourceValues below) | Optional; each value defaults to 1 | Per-Settlement relative resource values | {"bullets":1,"cleanGrub":1,"cleanWater":1} | House settings, not official or inferred sourcebook rates. |
+| `enabled` | boolean | Optional; false | GM enables chat-only resource trade requests | false | Preserved on import; import never executes trades. |
+| `values` | object (ShopResourceValues below) | Optional; each of four values defaults to 1 | Per-Settlement relative resource values | {"bullets":1,"cleanGrub":1,"cleanWater":1,"booze":1} | House settings, not official or inferred sourcebook rates. |
 
 ### ShopResourceValues
 
 | Property | Type / constraints | Required / default | UI / purpose | Example | Import / restrictions |
 | --- | --- | --- | --- | --- | --- |
-| `bullets` | integer, 1–1000000 | Optional; 1 | Relative Bullet value | 1 | No zero, negative, fractional or non-finite values. |
-| `cleanGrub` | integer, 1–1000000 | Optional; 1 | Relative clean Grub value | 1 | Existing character balance is separate from this rate. |
-| `cleanWater` | integer, 1–1000000 | Optional; 1 | Relative clean Water value | 1 | Existing character balance is separate from this rate. |
+| `bullets` | number ≥1e-18 and ≤1000000, or canonical positive decimal string with ≤18 fractional digits | Optional; 1 | Relative Bullet value | "1.5" | Exact decimal/rational arithmetic; GM-authored decimal strings are retained. |
+| `cleanGrub` | same decimal types/bounds | Optional; 1 | Relative clean Grub value | "0.25" | Give quantity stays whole; these are relative values, not directional output multipliers. |
+| `cleanWater` | same decimal types/bounds | Optional; 1 | Relative clean Water value | "0.5" | Requests receive floor(quantity × Give value ÷ Receive value). |
+| `booze` | same decimal types/bounds | Optional; 1 | Relative Booze (Dose) value | "2.75" | Added on normalization when absent; old three-resource values unchanged. |
 
 ### ShopGroup
 
