@@ -592,3 +592,12 @@ Configure / Tracking now labels **Columns** as horizontal squares and **Rows** a
 ### Generate sector JSON with external AI tools
 
 Use the [authoritative field guide](docs/sector-json/SECTOR-JSON-GUIDE.md), [standalone Draft 2020-12 Schema](docs/sector-json/sector.schema.json), and [AI conversion instructions](docs/sector-json/AI-SECTOR-CONVERSION-INSTRUCTIONS.md). Complete fictional, document-free examples are available for [Normal](docs/sector-json/example-normal-sector.json), [Special](docs/sector-json/example-special-sector.json), and [Settlement](docs/sector-json/example-settlement-sector.json). The guide distinguishes validation from visible UI behavior, documents defaults and missing references, and explains why live Shop stock/Faction galleries need actual UUIDs. This documentation does not change the importer or module version.
+
+
+### Player Roster and linked Ark fixes (0.1.39)
+
+Player Shops now select only owned official MYZ characters in the existing **Party Roster**, checked again by the GM for each purchase/trade. Quantity controls are compact and centered. A Buy request posts only the selected character's request and Item name/exact listed price.
+
+Linked Ark Overview shows current development values, live read-only population, and read-only Ark coordinates with grid/occupancy warnings. Existing manual population and Zone placement are preserved. Automatic placement uses the requested safe fallback: coordinates are displayed/validated, but no records are silently moved or replaced.
+
+Embedded Ark Projects synchronize idempotently into read-only draft entries with native source opening and portable source metadata. Deleted/unavailable sources retain snapshots, manual Projects remain editable, and **Save Sector** persists changes. Source updates do not automatically write Journals. See the [data mappings, limitations and manual checks](docs/settlement-player-shop.md#ark-coordinates-and-projects-0139).

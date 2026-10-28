@@ -961,7 +961,7 @@ const path=require('node:path');
     assert.deepEqual(await page.evaluate(()=>manager.draft.settlement.shops),await page.evaluate(()=>legacyShopBackup));assert.deepEqual(await page.evaluate(()=>sourceMutations),[]);await page.screenshot({path:'/tmp/myz-single-shop.png'});
     const savedSettlement=await page.evaluate(()=>structuredClone(manager.journal.getFlag('myz-sector-manager','sector').settlement));
     await page.locator('[data-tab="Overview"]').click();assert.equal(await page.locator('[name="settlement.description"]').inputValue(),settlementDescription);
-    await page.locator('[name="settlement.population"]').fill('Unsaved change');await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>false;});await page.evaluate(()=>manager.close());assert.equal(await page.evaluate(()=>manager.rendered),true);
+    await page.locator('[name="settlement.leadership"]').fill('Unsaved change');await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>false;});await page.evaluate(()=>manager.close());assert.equal(await page.evaluate(()=>manager.rendered),true);
     await page.evaluate(()=>{foundry.applications.api.DialogV2.confirm=async()=>true;});await page.evaluate(()=>manager.close());await page.evaluate(async()=>{manager=await game.myzSectorManager.open(settlementId);});assert.deepEqual(await page.evaluate(()=>manager.draft.settlement),savedSettlement);
     // Type conversion preserves both authored and inactive content through all three types.
     for(const type of ['normal','special','settlement']){
@@ -1153,6 +1153,28 @@ const path=require('node:path');
     await gear.click();await page.screenshot({path:'/tmp/myz-settings-portable.png'});await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>sourceMutations),[]);
     console.log('Settings gear/top-layer dismissal/keyboard/movement, preserved Zone actions, physical Columns/Rows in vertical orientation, real JSON download/file-input preview, all Settlement tabs, empty import, Cancel/explicit atomic replacement, missing/unknown preservation, inert HTML and Scene-change guards pass');
 
+    // Linked Ark population and Projects in the actual Sector Manager editor.
+    await page.evaluate(async()=>{
+      globalThis.arkProjectOpens=[];
+      const source=docs.get('Actor.ark');Object.assign(source,{system:{population:'42',coordinates:'B2',dev_levels:{food:{value:11,max:0}},bosses:{},description:'Ark info'},items:[]});
+      const item={documentName:'Item',type:'project',id:'embeddedFarm',uuid:'Actor.ark.Item.embeddedFarm',name:'Ark Farm',system:{description:'Source description',work_points:'5 / 12',completed:false,comment:'Source note'},sheet:{render:()=>arkProjectOpens.push('farm')}};
+      item.parent=source;source.items=[item];docs.set(item.uuid,item);
+      await manager.navigate(settlementId);manager.tab='Overview';await manager.render();
+      globalThis.arkSavedBefore=JSON.stringify(manager.journal.getFlag('myz-sector-manager','sector'));
+      globalThis.populationBefore=manager.draft.settlement.population;globalThis.placementBefore=manager.draft.code;
+    });
+    assert.equal(await page.locator('[data-ark-population]').inputValue(),'42');assert(await page.locator('[data-ark-population]').isDisabled());assert.equal(await page.locator('[name="settlement.population"]').count(),0);assert.equal(await page.locator('[data-ark-coordinates]').inputValue(),'B2');
+    await page.evaluate(()=>manager.capture());assert.equal(await page.evaluate(()=>manager.draft.settlement.population===populationBefore&&manager.draft.code===placementBefore),true);
+    await page.evaluate(()=>{docs.get('Actor.ark').system.population='50';Hooks.call('updateActor',docs.get('Actor.ark'));});await page.waitForFunction(()=>document.querySelector('[data-ark-population]')?.value==='50');
+    await page.locator('[data-tab="Projects"]').click();const linkedArkCard=page.locator('[data-entry]').filter({hasText:'Ark-linked Project'});assert.equal(await linkedArkCard.count(),1);assert.equal(await linkedArkCard.locator('[data-remove], [name]').count(),0);assert.match(await linkedArkCard.innerText(),/5 \/ 12/);await linkedArkCard.locator('button').filter({hasText:'Open Ark Project'}).click();assert.deepEqual(await page.evaluate(()=>arkProjectOpens),['farm']);
+    const syncedArkId=await page.evaluate(()=>manager.draft.settlement.projects.find(p=>p.arkSource).id);
+    await page.evaluate(()=>{const item=docs.get('Actor.ark.Item.embeddedFarm');item.name='Improved Farm';item.system.completed=true;item.system.work_points='12 / 12';Hooks.call('updateItem',item);});await page.waitForFunction(()=>manager.draft.settlement.projects.some(p=>p.arkSource&&p.title==='Improved Farm'&&p.status==='Completed'));
+    await page.evaluate(async()=>{await manager.render();await manager.render();});assert.equal(await page.evaluate(()=>manager.draft.settlement.projects.filter(p=>p.arkSource).length),1);assert.equal(await page.evaluate(()=>manager.draft.settlement.projects.find(p=>p.arkSource).id),syncedArkId);
+    assert.equal(await page.evaluate(()=>JSON.stringify(manager.journal.getFlag('myz-sector-manager','sector'))===arkSavedBefore),true);
+    await page.evaluate(()=>{const item=docs.get('Actor.ark.Item.embeddedFarm');docs.get('Actor.ark').items=[];docs.delete(item.uuid);Hooks.call('deleteItem',item.parent?item:{...item,parent:docs.get('Actor.ark')});});await page.waitForFunction(()=>manager.draft.settlement.projects.some(p=>p.arkSource?.missing));assert.match(await linkedArkCard.innerText(),/source missing|Source unavailable/);
+    await page.locator('[data-tab="Overview"]').click();await page.locator('[name="settlement.arkUuid"]').fill('Actor.missing');await page.locator('[name="settlement.arkUuid"]').press('Tab');await page.waitForFunction(()=>document.querySelector('[data-ark-population]')?.value==='Unavailable');assert.equal(await page.evaluate(()=>manager.draft.settlement.population===populationBefore),true);
+    await page.locator('[name="settlement.arkUuid"]').fill('');await page.locator('[name="settlement.arkUuid"]').press('Tab');await page.waitForFunction(()=>Boolean(document.querySelector('[name="settlement.population"]')));assert.equal(await page.locator('[name="settlement.population"]').inputValue(),await page.evaluate(()=>populationBefore));
+    console.log('Linked Ark population/coordinates read-only display, native Project source opening, idempotent draft synchronization/update/deletion, preserved manual population/placement and zero automatic Journal writes pass');
     assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>notifyErrors),[]);
     console.log('Zone dialog units/tokens/Actor links persist; origin picking respects zoom; confirmed map creation, overlay isolation, closed-window tracking and missing references pass');
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

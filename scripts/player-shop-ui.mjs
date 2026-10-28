@@ -10,14 +10,14 @@ export function playerShopContent(snapshot,actors,actorUuid){
  .myz-player-shop th:last-child{width:76px}.myz-player-shop label{display:block;margin:6px 0}
  .myz-player-shop select{width:100%;min-width:0;max-width:100%}.myz-player-shop fieldset{min-width:0}
  .myz-player-shop .sm-exchange-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
- .myz-player-shop .sm-exchange-column{min-width:0}.myz-player-shop .sm-exchange-quantity{display:flex;align-items:center;gap:4px;height:36px}
+ .myz-player-shop .sm-exchange-column{min-width:0}.myz-player-shop .sm-exchange-quantity{display:flex;align-items:center;gap:4px;height:36px;justify-content:center}
  .myz-player-shop .sm-exchange-quantity button{flex:0 0 28px;width:28px;padding:0;height:32px}
- .myz-player-shop .sm-exchange-quantity input{width:100%;min-width:0;height:32px;text-align:center}
- .myz-player-shop [data-received]{display:flex;align-items:center;min-height:36px;font-size:1.5em;font-weight:bold;font-variant-numeric:tabular-nums}
+ .myz-player-shop .sm-exchange-quantity input{flex:0 0 4ch;width:4ch;min-width:4ch;padding:2px;height:32px;text-align:center}
+ .myz-player-shop [data-received]{display:flex;align-items:center;justify-content:center;min-height:36px;font-size:1.5em;font-weight:bold;font-variant-numeric:tabular-nums}
  @media(max-width:400px){.myz-player-shop .sm-exchange-columns{gap:8px}.myz-player-shop .sm-exchange-quantity{gap:2px}.myz-player-shop .sm-exchange-quantity button{flex-basis:24px;width:24px}}
  </style><section><h2>${esc(snapshot.name)} — Shop</h2><p>Purchase requests are informational. No stock is tracked, and Items and resources are not transferred by purchases.</p>
  <label>Character<select data-character>${actors.map(a=>`<option value="${esc(a.uuid)}" ${a.uuid===actorUuid?'selected':''}>${esc(a.name)}</option>`).join('')}</select></label><p data-balances></p>
- ${!actors.length?'<p role="alert">No owned MYZ character with valid resources is available.</p>':''}
+ ${!actors.length?'<p role="alert">No eligible Party Roster character is available. Ask the GM to configure the roster and character ownership.</p>':''}
  ${snapshot.groups.map(g=>`<h3>${esc(g.name)}</h3><table><thead><tr><th>Item</th><th>Price</th><th>Buy</th></tr></thead><tbody>${g.entries.map(i=>`<tr><td>${esc(i.name)}</td><td>${esc(i.cost??'—')}</td><td><button type="button" data-buy="${esc(i.id)}" aria-label="Buy ${esc(i.name)}" ${i.unavailable||!actors.length?'disabled':''}>Buy</button></td></tr>`).join('')}</tbody></table>`).join('')}
  <fieldset><legend>Resource Trading</legend>${snapshot.trading.enabled?`<div class="sm-exchange-columns"><div class="sm-exchange-column"><label>Give<select data-give>${opts}</select></label><div class="sm-exchange-quantity"><button type="button" data-decrease aria-label="Decrease Give quantity">−</button><input data-quantity aria-label="Quantity to give" type="number" min="1" max="1000000" step="1" value="1"><button type="button" data-increase aria-label="Increase Give quantity">+</button></div></div><div class="sm-exchange-column"><label>Receive<select data-receive>${opts}</select></label><output data-received aria-label="Quantity to receive" aria-live="polite">—</output></div></div><p data-quote role="status"></p><button type="button" data-trade>Review and Confirm Trade</button>`:'<p>Resource trading is disabled at this Settlement.</p>'}</fieldset>
  <p data-status role="status"></p><button type="button" data-refresh>Refresh Shop</button></section>`;
@@ -31,7 +31,7 @@ export function createPlayerShopClass(ApplicationV2,service,env=globalThis){
   _replaceHTML(result,content){content.replaceChildren(result);}
   async _onClose(options){
    if(this.actorHook!==undefined)env.Hooks?.off('updateActor',this.actorHook);this.actorHook=undefined;
-   clearInterval(this.rateTimer);this.rateTimer=undefined;await super._onClose?.(options);
+   if(this.rosterHook!==undefined)env.Hooks?.off('updateSetting',this.rosterHook);this.rosterHook=undefined;clearInterval(this.rateTimer);this.rateTimer=undefined;await super._onClose?.(options);
   }
   // Reuse the existing GM-filtered browse API; players never read private Journals.
   async refreshDisplayedRates(){
@@ -68,6 +68,7 @@ export function createPlayerShopClass(ApplicationV2,service,env=globalThis){
    this.updateShopControls=update;
    for(const key of ['give','receive','quantity'])if(control(key))control(key).value=this.tradeSelection[key];
    if(this.actorHook!==undefined)env.Hooks?.off('updateActor',this.actorHook);this.actorHook=env.Hooks?.on('updateActor',doc=>{if(doc.uuid===actor()?.uuid)update();});
+   if(this.rosterHook!==undefined)env.Hooks?.off('updateSetting',this.rosterHook);this.rosterHook=env.Hooks?.on('updateSetting',setting=>{if(setting.key==='myz-sector-manager.partyRoster'&&!this.busy)void this.render();});
    control('character').addEventListener('change',()=>{this.actorUuid=control('character').value;update();});
    for(const key of ['give','receive','quantity'])control(key)?.addEventListener('input',update);
    for(const [name,step] of [['decrease',-1],['increase',1]])control(name)?.addEventListener('click',()=>{const value=Number(control('quantity').value);control('quantity').value=String(Math.max(1,Math.min(1000000,(Number.isFinite(value)?value:1)+step)));update();});

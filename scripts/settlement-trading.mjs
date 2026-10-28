@@ -1,3 +1,4 @@
+import {partyRoster} from './travel/model.mjs';
 export const RESOURCES=Object.freeze({bullets:{label:'Bullets',key:'bullets'},cleanGrub:{label:'Clean Grub',key:'grub'},cleanWater:{label:'Clean Water',key:'water'}});
 export const tradingDefaults=()=>({enabled:false,values:{bullets:1,cleanGrub:1,cleanWater:1}});
 export function normalizeTrading(raw){
@@ -18,6 +19,7 @@ export function tradeQuote(rates,give,receive,quantity){
 }
 export function characterResources(actor,user,env=globalThis){
  if(env.game.system?.id!=='mutant-year-zero'||actor?.documentName!=='Actor'||!['mutant','animal','human','robot'].includes(actor.type)||!actor.testUserPermission?.(user,'OWNER'))throw new Error('Choose an owned, updateable MYZ character Actor.');
+ if(!partyRoster(env).members.some(member=>member.actorUuid===actor.uuid))throw new Error('Choose an eligible character assigned to the Party Roster.');
  const resources={};for(const [key,{key:field}] of Object.entries(RESOURCES)){const value=actor.system?.resources?.[field]?.value;if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>Number.MAX_SAFE_INTEGER)throw new Error('Character resources are missing or invalid.');resources[key]=value;}
  return resources;
 }
