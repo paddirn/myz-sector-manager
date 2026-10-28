@@ -1,3 +1,5 @@
+Current behavior for 0.1.42 is documented in [Player Shop and Ark Projects](shop-ark-projects.md). Historical version notes below describe earlier interfaces; 0.1.42 replaces Vehicle Item statistics/passenger editing and read-only Ark Project status.
+
 # Linked Arks and standalone Player Shops (0.1.37)
 
 ## GM setup
@@ -22,7 +24,7 @@ await game.myzSectorManager.openPlayerShop("JournalEntry.YOUR_SETTLEMENT_JOURNAL
 
 ## Purchase requests
 
-Select an eligible **Party Roster** character and click **Buy** beside an Item to request exactly one unit. The existing module calls its Player Roster configuration **Party Roster**; configure it through Module Settings → Party Roster. Compact rows preserve group/Item order and show name, price and Buy. The authoritative GM rechecks current roster membership, official character type, ownership, availability and selected Item. Chat uses exactly this visible format, with two paragraphs:
+Select an eligible **Party Roster** character and click **Buy** beside an Item to request exactly one unit. The existing module calls its Player Roster configuration **Party Roster**; configure it through Module Settings → Party Roster. Compact rows preserve group/Item order and show name, price and Buy. The authoritative GM rechecks current roster membership, official character type, ownership, availability and selected Item. Chat starts with this visible format, followed by available weight, public comment and a native draggable document link:
 
 ```
 Scout wants to buy something from the shop:
@@ -128,7 +130,7 @@ The linked Ark's `system.coordinates` appears read-only in Overview and refreshe
 
 **Architectural limit:** this release uses the requested read-only fallback. It does not automatically assign, unassign, relocate or replace a sector. Existing Journal/Scene placement has no cross-Journal atomic occupancy transaction, so an automatic move could race another GM's placement. Ark links never change existing placement or move a record to another Scene. Use explicit GM placement controls when appropriate; inspect any occupancy warning first.
 
-Opening/rendering a linked Settlement synchronizes embedded Ark `project` Items into its Projects **draft**, using stable source UUIDs. These are marked **Ark-linked Project — read-only**, have no editable fields or Delete action, and provide **Open Ark Project** where the source is available. Manual Project records stay separate, editable and unchanged. Names, source descriptions, completed/not-completed state, exact `work_points` text and source comments map to existing title/details/status/progress/notes fields. Work-point text is shown as **Work points (source)**, not an invented numerical progress estimate; no start date or completion date is guessed. Full supported Item information still resolves from the source.
+Opening/rendering a linked Settlement synchronizes embedded Ark `project` Items into its Projects **draft**, using stable source UUIDs. Historically these were read-only. Since 0.1.42 they expose status/Work Points metadata without a Delete action, and provide **Open Ark Project** where the source is available. Manual Project records stay separate, editable and unchanged. Names, source descriptions, completed/not-completed state, exact `work_points` text and source comments map to existing title/details/status/progress/notes fields. Work-point text is shown as **Work points (source)**, not an invented numerical progress estimate; no start date or completion date is guessed. Full supported Item information still resolves from the source.
 
 Updated sources refresh existing entries rather than appending duplicates. Source deletion, inaccessible/unlinked Arks, and link changes retain the last snapshot with a missing-source marker; manual records are not deleted. Relinking the same available source clears the marker. Synchronization never writes to the source Actor or Item. It only changes the current draft when content differs: **Save Sector** persists snapshots through the normal Journal save. Ark update hooks/repeated loads perform no automatic Journal writes.
 

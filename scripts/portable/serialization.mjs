@@ -64,7 +64,7 @@ function materialize(content){
   // Retain the old archive and perform the existing reference-only migration deterministically.
   if(!settlement.shop){const seen=new Set();let unlinked=0,duplicates=0;const groups=(settlement.shops||[]).map(shop=>{const entries=[];for(const item of shop.inventory||[]){if(!item.uuid){unlinked++;continue;}if(seen.has(item.uuid)){duplicates++;continue;}seen.add(item.uuid);entries.push(identify({uuid:item.uuid,legacyEntryId:item.id||''}));}return identify({name:shop.title||'Recovered inventory',type:'general',entries});});settlement.shop={version:1,groups,...(settlement.shops?.length?{migration:{version:1,source:'settlement.shops',unlinked,duplicates}}:{})};}
   settlement.shop.version??=1;settlement.shop.groups??=[];
-  for(const group of settlement.shop.groups||[]){identify(group);group.entries??=[];for(const entry of group.entries){identify(entry);if(!entry.uuid)throw new Error('Shop inventory entries require a nonempty Item UUID.');}}
+  for(const group of settlement.shop.groups||[]){identify(group);group.entries??=[];for(const entry of group.entries){identify(entry);if(!entry.uuid)throw new Error('Shop inventory entries require a nonempty Item or Vehicle Actor UUID.');}}
  }
  return normalizeSectorType({version:1,nameOverride:false,customName:'',threatLevel:sectorThreatLevel(data),terrain:'',rot:0,status:'Unexplored',description:'',notes:'',locations:[],encounters:[],loot:[],effects:[],secrets:[],history:[],supplies:{},pathStunts:{},...data});
 }
