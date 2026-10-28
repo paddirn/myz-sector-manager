@@ -11,10 +11,10 @@ test('v14 configured Item drop resolver accepts consecutive world, Compendium, e
  assert.equal(putShopItem(shop,await resolveShopDrop(payloads[0],env),'a').duplicate,true);
 });
 test('drop resolution distinguishes unsupported data, missing documents, access errors and non-Items without mutating inventory',async()=>{
- for(const payload of [null,{},[],{type:'Actor',uuid:'Actor.one'}])await assert.rejects(resolveShopDrop(payload),/Invalid|requires/);
+ for(const payload of [null,{},[],{type:'Actor',uuid:'Actor.one'}])await assert.rejects(resolveShopDrop(payload),/Invalid|require/);
  await assert.rejects(resolveShopDrop({type:'Item',uuid:'Item.missing'},{fromUuid:async()=>null}),/missing or inaccessible/);
  await assert.rejects(resolveShopDrop({type:'Item',uuid:'Compendium.private.items.Item.one'},{CONFIG:{Item:{documentClass:{fromDropData(){throw Error('Permission denied');}}}}}),/Compendium access: Permission denied/);
- await assert.rejects(resolveShopDrop({uuid:'Actor.one'},{fromUuid:async()=>({documentName:'Actor'})}),/requires a Foundry Item/);
+ await assert.rejects(resolveShopDrop({uuid:'Actor.one'},{fromUuid:async()=>({documentName:'Actor'})}),/Vehicle Actor/);
  await assert.rejects(resolveShopDrop({type:'Item'},{Item:{fromDropData:async()=>({documentName:'Item'})}}),/no stable UUID/);
  assert.equal((await resolveShopDrop({uuid:'Item.old'},{fromUuid:async uuid=>({documentName:'Item',uuid})})).uuid,'Item.old');
 });
