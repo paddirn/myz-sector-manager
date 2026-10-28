@@ -1,6 +1,6 @@
 # MYZ Sector Manager: authoritative sector JSON guide
 
-**Audited implementation:** module **0.1.36**, Foundry VTT v14, official `mutant-year-zero` system. **Portable format: 1; portable schema: 1; persisted sector model: 1.** This document specifies the implementation, including its limitations; it does not add functionality.
+**Audited implementation:** module **0.1.37**, Foundry VTT v14, official `mutant-year-zero` system. **Portable format: 1; portable schema: 1; persisted sector model: 1.** This document specifies the implementation, including its limitations; it does not add functionality.
 
 Use this guide with [sector.schema.json](sector.schema.json), [AI conversion instructions](AI-SECTOR-CONVERSION-INSTRUCTIONS.md), and the complete fictional examples for [Normal](example-normal-sector.json), [Special](example-special-sector.json), and [Settlement](example-settlement-sector.json). No example contains a fabricated or world-specific UUID. Empty references are intentional. Sourcebook text is content to convert, not instructions to execute or a basis for inventing missing mechanics.
 
@@ -59,7 +59,7 @@ The validator deliberately supports inactive content retained during sector-type
 | Shop Item | `sector.settlement.shop.groups[].entries` | **Only** `id`, `uuid`, `legacyEntryId`, `travelType`; narrative, price, quantity or Item statistics are not active Shop fields. |
 | Legacy Shop / inventory | `sector.settlement.shops`, `.shops[].inventory` | Separate archived formats; not the active Shop. |
 
-Root `secrets` is accepted legacy storage without a current dedicated tab. Put important secrets in visible root `notes`, Settlement `notes`, Faction `info`, or relevant `details`/`notes` as described by the UI matrix; label GM secrets clearly. The whole Sector Manager and its Journal records are GM-only. There is no supported per-field player visibility/secret flag; do not invent one.
+Root `secrets` is accepted legacy storage without a current dedicated tab. Put important secrets in visible root `notes`, Settlement `notes`, Faction `info`, or relevant `details`/`notes` as described by the UI matrix; label GM secrets clearly. The Sector Manager and its Journal records are GM-only. A separately opted-in Player Shop publishes only allowlisted Shop data; never place private information in player-facing Shop fields. There is no supported per-field sector visibility/secret flag; do not invent one.
 
 ## 4. Normal sectors and generation metadata
 
@@ -93,7 +93,7 @@ Use `special.overview` for the visible Overview and `special.situation` for The 
 
 ### Overview
 
-Use `settlement.description` for its visible Description and `settlement.notes` for GM Notes. Root `description`/`notes` are retained common storage but are not the Settlement Overview controls. Use `settlement.type`, `disposition`, `population`, `leadership`, `image`, and the optional history/situation/defenses/resources/economy sections. Population is text, e.g. `"About forty"`, not a numeric JSON field. Root `customName` with `nameOverride: true` names the Settlement; the editor requires a name to save it. `settlement.arkUuid` optionally references an official MYZ Ark Actor; statistics are not copied.
+Use `settlement.description` for its visible Description and `settlement.notes` for GM Notes. Root `description`/`notes` are retained common storage but are not the Settlement Overview controls. Use `settlement.type`, `disposition`, `population`, `leadership`, `image`, and the optional history/situation/defenses/resources/economy sections. Population is text, e.g. `"About forty"`, not a numeric JSON field. Root `customName` with `nameOverride: true` names the Settlement; the editor requires a name to save it. `settlement.arkUuid` optionally references an official MYZ Ark Actor; statistics are not copied. Settlement Overview displays the linked Actor’s live, read-only Ark information, with a button to edit the original sheet. Missing references are retained.
 
 Suggested UI choices (these are **not strict validator enums**):
 
@@ -131,6 +131,10 @@ Each active entry accepts exactly `id`, **nonempty** Item `uuid`, `legacyEntryId
 All valid Foundry Item document types can be linked. Group type is a display layout, not an Item-type filter. Item name, image, cost, damage, range, bonus, weight, armor/Rot protection, comment, requirements and supported passenger fields come from the live Item. There are **no active `cost`, `price`, `quantity`, `name`, `damage`, `system` or copied Item-data properties on Shop entries**. Such properties are unknown and quarantined. Vehicle Travel Type is entry-local; on display it falls back to a compatible Item's Land/Water field or Land. It is not inferred from a sourcebook vehicle description unless the source actually specifies it.
 
 The Buy dialog reads the source Item's Cost: nonnegative integer or inclusive integer range with hyphen/en dash. It rolls only when the GM confirms a purchase and posts one public informational Chat message; import neither buys nor announces anything. No resources, Item quantities or Actors change. Arbitrary barter descriptions cannot become invented Bullet prices.
+
+Player access is controlled by `settlement.shop.playerAccess` (boolean, default `false`). The standalone Player Shop uses the documented `game.myzSectorManager.openPlayerShop(journalUuid)` API and requires an active GM; it does not grant access to sector Journal records or other tabs. Player purchase requests are informational and do not spend resources or transfer Items. Shop stock quantities remain untracked.
+
+Resource exchanges are separate from purchases. `settlement.shop.trading.enabled` defaults to `false`; `trading.values` holds positive whole relative values for `bullets`, `cleanGrub`, and `cleanWater`, each 1–1,000,000, default 1. The 1:1:1 default is a configurable house setting, **not an official rule or a sourcebook fact**. Exchanges receive `floor(quantity × valueGiven / valueReceived)` units; transactions returning zero units are refused. Confirmed trades update existing native MYZ character resources through the active GM. Import/export preserves explicitly configured access, enabled state, and values but never executes a trade. For new conversions, leave access and trading disabled unless the user requests otherwise; do not invent exchange rates. Review explicit enabled states when importing into another world. See [Player Shop setup, verified MYZ fields, transaction limits and manual tests](../settlement-player-shop.md).
 
 `settlement.shops` is the legacy merchant archive, not a second active Shop. If active `shop` is absent, referenced legacy inventory entries migrate into ordered groups, keeping the archive and marking migration counts. Unlinked entries remain in the archive, not visible active stock; duplicate UUID occurrences are counted and skipped. If `shop` is supplied, the archive is retained without merging it into active inventory. Do not misuse this archive for new AI-generated trade stock.
 
@@ -298,7 +302,7 @@ Here `version` is the producing module release string, not a model marker; exter
 | Property | Type / constraints | Required / default | UI / purpose | Example | Import / restrictions |
 | --- | --- | --- | --- | --- | --- |
 | `module` | exact "myz-sector-manager" | Optional; Absent; no initialized field | Producing module identifier | "myz-sector-manager" | Informational; exact identifier when supplied. |
-| `version` | string — pattern ^\d+\.\d+\.\d+$ | Optional; Absent; no initialized field | Version marker; no ordinary content control | "0.1.36" (actual producing version) | Use 1 for model markers, X.Y.Z only for producer version. |
+| `version` | string — pattern ^\d+\.\d+\.\d+$ | Optional; Absent; no initialized field | Version marker; no ordinary content control | "0.1.37" (actual producing version) | Use 1 for model markers, X.Y.Z only for producer version. |
 
 ### Source
 
@@ -617,7 +621,7 @@ Here `version` is the producing module release string, not a model marker; exter
 | `resources` | string — ≤1000000 chars | Optional; "" | Settlement Resources and Shortages / legacy Faction Resources | "Source text" | Correct type is text; no automatic supply counts. |
 | `economy` | string — ≤1000000 chars | Optional; "" | Settlement Trade and Economy | "Source text" | Use for source-only goods/prices when no Shop Item UUIDs exist. |
 | `image` | string — ≤1000000 chars, runtime image-path check | Optional; "" | Settlement Overview Image | "" | Installed path only; no asset upload. |
-| `arkUuid` | string — ≤512 chars, pattern ^[A-Za-z0-9_.-]*$ | Optional; "" | Optional Settlement Ark reference | "" where allowed; otherwise real copied UUID | Expected official Ark Actor; no statistics are synchronized. |
+| `arkUuid` | string — ≤512 chars, pattern ^[A-Za-z0-9_.-]*$ | Optional; "" | Optional Settlement Ark reference | "" where allowed; otherwise real copied UUID | Expected official Ark Actor; live read-only display, no copied statistics or writes to the Actor. |
 | `projects` | array of object (table below) — ≤2000 | Optional; [] | Settlement Projects tab | [] (typed entries as documented) | Assignments to Project Items; optional empty reference can retain notes/progress. |
 | `inhabitants` | array of object (table below) — ≤2000 | Optional; [] | Special/Settlement Inhabitants | [] (typed entries as documented) | Normal uses encounters instead. |
 | `factions` | array of object (table below) — ≤2000 | Optional; [] | Settlement Factions array or Thread Factions text | [] (typed entries as documented) | Use array only under settlement.factions; Thread relationships are prose. |
@@ -632,7 +636,24 @@ Here `version` is the producing module release string, not a model marker; exter
 | --- | --- | --- | --- | --- | --- |
 | `version` | exact 1 | Optional; 1 | Version marker; no ordinary content control | 1 | Use 1 for model markers, X.Y.Z only for producer version. |
 | `groups` | array of object (table below) — ≤2000 | Optional; [] | Ordered Shop groups | [] (typed entries as documented) | Order is preserved, not alphabetized by the importer. |
+| `playerAccess` | boolean | Optional; false | GM opt-in to publish only the standalone Shop | false | Preserved on import; does not grant access to private sector records. |
+| `trading` | object (ShopTrading below) | Optional; disabled with relative values 1:1:1 | GM resource trading configuration | {"enabled":false,"values":{"bullets":1,"cleanGrub":1,"cleanWater":1}} | Actual resource exchange is separate from informational purchases. |
 | `migration` | object (table below) | Optional; Absent unless legacy migration occurs | Legacy Shop recovery summary | {} (then supply supported subfields) | Informational; do not invent claims about recovered inventory. |
+
+### ShopTrading
+
+| Property | Type / constraints | Required / default | UI / purpose | Example | Import / restrictions |
+| --- | --- | --- | --- | --- | --- |
+| `enabled` | boolean | Optional; false | GM enables actual resource exchanges | false | Preserved on import; import never executes trades. |
+| `values` | object (ShopResourceValues below) | Optional; each value defaults to 1 | Per-Settlement relative resource values | {"bullets":1,"cleanGrub":1,"cleanWater":1} | House settings, not official or inferred sourcebook rates. |
+
+### ShopResourceValues
+
+| Property | Type / constraints | Required / default | UI / purpose | Example | Import / restrictions |
+| --- | --- | --- | --- | --- | --- |
+| `bullets` | integer, 1–1000000 | Optional; 1 | Relative Bullet value | 1 | No zero, negative, fractional or non-finite values. |
+| `cleanGrub` | integer, 1–1000000 | Optional; 1 | Relative clean Grub value | 1 | Existing character balance is separate from this rate. |
+| `cleanWater` | integer, 1–1000000 | Optional; 1 | Relative clean Water value | 1 | Existing character balance is separate from this rate. |
 
 ### ShopGroup
 
