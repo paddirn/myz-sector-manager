@@ -1,4 +1,4 @@
-import {normalizeShop,resolveShopItem,shopColumns,groupType,vehicleTravelType} from './settlement-shop.mjs';
+import {normalizeShop,resolveShopItem,shopColumns,vehiclePassengers,groupType,vehicleTravelType} from './settlement-shop.mjs';
 import {normalizeTrading,characterResources,tradeRequestQuote,resourceLabel,RESOURCES} from './settlement-trading.mjs';
 import {escapeHTML as esc} from './travel/model.mjs';
 export const SHOP_MODULE='myz-sector-manager';
@@ -18,7 +18,7 @@ async function publicText(value,env){
 export async function shopSnapshot(id,env=globalThis){
  if(!env.game.user.isGM)throw new Error('Only the authoritative GM can publish Shop data.');
  const {sector,shop}=shopSettlement(id,env),saved=JSON.stringify(shop),groups=[];
- for(const group of shop.groups){const entries=[];for(const entry of group.entries){try{const {doc,fields}=await resolveShopItem(entry.uuid,env);entries.push({id:entry.id,name:doc.name,description:await publicText(doc.system?.description,env),cost:fields.cost,fields:Object.fromEntries(await Promise.all(shopColumns(group).filter(c=>c.key!=='link').map(async c=>[c.label,['comment','requirement'].includes(c.key)?await publicText(fields[c.key],env):String(c.key==='travel'?vehicleTravelType(entry,doc):fields[c.key]??'')]))),stock:null});}catch{entries.push({id:entry.id,name:'Unavailable Item',unavailable:true});}}groups.push({id:group.id,name:String(group.name??''),type:groupType(group),entries});}
+ for(const group of shop.groups){const entries=[];for(const entry of group.entries){try{const {doc,fields}=await resolveShopItem(entry.uuid,env);entries.push({id:entry.id,name:doc.name,description:await publicText(doc.system?.description,env),cost:fields.cost,fields:Object.fromEntries(await Promise.all(shopColumns(group).filter(c=>c.key!=='link').map(async c=>[c.label,['comment','requirement'].includes(c.key)?await publicText(fields[c.key],env):String(c.key==='travel'?vehicleTravelType(entry,doc):c.key==='passengers'?vehiclePassengers(entry,doc):fields[c.key]??'')]))),stock:null});}catch{entries.push({id:entry.id,name:'Unavailable Item',unavailable:true});}}groups.push({id:group.id,name:String(group.name??''),type:groupType(group),entries});}
  const snapshot={id,name:String(sector.customName||sector.name||sector.code||'Settlement'),groups,trading:publishedTrading(shop.trading)};
  const bytes=new TextEncoder().encode(JSON.stringify(snapshot)),digest=await env.crypto.subtle.digest('SHA-256',bytes);
  if(JSON.stringify(shopSettlement(id,env).shop)!==saved)throw new Error('Shop changed while loading. Refresh and review again.');

@@ -12,7 +12,7 @@ const entry=object({...common,duration:string,category:string,macroUuid:uuid,tri
 const inhabitant=object(common),project=object({...common,progress:string,completedAt:string,arkSource:{...object({version:{const:1},arkUuid:{...uuid,pattern:'^[A-Za-z0-9_.-]+$'},projectUuid:{...uuid,pattern:'^[A-Za-z0-9_.-]+$'},missing:bool}),required:['version','arkUuid','projectUuid','missing']}});
 const member=object({id,uuid,actorUuid:uuid});
 const faction=object({...common,...text('info description leader goals resources relationship allies rivals tensions'),infoVersion:{const:1},membersVersion:{const:1},members:array({anyOf:[uuid,member]}),actors:array({anyOf:[uuid,member]}),actorUuids:array(uuid)});
-const shopEntry=object({id,uuid,legacyEntryId:string,travelType:{enum:['Land','Water']}});
+const shopEntry=object({id,uuid,legacyEntryId:string,passengers:string,travelType:{enum:['Land','Water']}});
 const group=object({id,name:string,type:string,entries:array(shopEntry)});
 const legacyInventory=object({...common,price:{anyOf:[string,number]},quantity:{anyOf:[string,number]}});
 const legacyShop=object({...common,proprietor:string,inventory:array(legacyInventory)});

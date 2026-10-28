@@ -38,7 +38,7 @@ Only **roster-assigned**, owned world character Actors of the official MYZ types
 
 ## Decimal values and whole-number trade requests (0.1.40)
 
-Resource Trading appears above the Gear and Services introduction/inventory. A portrait dropdown includes only eligible, owned Party Roster characters, with arrow/Home/End/type-ahead navigation, Enter/Space selection, Escape/outside dismissal and portrait fallback. The window title is `<Settlement Name> - Gear and Services`.
+The introduction sits beside the character selector, followed by Resource Trading above the inventory. The wider, resizable Player Shop keeps all columns and scrolls wide tables horizontally. The character selector uses 64px portraits and displays live Bullets, Clean Grub, Clean Water and Booze for each eligible character; there is no separate balance row. The trade preview and Request Trade action share a third column, moving below Give/Receive on narrow windows. A portrait dropdown includes only eligible, owned Party Roster characters, with arrow/Home/End/type-ahead navigation, Enter/Space selection, Escape/outside dismissal and portrait fallback. The window title is `<Settlement Name> - Gear and Services`.
 
 Values are **relative values**, not output amounts. Giving Q units of A requests:
 
@@ -141,3 +141,11 @@ Before release in a backup Foundry v14 world, verify roster filtering with multi
 Projects use two columns (one at narrow widths). Status **Not completed** sorts first, preserving its stored relative order, with a subtle theme-compatible highlight. **Completed** sorts last alphabetically by the displayed title, without the highlight. Other pre-existing statuses retain an alphabetical middle group. This applies equally to Ark-linked and manual entries; the manual status chooser includes Not completed. Sorting moves existing DOM cards only, preserving source paths, controls, progress, links and stored/source array order.
 
 Manual checks: open the player macro with multiple roster characters and exercise keyboard/avatar fallback behavior; compare all five group column sets against the GM Shop; confirm the exact introduction and dynamic title; configure 0.5/0.25/1.5/2.75 values, test both conversion directions and Booze pairs, minimum/stepper behavior, positive integer output and unchanged Actor resources/flags; inspect proposed-trade chat; export/import old three-value and new decimal settings; verify Project grouping/highlights/two-column layout without saved-order changes; check one visible synchronized Coordinates field with unchanged placement diagnostics. Browser tests simulate Foundry; live v14 testing remains required.
+
+## Shop UI refinements (0.1.41)
+
+The GM access and trading checkboxes are together above four compact relative-value controls. Minus/plus changes a rate by exactly one, preserving fractional digits, and disables invalid steps. Decimal text remains directly editable; Save Sector applies changes. Inputs use decimal keyboard hints rather than floating-point conversion so long authored decimal values remain exact.
+
+Vehicle groups expose **Passengers** as entry-local text, alongside the existing Travel Type control. Missing overrides display the Item value; editing, including clearing the value, stores `passengers` with the Shop entry. Save/reopen and JSON export/import preserve it. Players see plain text and source Items are never modified.
+
+Manual Foundry v14 checks: verify selector focus/keyboard navigation and resource updates for two roster characters; resize the Player Shop and scroll wide tables; confirm rates such as 0.5 → 1.5 and 2.750000000000000001 → 3.750000000000000001; save/reopen and export/import a Vehicle passenger note; submit Buy and trade requests and verify chat messages with no Actor or inventory changes.

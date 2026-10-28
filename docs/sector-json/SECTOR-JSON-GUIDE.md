@@ -56,7 +56,7 @@ The validator deliberately supports inactive content retained during sector-type
 | Faction | `sector.settlement.factions` | Common fields plus legacy structured notes, Info/version fields and member-reference collections; see Faction table. |
 | Settlement Event | `sector.settlement.events` | Common fields plus `trigger`, `outcomes`, `related`; **no** automatic Macro trigger. |
 | Settlement Thread | `sector.settlement.threads` | Common fields plus `npcs`, `factions`, `clues`, `developments`, `resolution`. |
-| Shop Item | `sector.settlement.shop.groups[].entries` | **Only** `id`, `uuid`, `legacyEntryId`, `travelType`; narrative, price, quantity or Item statistics are not active Shop fields. |
+| Shop Item | `sector.settlement.shop.groups[].entries` | **Only** `id`, `uuid`, `legacyEntryId`, `travelType`, `passengers`; narrative, price, quantity or Item statistics are not active Shop fields. |
 | Legacy Shop / inventory | `sector.settlement.shops`, `.shops[].inventory` | Separate archived formats; not the active Shop. |
 
 Root `secrets` is accepted legacy storage without a current dedicated tab. Put important secrets in visible root `notes`, Settlement `notes`, Faction `info`, or relevant `details`/`notes` as described by the UI matrix; label GM secrets clearly. The Sector Manager and its Journal records are GM-only. A separately opted-in Player Shop publishes only allowlisted Shop data; never place private information in player-facing Shop fields. There is no supported per-field sector visibility/secret flag; do not invent one.
@@ -128,7 +128,7 @@ Settlement Events use title/details/status/notes plus textual `trigger`, `outcom
 
 `settlement.shop` has version 1 and ordered `groups`. A group has ID, display `name`, `type`, and ordered `entries`. Supported layouts: `general`, `weapons`, `armor`, `vehicles`, `services`; `type` is a string, not a strict enum. Missing type becomes General; unknown type strings remain stored and show a General view. The group name is independent of type.
 
-Each active entry accepts exactly `id`, **nonempty** Item `uuid`, `legacyEntryId`, and optional `travelType` (`Land` or `Water`, exact case). A UUID may be unresolved and retained, but it must not be fabricated to make a Shop row. **There is no valid document-free active Shop Item entry.** Empty groups are valid. The Settlement example demonstrates all layouts with empty groups; trade goods are described in `settlement.economy`. Add actual entries only after the GM provides genuine Item UUIDs. One source UUID may occur only once across the active Shop; duplicate references reject import.
+Each active entry accepts exactly `id`, **nonempty** Item `uuid`, `legacyEntryId`, optional Shop-specific `passengers` text, and optional `travelType` (`Land` or `Water`, exact case). A UUID may be unresolved and retained, but it must not be fabricated to make a Shop row. **There is no valid document-free active Shop Item entry.** Empty groups are valid. The Settlement example demonstrates all layouts with empty groups; trade goods are described in `settlement.economy`. Add actual entries only after the GM provides genuine Item UUIDs. One source UUID may occur only once across the active Shop; duplicate references reject import.
 
 All valid Foundry Item document types can be linked. Group type is a display layout, not an Item-type filter. Item name, image, cost, damage, range, bonus, weight, armor/Rot protection, comment, requirements and supported passenger fields come from the live Item. There are **no active `cost`, `price`, `quantity`, `name`, `damage`, `system` or copied Item-data properties on Shop entries**. Such properties are unknown and quarantined. Vehicle Travel Type is entry-local; on display it falls back to a compatible Item's Land/Water field or Land. It is not inferred from a sourcebook vehicle description unless the source actually specifies it.
 
@@ -675,6 +675,7 @@ Here `version` is the producing module release string, not a model marker; exter
 | `id` | string — ≤128 chars, pattern ^[A-Za-z0-9_-]+$ | Optional; Assigned when missing; prefer explicit stable ID | Stable entry identity; no direct editor input | "npc-mara" | Optional; deterministic IDs normally supplied by materialization. Keep unique in the relevant namespace. |
 | `uuid` | string — ≤512 chars, pattern ^[A-Za-z0-9_.-]*$ | Optional; MODEL REQUIRED, nonempty | Optional Foundry document link; context-dependent | "" where allowed; otherwise real copied UUID | Empty allowed for ordinary narrative entries; effective Faction Member and active Shop Item UUIDs must be nonempty. |
 | `legacyEntryId` | string — ≤1000000 chars | Optional; Absent | Prior merchant inventory entry identity | "Source text" | Recovery metadata; not a live document UUID. |
+| `passengers` | string | Optional; absent uses Item value | Shop Vehicle Passengers | "4 passengers + cargo" | Entry-local text; never written to the source Item. |
 | `travelType` | "Land" / "Water" | Optional; Absent; display uses Item value or Land | Shop Vehicle Travel Type | "Land" | Only Land or Water; entry-local and independent of the Item. |
 
 ### ShopMigration

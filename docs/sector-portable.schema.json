@@ -3960,6 +3960,10 @@
                               "type": "string",
                               "maxLength": 1000000
                             },
+                            "passengers": {
+                              "type": "string",
+                              "maxLength": 1000000
+                            },
                             "travelType": {
                               "enum": [
                                 "Land",

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {PlayerShopService,shopSnapshot,shopSettlement} from '../scripts/player-shop-service.mjs';
-import {RESOURCES,normalizeTrading,tradeQuote,tradeRequestQuote,tradeRatio,decimalFraction} from '../scripts/settlement-trading.mjs';
+import {RESOURCES,normalizeTrading,tradeQuote,tradeRequestQuote,tradeRatio,decimalFraction,stepResourceValue} from '../scripts/settlement-trading.mjs';
 import {normalizeShop} from '../scripts/settlement-shop.mjs';
 import {requireArk,arkInformation} from '../scripts/settlement-ark.mjs';
 import {playerShopContent,eligibleShopCharacters} from '../scripts/player-shop-ui.mjs';
@@ -105,4 +105,15 @@ test('all twelve decimal/Booze conversion directions use the existing relative-v
 test('all five Player Shop informational column sets match the GM definitions without management controls',()=>{
  const expected={general:['Item','Cost','Req.','Weight','Comment'],weapons:['Item','Cost','Damage','Range','Bonus','Weight','Comment'],armor:['Item','Cost','Rating','Rot Prot.','Weight','Comment'],vehicles:['Item','Cost','Passengers','Travel Type'],services:['Item','Cost','Req.','Comment']};
  for(const [type,columns] of Object.entries(expected)){const html=playerShopContent({name:'Shop',trading:normalizeTrading(),groups:[{type,name:type,entries:[]}]},[],null);assert.deepEqual(Array.from(html.matchAll(/<th>([^<]+)<\/th>/g),m=>m[1]),[...columns,'Buy']);assert.doesNotMatch(html,/data-shop-remove|data-shop-add|data-shop-entry-up/);}
+});
+
+test('GM rate steps preserve all fractional digits, enforce bounds and do not change rates implicitly',()=>{
+ for(const [value,next] of [['2','3'],['1.5','2.5'],['0.5','1.5'],['0.000000000000000001','1.000000000000000001'],['2.750000000000000001','3.750000000000000001']]){assert.equal(stepResourceValue(value,1),next);assert.equal(stepResourceValue(next,-1),value);}
+ for(const value of ['0.5','1','0.000000000000000001'])assert.throws(()=>stepResourceValue(value,-1));
+ assert.throws(()=>stepResourceValue('1000000',1));assert.throws(()=>stepResourceValue('invalid',1));
+});
+test('Vehicle Passengers is entry-local text, publicly read-only and survives portable serialization',async()=>{
+ const f=fixture();f.sector.settlement.shop.groups[0].type='vehicles';f.sector.settlement.shop.groups[0].entries[0].passengers='4 passengers + cargo';f.item.system.passengers=99;
+ const snapshot=await shopSnapshot(f.id,f.env);assert.equal(snapshot.groups[0].entries[0].fields.Passengers,'4 passengers + cargo');assert.equal(f.item.system.passengers,99);
+ const file=serializeSector(f.sector,{moduleVersion:'0.1.41'});assert.equal(file.extensions.unknown.length,0);const restored=deserializeSector(file,{code:'A1',sceneId:'zone'});assert.equal(restored.settlement.shop.groups[0].entries[0].passengers,'4 passengers + cargo');
 });

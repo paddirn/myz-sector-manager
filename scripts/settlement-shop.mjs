@@ -72,6 +72,7 @@ export function shopItemFields(doc,env=globalThis){
   return {cost:scalar(system.cost),requirement:scalar(type==='project'?system.DEV_Requirement:['artifact','weapon','armor'].includes(type)?system.dev_requirement:system.requirement),weight:scalar(system.weight),comment:scalar(system.comment),damage:scalar(system.damage),range:localized&&localized!==key?localized:range,bonus:pair(system.bonus),rating:pair(system.rating),rot:pair(system.rot),passengers:scalar(system.passengers??system.crew?.passengers)};
 }
 export const TRAVEL_TYPES=Object.freeze(['Land','Water']);
+export const vehiclePassengers=(entry,doc)=>entry?.passengers!==undefined?String(entry.passengers):String(shopItemFields(doc).passengers??'');
 export const vehicleTravelType=(entry,doc)=>TRAVEL_TYPES.includes(entry?.travelType)?entry.travelType:TRAVEL_TYPES.includes(doc?.system?.travelType)?doc.system.travelType:'Land';
 export function initializeVehicleTravel(entry,doc){if(entry.travelType===undefined)entry.travelType=vehicleTravelType(entry,doc);return entry;}
 export async function resolveShopItem(uuid,env=globalThis){
