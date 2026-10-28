@@ -601,3 +601,10 @@ Player Shops now select only owned official MYZ characters in the existing **Par
 Linked Ark Overview shows current development values, live read-only population, and read-only Ark coordinates with grid/occupancy warnings. Existing manual population and Zone placement are preserved. Automatic placement uses the requested safe fallback: coordinates are displayed/validated, but no records are silently moved or replaced.
 
 Embedded Ark Projects synchronize idempotently into read-only draft entries with native source opening and portable source metadata. Deleted/unavailable sources retain snapshots, manual Projects remain editable, and **Save Sector** persists changes. Source updates do not automatically write Journals. See the [data mappings, limitations and manual checks](docs/settlement-player-shop.md#ark-coordinates-and-projects-0139).
+
+
+### Gear and Services, decimal trade requests and Projects (0.1.40)
+
+The standalone player window is now named for its Settlement and shows portrait-based roster selection, Resource Trading first, the supplied Gear and Services introduction, and all shared GM Shop informational columns. Buy continues requesting exactly one Item. Positive decimal relative values and Booze (Dose) support all twelve exchange directions with exact rational arithmetic and visible minimum whole Give quantities. **Trade now posts a request for GM resolution only; it never changes character resources, stock, Items or Actor flags.** Old three-resource values are preserved, with Booze defaulting to 1.
+
+Projects display in two columns, with highlighted Not completed entries first in stable order and Completed entries alphabetically afterward. Stored order/source data remain unchanged. Overview shows one Coordinates field, retaining the linked Ark's live read-only display and the existing safe placement fallback. See [configuration, limits and manual checks](docs/settlement-player-shop.md).

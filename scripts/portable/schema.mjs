@@ -3,6 +3,7 @@ const string={type:'string',maxLength:1000000},bool={type:'boolean'},number={typ
 const id={type:'string',maxLength:128,pattern:'^[A-Za-z0-9_-]+$'};
 const object=properties=>({type:'object',properties,additionalProperties:true});
 const array=items=>({type:'array',items,maxItems:2000});
+const resourceValue={anyOf:[{type:'number',minimum:1e-18,maximum:1000000},{type:'string',maxLength:32,pattern:'^(?=.*[1-9])(?:(?:0|[1-9][0-9]{0,5})(?:[.][0-9]{1,18})?|1000000(?:[.]0{1,18})?)$'}]};
 const json={};
 const text=keys=>Object.fromEntries(keys.split(' ').filter(Boolean).map(key=>[key,string]));
 const source=array(json);
@@ -22,7 +23,7 @@ export const SECTOR_SCHEMA=object({
  pathStunts:object(Object.fromEntries('safePath artifact assessRot bullets grub water halfTime rush saferRoute'.split(' ').map(key=>[key,bool]))),
  travel:object({mode:{enum:['foot','vehicle']},...Object.fromEntries('rushed stalker open difficult night'.split(' ').map(key=>[key,bool])),difficulty:{type:'number',minimum:2}}),
  special:object({overlayImage:image,sceneUuid:uuid,...text('source overview situation'),images:array(entry),locations:array(entry),inhabitants:array(inhabitant),gear:array(entry),events:array(entry)}),
- settlement:object({version:{const:1},...text('type disposition population leadership description notes history situation defenses resources economy'),image,arkUuid:uuid,projects:array(project),inhabitants:array(inhabitant),factions:array(faction),events:array(object({...common,...text('trigger outcomes related')})),threads:array(object({...common,...text('npcs factions clues developments resolution')})),shops:array(legacyShop),shop:object({version:{const:1},playerAccess:bool,trading:object({enabled:bool,values:object(Object.fromEntries(['bullets','cleanGrub','cleanWater'].map(key=>[key,{type:'integer',minimum:1,maximum:1000000}])))}),groups:array(group),migration:object({version:{const:1},source:string,unlinked:integer,duplicates:integer})})}),
+ settlement:object({version:{const:1},...text('type disposition population leadership description notes history situation defenses resources economy'),image,arkUuid:uuid,projects:array(project),inhabitants:array(inhabitant),factions:array(faction),events:array(object({...common,...text('trigger outcomes related')})),threads:array(object({...common,...text('npcs factions clues developments resolution')})),shops:array(legacyShop),shop:object({version:{const:1},playerAccess:bool,trading:object({enabled:bool,values:object(Object.fromEntries(['bullets','cleanGrub','cleanWater','booze'].map(key=>[key,resourceValue])))}),groups:array(group),migration:object({version:{const:1},source:string,unlinked:integer,duplicates:integer})})}),
  randomization:object({method:string,threatLevel:string,numericThreatLevel:integer,levelSelection:json,environment:object({name:string,ruins:{anyOf:[string,{type:'null'}]},threats:bool,artifacts:bool,manual:bool}),baseDice:array({type:'integer',minimum:1,maximum:6}),rolledOnes:integer,rolledSixes:integer,threatSeverity:integer,threatCount:integer,artifactCount:integer,threatMode:string,sources:source})
 });
 SECTOR_SCHEMA.required=['sectorType'];

@@ -1,5 +1,5 @@
-import {normalizeShop,resolveShopItem,shopColumns,groupType} from './settlement-shop.mjs';
-import {normalizeTrading,characterResources,tradeUpdate,RESOURCES} from './settlement-trading.mjs';
+import {normalizeShop,resolveShopItem,shopColumns,groupType,vehicleTravelType} from './settlement-shop.mjs';
+import {normalizeTrading,characterResources,tradeRequestQuote,resourceLabel,RESOURCES} from './settlement-trading.mjs';
 import {escapeHTML as esc} from './travel/model.mjs';
 export const SHOP_MODULE='myz-sector-manager';
 const publishedTrading=raw=>{const trading=normalizeTrading(raw);return {enabled:trading.enabled,values:Object.fromEntries(Object.keys(RESOURCES).map(key=>[key,trading.values[key]]))};};
@@ -18,7 +18,7 @@ async function publicText(value,env){
 export async function shopSnapshot(id,env=globalThis){
  if(!env.game.user.isGM)throw new Error('Only the authoritative GM can publish Shop data.');
  const {sector,shop}=shopSettlement(id,env),saved=JSON.stringify(shop),groups=[];
- for(const group of shop.groups){const entries=[];for(const entry of group.entries){try{const {doc,fields}=await resolveShopItem(entry.uuid,env);entries.push({id:entry.id,name:doc.name,description:await publicText(doc.system?.description,env),cost:fields.cost,fields:Object.fromEntries(await Promise.all(shopColumns(group).filter(c=>c.key!=='link').map(async c=>[c.label,['comment','requirement'].includes(c.key)?await publicText(fields[c.key],env):String(fields[c.key]??'')]))),stock:null});}catch{entries.push({id:entry.id,name:'Unavailable Item',unavailable:true});}}groups.push({id:group.id,name:String(group.name??''),type:groupType(group),entries});}
+ for(const group of shop.groups){const entries=[];for(const entry of group.entries){try{const {doc,fields}=await resolveShopItem(entry.uuid,env);entries.push({id:entry.id,name:doc.name,description:await publicText(doc.system?.description,env),cost:fields.cost,fields:Object.fromEntries(await Promise.all(shopColumns(group).filter(c=>c.key!=='link').map(async c=>[c.label,['comment','requirement'].includes(c.key)?await publicText(fields[c.key],env):String(c.key==='travel'?vehicleTravelType(entry,doc):fields[c.key]??'')]))),stock:null});}catch{entries.push({id:entry.id,name:'Unavailable Item',unavailable:true});}}groups.push({id:group.id,name:String(group.name??''),type:groupType(group),entries});}
  const snapshot={id,name:String(sector.customName||sector.name||sector.code||'Settlement'),groups,trading:publishedTrading(shop.trading)};
  const bytes=new TextEncoder().encode(JSON.stringify(snapshot)),digest=await env.crypto.subtle.digest('SHA-256',bytes);
  if(JSON.stringify(shopSettlement(id,env).shop)!==saved)throw new Error('Shop changed while loading. Refresh and review again.');
@@ -26,7 +26,7 @@ export async function shopSnapshot(id,env=globalThis){
 }
 // Requests travel through the requester's User document, rather than unauthenticated
 // module socket payloads. Foundry's User update permissions identify the requester.
-// All writes are serialized by the elected active GM, with durable Actor receipts.
+// Chat requests are serialized by the elected active GM. Actors are never updated.
 export class PlayerShopService {
  constructor(env=globalThis){this.env=env;this.queue=Promise.resolve();this.pending=new Map();this.results=new Map();this.inflight=new Set();}
  authoritative(){return this.env.game.user.isGM&&activeShopGM(this.env)?.id===this.env.game.user.id;}
@@ -36,8 +36,7 @@ export class PlayerShopService {
    if(changes.flags?.[SHOP_MODULE]?.shopRequest&&this.authoritative())this.enqueue(user);
    if(user.id===env.game.user.id&&changes.flags?.[SHOP_MODULE]?.shopResponse){const response=user.getFlag(SHOP_MODULE,'shopResponse'),pending=this.pending.get(response?.id);if(pending){this.pending.delete(response.id);clearTimeout(pending.timer);response.ok?pending.resolve(response.data):pending.reject(new Error(response.error));}}
   });
-  // Do not replay requests on reload or GM failover. A timed-out write must be
-  // checked on the character; explicit retries use the SAME request ID.
+  // Do not replay chat requests automatically on reload or GM failover.
  }
  enqueue(user){
   const request=structuredClone(user.getFlag(SHOP_MODULE,'shopRequest'));if(!request)return;
@@ -49,7 +48,7 @@ export class PlayerShopService {
   const request={...payload,id:payload.id||env.crypto.randomUUID(),timestamp:Date.now()};
   if(env.game.user.isGM&&this.authoritative()){const task=this.queue.then(()=>this.execute(env.game.user,request));this.queue=task.catch(()=>{});return task;}
   return new Promise((resolve,reject)=>{
-   const timer=setTimeout(()=>{this.pending.delete(request.id);reject(new Error(`Shop request timed out. Check character resources before retrying. Request ID: ${request.id}`));},60000);
+   const timer=setTimeout(()=>{this.pending.delete(request.id);reject(new Error(`Shop request timed out. Check chat before retrying. Request ID: ${request.id}`));},60000);
    this.pending.set(request.id,{resolve,reject,timer});env.game.user.setFlag(SHOP_MODULE,'shopRequest',request).catch(error=>{clearTimeout(timer);this.pending.delete(request.id);reject(error);});
   });
  }
@@ -67,22 +66,14 @@ export class PlayerShopService {
    if(request.revision!==snapshot.revision)throw new Error('Shop or rates changed. Refresh the Shop and review again.');
    if(typeof request.actor!=='string'||!/^Actor\.[A-Za-z0-9_-]+$/.test(request.actor))throw new Error('Choose a world character Actor.');
    const actor=await env.fromUuid(request.actor);characterResources(actor,user,env);
-   const receipts=actor.getFlag?.(SHOP_MODULE,'shopReceipts')||[];
-   if(!Array.isArray(receipts))throw new Error('Character trade history is invalid; ask the GM to repair it.');
-   const previous=receipts.find(r=>r.key===key);if(previous)return previous.result;
    let result;
    if(request.action==='trade'){
     const current=shopSettlement(request.settlement,env).shop;
     if(!current.trading.enabled)throw new Error('Resource trading is disabled.');
     if(JSON.stringify(publishedTrading(current.trading))!==JSON.stringify(snapshot.trading))throw new Error('Resource rates changed. Refresh and review again.');
-    const {quote,update}=tradeUpdate(actor,user,snapshot.trading,request.give,request.receive,request.quantity,env);
-    if(!request.expected||!Object.keys(RESOURCES).every(key=>characterResources(actor,user,env)[key]===request.expected[key]))throw new Error('Character resources changed. Refresh and review the trade.');
-    result={completed:true,message:`${user.name}: ${actor.name} traded ${quote.quantity} ${RESOURCES[quote.give].label} for ${quote.amount} ${RESOURCES[quote.receive].label} at ${snapshot.name} (rate ${quote.rate}; rounded down).`};
-    const recent=receipts.filter(r=>r.timestamp>Date.now()-600000);if(recent.length>=1000)throw new Error('Too many recent trades. Wait before trying again.');
-    if(!this.authoritative())throw new Error('GM authority changed; trade cancelled.');
-    // One Actor update carries both resources and receipt. No cross-document CAS
-    // is available; manual edits/other modules are outside this service's queue.
-    await actor.update({...update,[`flags.${SHOP_MODULE}.shopReceipts`]:[...recent,{key,timestamp:Date.now(),result}]});
+    const quote=tradeRequestQuote(actor,user,snapshot.trading,request.give,request.receive,request.quantity,env);
+    if(!this.authoritative())throw new Error('GM authority changed; request cancelled.');
+    result={completed:true,message:`${actor.name} wants to trade at ${snapshot.name}:\n\n${quote.quantity} ${resourceLabel(quote.give,quote.quantity)} for ${quote.amount} ${resourceLabel(quote.receive,quote.amount)}`};
    }else{
     if(!Array.isArray(request.items)||request.items.length!==1||request.items[0]?.quantity!==1)throw new Error('Buy requests exactly one Item at quantity 1.');
     const selected=request.items[0],item=snapshot.groups.flatMap(g=>g.entries).find(i=>i.id===selected.id&&!i.unavailable);
@@ -90,9 +81,9 @@ export class PlayerShopService {
     result={completed:true,message:`${actor.name} wants to buy something from the shop:\n\n${item.name} (cost ${item.cost??''})`};
    }
    if(request.action==='purchase'&&!this.authoritative())throw new Error('GM authority changed; purchase request cancelled.');
-   // Cache BEFORE ChatMessage.create: a chat failure must never deduct twice.
+   // Cache before posting to suppress duplicate submissions; no resource writes occur.
    this.results.set(key,result);if(this.results.size>2000)this.results.delete(this.results.keys().next().value);
-   try{await env.ChatMessage.create({content:request.action==='purchase'?result.message.split('\n\n').map(text=>`<p>${esc(text)}</p>`).join(''):`<p>${esc(result.message)}</p>`,whisper:[],blind:false});}catch{result={...result,chatWarning:'Completed, but the chat announcement failed. Do not repeat the transaction.'};this.results.set(key,result);}
+   try{await env.ChatMessage.create({content:result.message.split('\n\n').map(text=>`<p>${esc(text)}</p>`).join(''),whisper:[],blind:false});}catch{result={...result,completed:false,chatWarning:'Chat posting could not be confirmed. Check chat before retrying. No resources were changed.'};this.results.set(key,result);}
    return result;
   }finally{this.inflight.delete(key);}
  }

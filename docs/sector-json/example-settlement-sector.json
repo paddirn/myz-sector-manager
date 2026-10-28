@@ -158,7 +158,8 @@
           "values": {
             "bullets": 1,
             "cleanGrub": 1,
-            "cleanWater": 1
+            "cleanWater": 1,
+            "booze": 1
           }
         }
       },
