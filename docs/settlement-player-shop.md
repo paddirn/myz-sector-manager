@@ -6,7 +6,7 @@
 2. The linked information is read-only. **Open Ark Sheet** opens the original sheet for editing. Actor changes and changes to its embedded Items refresh this view. Missing/inaccessible links produce a warning and retain the UUID. The Settlement's own descriptive Population/Leadership/etc. remain separate authored fields; linking never overwrites them.
 3. On **Shop**, expand **Player Shop and Resource Trading (GM configuration)**. Enable Player Shop access and Save Sector. This explicitly publishes the Shop's Item names, descriptions (excluding secret blocks), displayed statistics/comments, prices, group names and exchange rates to **all players** who have its macro/identifier. Nothing else from the sector is published. Only enable this for information intended for players.
 4. Optionally enable resource trading. Enter positive whole relative values (1–1,000,000) for Bullets, Clean Grub, and Clean Water, then Save Sector. Trading is disabled by default. The default relative values are 1:1:1, configurable house settings, **not official MYZ exchange rates**.
-5. Copy the macro shown in that Settlement's Shop configuration. Create a Script Macro, grant players permission to run it, and share it. Players do **not** need access to the GM sector Journal or source Items.
+5. Click **Copy Macro** beside the macro shown in that Settlement's Shop configuration. A confirmation appears; if clipboard access fails, the displayed text is selected for manual copying. Create a Script Macro, grant players permission to run it, and share it. Players do **not** need access to the GM sector Journal or source Items.
 
 An active GM must be connected. The standalone window exposes only that Settlement's Shop; it never opens the Sector Manager or grants Journal permissions. A missing/unpublished/non-Settlement reference gives a clear error.
 
@@ -22,9 +22,9 @@ await game.myzSectorManager.openPlayerShop("JournalEntry.YOUR_SETTLEMENT_JOURNAL
 
 ## Purchase requests
 
-Select an owned MYZ character, enter whole request quantities for one or several Items, and click **Request Purchase**. Chat identifies the player, character, Settlement, each requested quantity and listed price. Fixed integer prices produce a total. Variable/range or non-numeric prices are reported without inventing a total or rolling a purchase price. Requests never transfer Items, spend resources, or change Shop inventory. Existing GM Buy behavior is preserved.
+Select an owned MYZ character and click **Buy** beside an Item to request exactly one unit. Compact rows show the Item name, listed price and Buy button, preserving group and Item order; descriptions and quantity inputs are absent. Chat identifies the player, character, Settlement, each requested quantity and listed price. Fixed integer prices produce a total. Variable/range or non-numeric prices are reported without inventing a total or rolling a purchase price. Requests never transfer Items, spend resources, or change Shop inventory. Existing GM Buy behavior is preserved.
 
-The existing Shop stores **Item references, not stock quantities**. The window says “Stock: not tracked” rather than inventing inventory. The quantity beside each Item is the quantity being requested. The GM fulfills a purchase manually.
+The existing Shop stores **Item references, not stock quantities**. Each Buy requests one unit rather than inventing stock or changing inventory quantities. The GM fulfills a purchase manually.
 
 Only owned world character Actors of the official MYZ types `mutant`, `animal`, `human`, or `robot`, with valid resource fields, are eligible. The assigned character is preferred, with a selector for additional eligible Actors. Other players' Actors and Ark/NPC/vehicle Actors are excluded. Ownership is checked again on the GM side.
 
@@ -36,7 +36,7 @@ For resource values `V`, giving `Q` units of A receives:
 floor(Q × V[A] / V[B]) units of B
 ```
 
-All six directed exchanges use the same values. Example house values Bullets=3, Grub=2, Water=1: 3 Grub yields 2 Bullets; 1 Bullet yields 3 Water. Integer multiplication/division uses BigInt, so rounding is deterministic. Received fractions/remainders are discarded; trades returning zero units are refused. Entered trade quantities must be positive whole numbers, at most 1,000,000. Changing either resource, the quantity, or the character refreshes the preview. Giving/receiving the same resource is refused.
+All six directed exchanges use the same values. Example house values Bullets=3, Grub=2, Water=1: 3 Grub yields 2 Bullets; 1 Bullet yields 3 Water. Integer multiplication/division uses BigInt, so rounding is deterministic. Received fractions/remainders are discarded; trades returning zero units are refused. Entered trade quantities must be positive whole numbers, at most 1,000,000. The Give and Receive controls appear in aligned columns. Give quantity starts at 1, with minus/plus buttons; the prominent read-only Receive amount updates as either resource, quantity or character changes. While open, the window checks the existing GM-filtered Shop API every ten seconds for new rates/availability, preserving the selected resources and Give quantity; Refresh Shop also fetches them immediately. Pending requests suspend these background checks. Giving/receiving the same resource is refused.
 
 Confirmation states the exact deduction, addition and rate. The GM rechecks the current saved Settlement, publication/trading settings, inventory/rate revision, Actor ownership, and current balances before updating the Actor. If rates or displayed balances changed, refresh and review again.
 
@@ -100,8 +100,8 @@ Overlay labels previously used PIXI's default text texture resolution (the brows
 Automated tests simulate Foundry APIs; Chromium/PIXI checks do not load licensed Foundry.
 
 1. In a backup world with official MYZ v14, link/drop/paste an Ark; verify all listed fields, native sheet opening, live Actor and embedded Item edits, wrong Actor rejection, missing Actor warnings, and Save/reload.
-2. As GM, publish one Shop and leave a second unpublished. As a separate player account with **no sector Journal permission**, run the shared macro. Confirm only the designated Shop appears; unpublished/missing/Normal/Special identifiers fail. Check world and Compendium Item descriptions and that secrets/private tabs remain absent.
-3. Test assigned/multiple owned characters and another player's Actor; confirm only authorized characters work. Test multi-Item purchase requests, quantity validation, fixed/range prices, public chat, and unchanged resources/Items/stock.
+2. As GM, publish one Shop and leave a second unpublished. As a separate player account with **no sector Journal permission**, run the shared macro. Confirm only the designated Shop appears; unpublished/missing/Normal/Special identifiers fail. Check world and Compendium Item names/prices, unavailable rows, Copy Macro success/failure, and that secrets/private tabs remain absent.
+3. Test assigned/multiple owned characters and another player's Actor; confirm only authorized characters work. Verify each Buy submits exactly one Item at quantity 1; test fixed/range prices, public chat, and unchanged resources/Items/stock.
 4. Enable trading; test all six directions, integer rounding, fractional existing balances, zero/negative/fractional inputs, insufficient supplies and confirmation cancellation. Check the actual character sheet fields after trade and reload.
 5. With two players, submit simultaneous trades against the same authorized character and against different characters. Change balances/rates/disable access while confirmation is open. Confirm stale requests fail, duplicate clicks deduct once, and unauthorized attempts cannot write.
 6. Disconnect/reconnect player/GM during a request; inspect the sheet before any retry. Verify failed Actor writes produce no success chat and chat failures do not repeat deductions. Check that an active GM is required and a secondary GM does not also process requests.
