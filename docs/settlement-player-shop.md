@@ -1,4 +1,4 @@
-Current behavior for 0.1.42 is documented in [Player Shop and Ark Projects](shop-ark-projects.md). Historical version notes below describe earlier interfaces; 0.1.42 replaces Vehicle Item statistics/passenger editing and read-only Ark Project status.
+Current behavior for 0.1.43 is documented in [Player Shop and Ark Projects](shop-ark-projects.md). Historical version notes below describe earlier interfaces; 0.1.43 also replaces automatic Project completion with readiness, adds Not started grouping, and revises Shop quantities/layout; 0.1.42 replaced Vehicle Item statistics/passenger editing and read-only Ark Project status.
 
 # Linked Arks and standalone Player Shops (0.1.37)
 

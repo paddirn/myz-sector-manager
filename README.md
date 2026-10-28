@@ -612,3 +612,5 @@ Projects display in two columns, with highlighted Not completed entries first in
 Settlement Shop UI refinements in 0.1.41: wider responsive Player Shop with portrait/resource selection beside the introduction, compact three-column trade requests, non-wrapping table headings, exact decimal GM rate steppers, and Shop-specific Vehicle Passengers text. See [Player Shop documentation](docs/settlement-player-shop.md). Trading and purchases remain chat requests only.
 
 Version 0.1.42 adds Vehicle Actor Shop references/native statistics, enriched purchase-request links, system-computed character weight, and grouped Ark Projects with Work Points and checked completion synchronization. See [verified mappings, compatibility and manual testing](docs/shop-ark-projects.md).
+
+Version 0.1.43 fixes Work Points parsing/editing, shows Ready to Complete without automatic completion, adds Not started Project grouping, and refines the four-column Player Shop trade layout and availability limits. See [current behavior and manual checks](docs/shop-ark-projects.md).

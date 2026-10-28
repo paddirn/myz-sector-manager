@@ -23,15 +23,15 @@ const avatar=actor=>{const src=imagePath(actor?.img);return `${src?`<img class="
 export function playerShopContent(snapshot,actors,actorUuid){
  const opts=Object.entries(RESOURCES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join(''),selected=actors.find(a=>a.uuid===actorUuid),listId=`sm-character-list-${++characterPickerSequence}`;
  const inventory=snapshot.groups.map(g=>{const columns=shopColumns(g);return `<h3 class="sm-shop-section-heading">${esc(g.name)}</h3><div class="sm-player-inventory" tabindex="0" aria-label="${esc(g.name)} inventory"><table style="min-width:${columns.length*90+76}px"><thead><tr>${columns.map(c=>`<th>${esc(c.label)}</th>`).join('')}<th>Buy</th></tr></thead><tbody>${g.entries.map(i=>`<tr>${columns.map(c=>`<td>${esc(c.key==='link'?i.name+(i.legacyVehicle?' (legacy Item reference)':''):i.fields?.[c.label]??(c.key==='cost'?i.cost:'')??'')}</td>`).join('')}<td><button type="button" data-buy="${esc(i.id)}" aria-label="Buy ${esc(i.name)}" ${i.unavailable||!actors.length?'disabled':''}>Buy</button></td></tr>`).join('')}</tbody></table></div>`;}).join('');
- const trading=`<section data-resource-trading><h3 class="sm-shop-section-heading">Resource Trading</h3>${snapshot.trading.enabled?`<div class="sm-exchange-columns"><div class="sm-exchange-column"><label>Give<select data-give>${opts}</select></label><div class="sm-exchange-quantity"><button type="button" data-decrease aria-label="Decrease Give quantity">−</button><input data-quantity aria-label="Quantity to give" type="number" min="1" max="1000000" step="1" value="1"><button type="button" data-increase aria-label="Increase Give quantity">+</button></div></div><div class="sm-exchange-column"><label>Receive<select data-receive>${opts}</select></label><output data-received aria-label="Quantity to receive" aria-live="polite">—</output></div><div class="sm-exchange-summary"><p data-minimum role="status"></p><p data-quote role="status"></p><button type="button" data-trade>Request Trade</button></div></div>`:'<p>Resource trading is disabled at this Settlement.</p>'}</section><hr class="sm-shop-divider">`;
+ const trading=`<section data-resource-trading><h3 class="sm-shop-section-heading">Resource Trading</h3>${snapshot.trading.enabled?`<div class="sm-exchange-columns"><div class="sm-exchange-column"><label>Give<select data-give>${opts}</select></label><div class="sm-exchange-quantity"><button type="button" data-decrease aria-label="Decrease Give quantity">−</button><input data-quantity aria-label="Quantity to give" type="number" min="1" max="1000000" step="1" value="1"><button type="button" data-increase aria-label="Increase Give quantity">+</button></div></div><div class="sm-exchange-column"><label>Receive<select data-receive>${opts}</select></label><output data-received aria-label="Quantity to receive" aria-live="polite">—</output></div><div class="sm-exchange-summary"><div data-quote role="status"><div data-offer></div><div data-rate></div></div></div><div class="sm-exchange-action"><button type="button" data-trade>Request Trade</button></div></div>`:'<p>Resource trading is disabled at this Settlement.</p>'}</section><hr class="sm-shop-divider">`;
  return `<style>
  .myz-player-shop{max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);min-width:0}
  .myz-player-shop .window-content{overflow:auto;min-height:0}.myz-player-shop section{overflow-wrap:anywhere}
  .myz-player-shop table{width:100%;table-layout:fixed}.myz-player-shop td{vertical-align:middle;overflow-wrap:anywhere}
  .myz-player-shop th:last-child{width:76px}.myz-player-shop label{display:block;margin:6px 0}
  .myz-player-shop select{width:100%;min-width:0;max-width:100%}.myz-player-shop fieldset{min-width:0}
- .myz-player-shop .sm-exchange-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
- .myz-player-shop .sm-exchange-column{min-width:0}.myz-player-shop .sm-exchange-quantity{display:flex;align-items:center;gap:4px;height:36px;justify-content:center}
+ .myz-player-shop .sm-exchange-columns{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+ .myz-player-shop .sm-exchange-column{min-width:0}.myz-player-shop .sm-exchange-column label,.myz-player-shop .sm-exchange-column select{text-align:center;overflow-wrap:normal;word-break:normal}.myz-player-shop .sm-exchange-summary{min-width:0;overflow-wrap:normal;word-break:normal;align-self:center}.myz-player-shop .sm-exchange-action{display:flex;align-items:center;justify-content:center;min-width:0}.myz-player-shop [data-trade]{flex:0 1 auto;width:auto}.myz-player-shop .sm-exchange-quantity{display:flex;align-items:center;gap:4px;height:36px;justify-content:center}
  .myz-player-shop .sm-exchange-quantity button{flex:0 0 28px;width:28px;padding:0;height:32px}
  .myz-player-shop .sm-exchange-quantity input{flex:0 0 4ch;width:4ch;min-width:4ch;padding:2px;height:32px;text-align:center}
  .myz-player-shop [data-received]{display:flex;align-items:center;justify-content:center;min-height:36px;font-size:1.5em;font-weight:bold;font-variant-numeric:tabular-nums}
@@ -40,16 +40,16 @@ export function playerShopContent(snapshot,actors,actorUuid){
  .myz-player-shop .sm-player-inventory{max-width:100%;overflow-x:auto}.myz-player-shop .sm-player-inventory table{table-layout:auto}.myz-player-shop .sm-player-inventory td{white-space:pre-wrap}
  .myz-player-shop .sm-character-picker{position:relative;margin:8px 0}.myz-player-shop [data-character-toggle],.myz-player-shop [data-character-choice]{display:flex;align-items:center;gap:8px;width:100%;text-align:left;height:auto;min-height:40px}
  .myz-player-shop .sm-character-image[hidden],.myz-player-shop .sm-character-fallback[hidden]{display:none}
- .myz-player-shop .sm-character-image{width:64px;height:64px;object-fit:cover;flex:0 0 64px}.myz-player-shop .sm-character-fallback{display:inline-flex;width:64px;flex:0 0 64px;font-size:2em;justify-content:center}
+ .myz-player-shop .sm-character-image{width:96px;height:120px;object-fit:contain;flex:0 0 96px}.myz-player-shop .sm-character-fallback{display:inline-flex;width:96px;flex:0 0 96px;font-size:2em;justify-content:center}
  .myz-player-shop [data-character-list]{position:absolute;z-index:5;inset-inline:0;max-height:220px;overflow:auto;padding:4px;background:var(--color-cool-5,#252830);color:var(--color-light-1,#fff);border:1px solid currentColor}
  .myz-player-shop [data-character-choice][aria-selected=true],.myz-player-shop [data-character-choice].is-active{outline:2px solid var(--color-warm-2,#d49a3d);outline-offset:-2px}
 .myz-player-shop{container-type:inline-size}
  .myz-player-shop .sm-shop-welcome{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:20px;align-items:start}
  .myz-player-shop .sm-character-arrow{margin-inline-start:auto;flex:none}.myz-player-shop .sm-encumbered{color:var(--color-level-error,#d32222);font-weight:bold}
- .myz-player-shop [data-balances]{display:block;font-weight:normal;white-space:normal;line-height:1.5}
+ .myz-player-shop [data-balances]{display:block;font-weight:normal;white-space:pre-line;line-height:1.5}
  .myz-player-shop .sm-player-inventory th{white-space:nowrap;overflow-wrap:normal;word-break:normal;min-width:70px}
  .myz-player-shop .sm-shop-divider{width:100%;border:0;border-top:1px solid var(--color-border-light-primary,#888);margin:16px 0}
- @container(max-width:560px){.myz-player-shop .sm-shop-welcome{grid-template-columns:1fr}.myz-player-shop .sm-exchange-columns{grid-template-columns:repeat(2,minmax(0,1fr))}.myz-player-shop .sm-exchange-summary{grid-column:1/-1}}
+ @container(max-width:560px){.myz-player-shop .sm-shop-welcome{grid-template-columns:1fr}.myz-player-shop .sm-exchange-columns{grid-template-columns:repeat(2,minmax(0,1fr))}.myz-player-shop .sm-exchange-summary,.myz-player-shop .sm-exchange-action{grid-column:auto}}
 </style><section><h2>${esc(snapshot.name)} - Gear and Services</h2><div class="sm-shop-welcome"><div class="sm-character-picker"><span id="${listId}-label">Character</span><input type="hidden" data-character value="${esc(selected?.uuid||'')}"><button type="button" data-character-toggle role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="${listId}" aria-labelledby="${listId}-label" ${actors.length?'':'disabled'}>${avatar(selected)}<span class="sm-character-arrow" aria-hidden="true">▾</span></button><div data-character-list id="${listId}" role="listbox" aria-label="Roster characters" hidden>${actors.map((actor,i)=>`<button type="button" tabindex="-1" role="option" id="${listId}-${i}" data-character-choice="${esc(actor.uuid)}" aria-selected="${actor.uuid===selected?.uuid}">${avatar(actor)}</button>`).join('')}</div><div data-encumbrance aria-live="polite"></div></div><section data-gear-introduction>${PLAYER_SHOP_INTRO.map(p=>`<p>${esc(p)}</p>`).join('')}</section></div>${!actors.length?'<p role="alert">No eligible Party Roster character is available. Ask the GM to configure the roster and character ownership.</p>':''}${trading}${inventory}<p data-status role="status"></p><button type="button" data-refresh>Refresh Shop</button></section>`;
 }
 export function bindCharacterPicker(root,env=globalThis){
@@ -106,7 +106,7 @@ export function createPlayerShopClass(ApplicationV2,service,env=globalThis){
     let balances;
     for(const choice of root.querySelectorAll('[data-character-choice], [data-character-toggle]')){
      const id=choice.dataset.characterChoice||control('character').value,chosen=env.game.actors.get(id.split('.').at(-1)),output=choice.querySelector('[data-balances]');
-     try{const values=characterResources(chosen,env.game.user,env);output.textContent=Object.entries(RESOURCES).map(([k,v])=>`${v.label}: ${values[k]}`).join(' · ');}catch(error){output.textContent=error.message;}
+     try{const values=characterResources(chosen,env.game.user,env);output.textContent=Object.entries(RESOURCES).map(([k,v])=>`${v.label}: ${values[k]}`).join('\n');}catch(error){output.textContent=error.message;}
     }
     try{balances=characterResources(actor(),env.game.user,env);}catch{}
     const weight=characterEncumbrance(actor());control('encumbrance').innerHTML=weight?`Weight: ${weight.current} / ${weight.maximum}${weight.encumbered?'<div class="sm-encumbered" role="status"><span aria-hidden="true">⚠</span> Encumbered!</div>':''}`:'Weight: unavailable';
@@ -114,13 +114,23 @@ export function createPlayerShopClass(ApplicationV2,service,env=globalThis){
     control('refresh').disabled=Boolean(this.busy||this.refreshing);
     if(!control('quantity'))return;
     for(const key of ['give','receive','quantity'])this.tradeSelection[key]=control(key).value;
+    const maximum=Math.min(1000000,Math.floor(balances?.[control('give').value]??0));
     let minimum=1;
-    try{const ratio=tradeRatio(this.snapshot.trading,control('give').value,control('receive').value);minimum=ratio.minimum;control('quantity').min=String(minimum);control('minimum').textContent=`Minimum Give: ${minimum}. Equivalent whole-number ratio: ${ratio.equivalent}.`;if(adjustMinimum&&Number(control('quantity').value)<minimum)control('quantity').value=String(minimum);}catch(error){control('minimum').textContent=control('give').value===control('receive').value?'':error.message;}
-    const quantity=Number(control('quantity').value);this.tradeSelection.quantity=control('quantity').value;
+    try{minimum=tradeRatio(this.snapshot.trading,control('give').value,control('receive').value).minimum;}catch{/* Quote reports a single validation message below. */}
+    control('quantity').max=String(maximum);control('quantity').min=String(maximum>=minimum?minimum:0);
+    let quantity=Number(control('quantity').value);
+    if(Number.isFinite(quantity))quantity=Math.max(0,Math.min(maximum,quantity));
+    if(maximum===0)quantity=0;
+    else if(adjustMinimum&&quantity<minimum)quantity=Math.min(maximum,minimum);
+    if(Number.isFinite(quantity)&&control('quantity').value!=='')control('quantity').value=String(quantity);
+    this.tradeSelection.quantity=control('quantity').value;
     control('decrease').disabled=Boolean(this.busy||this.refreshing||!balances||quantity<=minimum);
-    control('increase').disabled=Boolean(this.busy||this.refreshing||quantity>=Math.min(1000000,Math.floor(balances?.[control('give').value]??0))||Math.floor(balances?.[control('give').value]??0)<minimum);
-    try{const q=quote();control('received').textContent=String(q.amount);control('quote').textContent=`Offer ${q.quantity} ${RESOURCES[q.give].label} for ${q.amount} ${RESOURCES[q.receive].label}. Rate: ${q.rate}.`;control('trade').disabled=Boolean(locked||!balances||balances[q.give]<q.quantity);}
-    catch(error){control('received').textContent='—';control('quote').textContent=control('give').value===control('receive').value?'Choose two different resources':error.message;control('trade').disabled=true;}
+    control('increase').disabled=Boolean(this.busy||this.refreshing||!balances||quantity>=maximum);
+    try{
+     if(maximum===0)throw new Error('No available units of the selected Give resource.');
+     const q=quote();control('received').textContent=String(q.amount);control('offer').textContent=`Offer ${q.quantity} ${RESOURCES[q.give].label} for ${q.amount} ${RESOURCES[q.receive].label}`;control('rate').textContent=`Rate: ${q.rate}`;control('trade').disabled=Boolean(locked||!balances||balances[q.give]<q.quantity);
+    }catch(error){control('received').textContent=maximum===0?'0':'—';control('offer').textContent=control('give').value===control('receive').value?'Choose two different resources':error.message;control('rate').textContent='';control('trade').disabled=true;}
+
    };
    this.unbindCharacterPicker?.();this.unbindCharacterPicker=bindCharacterPicker(root,env);
    this.updateShopControls=update;
@@ -129,7 +139,7 @@ export function createPlayerShopClass(ApplicationV2,service,env=globalThis){
    if(this.rosterHook!==undefined)env.Hooks?.off('updateSetting',this.rosterHook);this.rosterHook=env.Hooks?.on('updateSetting',setting=>{if(setting.key==='myz-sector-manager.partyRoster'&&!this.busy)void this.render();});
    for(const hook of this.inventoryHooks||[])env.Hooks?.off(hook.name,hook.id);this.inventoryHooks=['createItem','updateItem','deleteItem'].map(name=>({name,id:env.Hooks?.on(name,()=>update())}));
    control('character').addEventListener('change',()=>{this.actorUuid=control('character').value;update();});
-   for(const key of ['give','receive'])control(key)?.addEventListener('input',()=>update(true));control('quantity')?.addEventListener('input',()=>update());
+   control('give')?.addEventListener('input',()=>{try{control('quantity').value=String(Math.min(1000000,Math.floor(characterResources(actor(),env.game.user,env)[control('give').value])));}catch{control('quantity').value='0';}update();});control('receive')?.addEventListener('input',()=>update(true));control('quantity')?.addEventListener('input',()=>update());
    for(const [name,step] of [['decrease',-1],['increase',1]])control(name)?.addEventListener('click',()=>{if(control(name).disabled)return;const value=Number(control('quantity').value);control('quantity').value=String(Math.max(Number(control('quantity').min)||1,Math.min(1000000,Math.floor(characterResources(actor(),env.game.user,env)[control('give').value]),(Number.isFinite(value)?Math.trunc(value):1)+step)));update();});
    update(true);
    const run=async action=>{if(this.busy||this.refreshing)return;this.busy=true;update();try{await action();}catch(error){if(/timed out/.test(error.message))this.uncertain=true;status(error.message);}finally{this.busy=false;this.updateShopControls?.();}};
@@ -141,6 +151,7 @@ export function createPlayerShopClass(ApplicationV2,service,env=globalThis){
    control('trade')?.addEventListener('click',()=>void run(async()=>{
     const q=quote(),chosen=actor(),revision=this.snapshot.revision;characterResources(chosen,env.game.user,env);
     const confirmed=await env.foundry.applications.api.DialogV2.confirm({window:{title:'Confirm Trade Request'},content:`<p>${esc(chosen.name)} wants to trade at ${esc(this.snapshot.name)}: <strong>${q.quantity} ${RESOURCES[q.give].label}</strong> for <strong>${q.amount} ${RESOURCES[q.receive].label}</strong>.</p><p>Rate ${q.rate}.</p>`});if(!confirmed)return;
+    if(characterResources(chosen,env.game.user,env)[q.give]<q.quantity)throw new Error('Available resources changed. Review the updated quantity before requesting a trade.');
     const result=await service.request({action:'trade',settlement:this.settlement,revision,actor:chosen.uuid,give:q.give,receive:q.receive,quantity:q.quantity});if(result.chatWarning)status(result.chatWarning);
    }));
    clearInterval(this.rateTimer);this.rateTimer=setInterval(()=>void this.refreshDisplayedRates(),10000);
