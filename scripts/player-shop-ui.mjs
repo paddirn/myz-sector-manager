@@ -5,22 +5,22 @@ import {escapeHTML as esc} from './travel/model.mjs';
 export function eligibleShopCharacters(env=globalThis){return Array.from(env.game.actors).filter(actor=>{try{characterResources(actor,env.game.user,env);return true;}catch{return false;}}).sort((a,b)=>a.name.localeCompare(b.name));}
 let characterPickerSequence=0;
 export const PLAYER_SHOP_INTRO=Object.freeze([
- "The lists below contains items and services commonly traded in the Ark. The cost (in bullets) is only a guideline – remember, there are no set prices in the Ark. Requirement tells you what projects need to be completed in the Ark for the item to be generally available. Weight tells you how many lines on you gear list that the item requires.",
+ "The lists below contain items and services commonly traded in the Ark. The cost (in bullets) is only a guideline – remember, there are no set prices in the Ark. Requirement tells you what projects need to be completed in the Ark for the item to be generally available. Weight tells you how many lines on you gear list that the item requires.",
  "Individual tiny items don't take up space. However, more than 10 of a tiny item counts as a light item, more than 20 as a regular item and more than 40 as a heavy item.",
  "Prices below can be paid either bullets or in pieces of scrap, round up if cost is a fraction (you can't pay in fractions of bullets)."
 ]);
-const avatar=actor=>{const src=imagePath(actor?.img);return `${src?`<img class="sm-character-image" src="${esc(src)}" alt="" loading="lazy">`:''}<span class="sm-character-fallback" ${src?'hidden':''} aria-hidden="true">♟</span><span>${esc(actor?.name||'No eligible character')}</span>`;};
+const avatar=actor=>{const src=imagePath(actor?.img);return `${src?`<img class="sm-character-image" src="${esc(src)}" alt="" loading="lazy">`:''}<span class="sm-character-fallback" ${src?'hidden':''} aria-hidden="true">♟</span><span><span data-character-name>${esc(actor?.name||'No eligible character')}</span><small data-balances></small></span>`;};
 export function playerShopContent(snapshot,actors,actorUuid){
  const opts=Object.entries(RESOURCES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join(''),selected=actors.find(a=>a.uuid===actorUuid),listId=`sm-character-list-${++characterPickerSequence}`;
- const inventory=snapshot.groups.map(g=>{const columns=shopColumns(g);return `<h3>${esc(g.name)}</h3><div class="sm-player-inventory" tabindex="0" aria-label="${esc(g.name)} inventory"><table style="min-width:${columns.length*90+76}px"><thead><tr>${columns.map(c=>`<th>${esc(c.label)}</th>`).join('')}<th>Buy</th></tr></thead><tbody>${g.entries.map(i=>`<tr>${columns.map(c=>`<td>${esc(c.key==='link'?i.name:i.fields?.[c.label]??(c.key==='cost'?i.cost:'')??'')}</td>`).join('')}<td><button type="button" data-buy="${esc(i.id)}" aria-label="Buy ${esc(i.name)}" ${i.unavailable||!actors.length?'disabled':''}>Buy</button></td></tr>`).join('')}</tbody></table></div>`;}).join('');
- const trading=`<fieldset data-resource-trading><legend>Resource Trading</legend>${snapshot.trading.enabled?`<div class="sm-exchange-columns"><div class="sm-exchange-column"><label>Give<select data-give>${opts}</select></label><div class="sm-exchange-quantity"><button type="button" data-decrease aria-label="Decrease Give quantity">−</button><input data-quantity aria-label="Quantity to give" type="number" min="1" max="1000000" step="1" value="1"><button type="button" data-increase aria-label="Increase Give quantity">+</button></div></div><div class="sm-exchange-column"><label>Receive<select data-receive>${opts}</select></label><output data-received aria-label="Quantity to receive" aria-live="polite">—</output></div></div><p data-minimum role="status"></p><p data-quote role="status"></p><button type="button" data-trade>Request Trade</button><p>Requests only. The GM resolves trades manually.</p>`:'<p>Resource trading is disabled at this Settlement.</p>'}</fieldset>`;
+ const inventory=snapshot.groups.map(g=>{const columns=shopColumns(g);return `<h3 class="sm-shop-section-heading">${esc(g.name)}</h3><div class="sm-player-inventory" tabindex="0" aria-label="${esc(g.name)} inventory"><table style="min-width:${columns.length*90+76}px"><thead><tr>${columns.map(c=>`<th>${esc(c.label)}</th>`).join('')}<th>Buy</th></tr></thead><tbody>${g.entries.map(i=>`<tr>${columns.map(c=>`<td>${esc(c.key==='link'?i.name:i.fields?.[c.label]??(c.key==='cost'?i.cost:'')??'')}</td>`).join('')}<td><button type="button" data-buy="${esc(i.id)}" aria-label="Buy ${esc(i.name)}" ${i.unavailable||!actors.length?'disabled':''}>Buy</button></td></tr>`).join('')}</tbody></table></div>`;}).join('');
+ const trading=`<section data-resource-trading><h3 class="sm-shop-section-heading">Resource Trading</h3>${snapshot.trading.enabled?`<div class="sm-exchange-columns"><div class="sm-exchange-column"><label>Give<select data-give>${opts}</select></label><div class="sm-exchange-quantity"><button type="button" data-decrease aria-label="Decrease Give quantity">−</button><input data-quantity aria-label="Quantity to give" type="number" min="1" max="1000000" step="1" value="1"><button type="button" data-increase aria-label="Increase Give quantity">+</button></div></div><div class="sm-exchange-column"><label>Receive<select data-receive>${opts}</select></label><output data-received aria-label="Quantity to receive" aria-live="polite">—</output></div><div class="sm-exchange-summary"><p data-minimum role="status"></p><p data-quote role="status"></p><button type="button" data-trade>Request Trade</button></div></div>`:'<p>Resource trading is disabled at this Settlement.</p>'}</section><hr class="sm-shop-divider">`;
  return `<style>
  .myz-player-shop{max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);min-width:0}
  .myz-player-shop .window-content{overflow:auto;min-height:0}.myz-player-shop section{overflow-wrap:anywhere}
  .myz-player-shop table{width:100%;table-layout:fixed}.myz-player-shop td{vertical-align:middle;overflow-wrap:anywhere}
  .myz-player-shop th:last-child{width:76px}.myz-player-shop label{display:block;margin:6px 0}
  .myz-player-shop select{width:100%;min-width:0;max-width:100%}.myz-player-shop fieldset{min-width:0}
- .myz-player-shop .sm-exchange-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+ .myz-player-shop .sm-exchange-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
  .myz-player-shop .sm-exchange-column{min-width:0}.myz-player-shop .sm-exchange-quantity{display:flex;align-items:center;gap:4px;height:36px;justify-content:center}
  .myz-player-shop .sm-exchange-quantity button{flex:0 0 28px;width:28px;padding:0;height:32px}
  .myz-player-shop .sm-exchange-quantity input{flex:0 0 4ch;width:4ch;min-width:4ch;padding:2px;height:32px;text-align:center}
@@ -30,10 +30,16 @@ export function playerShopContent(snapshot,actors,actorUuid){
  .myz-player-shop .sm-player-inventory{max-width:100%;overflow-x:auto}.myz-player-shop .sm-player-inventory table{table-layout:auto}.myz-player-shop .sm-player-inventory td{white-space:pre-wrap}
  .myz-player-shop .sm-character-picker{position:relative;margin:8px 0}.myz-player-shop [data-character-toggle],.myz-player-shop [data-character-choice]{display:flex;align-items:center;gap:8px;width:100%;text-align:left;height:auto;min-height:40px}
  .myz-player-shop .sm-character-image[hidden],.myz-player-shop .sm-character-fallback[hidden]{display:none}
- .myz-player-shop .sm-character-image{width:32px;height:32px;object-fit:cover;flex:0 0 32px}.myz-player-shop .sm-character-fallback{display:inline-flex;width:32px;justify-content:center}
+ .myz-player-shop .sm-character-image{width:64px;height:64px;object-fit:cover;flex:0 0 64px}.myz-player-shop .sm-character-fallback{display:inline-flex;width:64px;flex:0 0 64px;font-size:2em;justify-content:center}
  .myz-player-shop [data-character-list]{position:absolute;z-index:5;inset-inline:0;max-height:220px;overflow:auto;padding:4px;background:var(--color-cool-5,#252830);color:var(--color-light-1,#fff);border:1px solid currentColor}
  .myz-player-shop [data-character-choice][aria-selected=true],.myz-player-shop [data-character-choice].is-active{outline:2px solid var(--color-warm-2,#d49a3d);outline-offset:-2px}
-</style><section><h2>${esc(snapshot.name)} - Gear and Services</h2><div class="sm-character-picker"><span id="${listId}-label">Character</span><input type="hidden" data-character value="${esc(selected?.uuid||'')}"><button type="button" data-character-toggle role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="${listId}" aria-labelledby="${listId}-label" ${actors.length?'':'disabled'}>${avatar(selected)}</button><div data-character-list id="${listId}" role="listbox" aria-label="Roster characters" hidden>${actors.map((actor,i)=>`<button type="button" tabindex="-1" role="option" id="${listId}-${i}" data-character-choice="${esc(actor.uuid)}" aria-selected="${actor.uuid===selected?.uuid}">${avatar(actor)}</button>`).join('')}</div></div><p data-balances></p>${!actors.length?'<p role="alert">No eligible Party Roster character is available. Ask the GM to configure the roster and character ownership.</p>':''}${trading}<section data-gear-introduction>${PLAYER_SHOP_INTRO.map(p=>`<p>${esc(p)}</p>`).join('')}</section>${inventory}<p data-status role="status"></p><button type="button" data-refresh>Refresh Shop</button></section>`;
+.myz-player-shop{container-type:inline-size}
+ .myz-player-shop .sm-shop-welcome{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:20px;align-items:start}
+ .myz-player-shop [data-balances]{display:block;font-weight:normal;white-space:normal;line-height:1.5}
+ .myz-player-shop .sm-player-inventory th{white-space:nowrap;overflow-wrap:normal;word-break:normal;min-width:70px}
+ .myz-player-shop .sm-shop-divider{width:100%;border:0;border-top:1px solid var(--color-border-light-primary,#888);margin:16px 0}
+ @container(max-width:560px){.myz-player-shop .sm-shop-welcome{grid-template-columns:1fr}.myz-player-shop .sm-exchange-columns{grid-template-columns:repeat(2,minmax(0,1fr))}.myz-player-shop .sm-exchange-summary{grid-column:1/-1}}
+</style><section><h2>${esc(snapshot.name)} - Gear and Services</h2><div class="sm-shop-welcome"><div class="sm-character-picker"><span id="${listId}-label">Character</span><input type="hidden" data-character value="${esc(selected?.uuid||'')}"><button type="button" data-character-toggle role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="${listId}" aria-labelledby="${listId}-label" ${actors.length?'':'disabled'}>${avatar(selected)}</button><div data-character-list id="${listId}" role="listbox" aria-label="Roster characters" hidden>${actors.map((actor,i)=>`<button type="button" tabindex="-1" role="option" id="${listId}-${i}" data-character-choice="${esc(actor.uuid)}" aria-selected="${actor.uuid===selected?.uuid}">${avatar(actor)}</button>`).join('')}</div></div><section data-gear-introduction>${PLAYER_SHOP_INTRO.map(p=>`<p>${esc(p)}</p>`).join('')}</section></div>${!actors.length?'<p role="alert">No eligible Party Roster character is available. Ask the GM to configure the roster and character ownership.</p>':''}${trading}${inventory}<p data-status role="status"></p><button type="button" data-refresh>Refresh Shop</button></section>`;
 }
 export function bindCharacterPicker(root,env=globalThis){
  const button=root.querySelector('[data-character-toggle]'),list=root.querySelector('[data-character-list]'),input=root.querySelector('[data-character]'),choices=Array.from(list.querySelectorAll('[data-character-choice]'));
@@ -47,7 +53,7 @@ export function bindCharacterPicker(root,env=globalThis){
   if(event.key==='Escape'){if(!list.hidden){event.preventDefault();event.stopPropagation();}close();return;}if(event.key==='Tab'){close();return;}
   if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();if(list.hidden)open();else active=event.key==='Home'?0:event.key==='End'?choices.length-1:(active+(event.key==='ArrowDown'?1:-1)+choices.length)%choices.length;highlight();}
   else if(['Enter',' '].includes(event.key)){event.preventDefault();list.hidden?open():choose(active);}
-  else if(event.key.length===1&&!event.ctrlKey&&!event.metaKey){const start=active+1;for(let n=0;n<choices.length;n++){const i=(start+n)%choices.length;if((choices[i].lastElementChild?.textContent||'').trim().toLowerCase().startsWith(event.key.toLowerCase())){active=i;open();break;}}}
+  else if(event.key.length===1&&!event.ctrlKey&&!event.metaKey){const start=active+1;for(let n=0;n<choices.length;n++){const i=(start+n)%choices.length;if((choices[i].querySelector('[data-character-name]')?.textContent||'').trim().toLowerCase().startsWith(event.key.toLowerCase())){active=i;open();break;}}}
  });
  const outside=event=>{if(!event.target.closest?.('.sm-character-picker'))close();};env.document.addEventListener('pointerdown',outside);
  const imageError=event=>{const img=event.target;if(img.matches?.('.sm-character-image')){img.hidden=true;img.nextElementSibling.hidden=false;}};root.addEventListener('error',imageError,true);
@@ -55,7 +61,7 @@ export function bindCharacterPicker(root,env=globalThis){
 }
 export function createPlayerShopClass(ApplicationV2,service,env=globalThis){
  return class PlayerSettlementShop extends ApplicationV2 {
-  static DEFAULT_OPTIONS={window:{title:'Settlement Shop',resizable:true},position:{width:680,height:680},classes:['myz-player-shop']};
+  static DEFAULT_OPTIONS={window:{title:'Settlement Shop',resizable:true},position:{width:840,height:680},classes:['myz-player-shop']};
   get title(){return `${this.snapshot?.name||'Settlement'} - Gear and Services`;}
   constructor(id){super();this.settlement=id;this.actorUuid=env.game.user.character?.uuid;this.busy=false;this.tradeSelection={give:'bullets',receive:'cleanGrub',quantity:'1'};}
   async refresh(){this.snapshot=await service.request({action:'browse',settlement:this.settlement});this.loadError=false;return this.render(true);}
@@ -86,8 +92,11 @@ export function createPlayerShopClass(ApplicationV2,service,env=globalThis){
    const update=(adjustMinimum=false)=>{
     const locked=this.busy||this.refreshing||this.uncertain||this.loadError;
     let balances;
-    try{balances=characterResources(actor(),env.game.user,env);control('balances').textContent=Object.entries(RESOURCES).map(([k,v])=>`${v.label}: ${balances[k]}`).join(' · ');}
-    catch(error){control('balances').textContent=error.message;}
+    for(const choice of root.querySelectorAll('[data-character-choice], [data-character-toggle]')){
+     const id=choice.dataset.characterChoice||control('character').value,chosen=env.game.actors.get(id.split('.').at(-1)),output=choice.querySelector('[data-balances]');
+     try{const values=characterResources(chosen,env.game.user,env);output.textContent=Object.entries(RESOURCES).map(([k,v])=>`${v.label}: ${values[k]}`).join(' · ');}catch(error){output.textContent=error.message;}
+    }
+    try{balances=characterResources(actor(),env.game.user,env);}catch{}
     for(const button of root.querySelectorAll('[data-buy]')){const item=this.snapshot.groups.flatMap(g=>g.entries).find(i=>i.id===button.dataset.buy);button.disabled=Boolean(locked||!balances||!item||item.unavailable);}
     control('refresh').disabled=Boolean(this.busy||this.refreshing);
     if(!control('quantity'))return;
@@ -103,7 +112,7 @@ export function createPlayerShopClass(ApplicationV2,service,env=globalThis){
    this.unbindCharacterPicker?.();this.unbindCharacterPicker=bindCharacterPicker(root,env);
    this.updateShopControls=update;
    for(const key of ['give','receive','quantity'])if(control(key))control(key).value=this.tradeSelection[key];
-   if(this.actorHook!==undefined)env.Hooks?.off('updateActor',this.actorHook);this.actorHook=env.Hooks?.on('updateActor',doc=>{if(doc.uuid===actor()?.uuid)update();});
+   if(this.actorHook!==undefined)env.Hooks?.off('updateActor',this.actorHook);this.actorHook=env.Hooks?.on('updateActor',()=>update());
    if(this.rosterHook!==undefined)env.Hooks?.off('updateSetting',this.rosterHook);this.rosterHook=env.Hooks?.on('updateSetting',setting=>{if(setting.key==='myz-sector-manager.partyRoster'&&!this.busy)void this.render();});
    control('character').addEventListener('change',()=>{this.actorUuid=control('character').value;update();});
    for(const key of ['give','receive'])control(key)?.addEventListener('input',()=>update(true));control('quantity')?.addEventListener('input',()=>update());

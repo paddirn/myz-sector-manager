@@ -14,6 +14,14 @@ export function decimalFraction(value){
  if(numerator<=0n||numerator>1000000n*denominator)throw new Error('Resource values must be greater than zero and at most 1,000,000.');
  return {numerator,denominator};
 }
+// Add one whole unit without converting authored fractional digits to binary floats.
+export function stepResourceValue(value,direction){
+ if(direction!==1&&direction!==-1)throw new Error('Invalid resource value step.');
+ const {numerator,denominator}=decimalFraction(value),next=numerator+BigInt(direction)*denominator;
+ if(next<=0n||next>1000000n*denominator)throw new Error('Resource value step would exceed the positive rate limits.');
+ const whole=next/denominator,remainder=next%denominator,places=denominator.toString().length-1;
+ return places?`${whole}.${remainder.toString().padStart(places,'0')}`:String(whole);
+}
 export function normalizeTrading(raw){
  if(raw!==undefined&&(!raw||typeof raw!=='object'||Array.isArray(raw)))throw new Error('Invalid resource trading configuration.');
  if(raw?.values!==undefined&&(!raw.values||typeof raw.values!=='object'||Array.isArray(raw.values)))throw new Error('Invalid resource values.');

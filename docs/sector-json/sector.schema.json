@@ -796,6 +796,10 @@
             "Land",
             "Water"
           ]
+        },
+        "passengers": {
+          "type": "string",
+          "maxLength": 1000000
         }
       },
       "additionalProperties": true
