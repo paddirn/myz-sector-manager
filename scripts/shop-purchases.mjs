@@ -1,5 +1,5 @@
 import {partyRoster,escapeHTML as esc} from './travel/model.mjs';
-import {resolveShopItem,shopColumns,vehiclePassengers,vehicleTravelType} from './settlement-shop.mjs';
+import {resolveShopItem,shopColumns,shopDisplayFields,vehiclePassengers,vehicleTravelType} from './settlement-shop.mjs';
 import {imagePath} from './sector-images.mjs';
 
 export function bulletCost(value){
@@ -20,7 +20,7 @@ export async function purchaseMembers(env=globalThis){
  return members.sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
 }
 export function purchaseContent(doc,fields,group,entry,members){
- const image=imagePath(doc.img),cost=bulletCost(doc.system?.cost);
+ fields=shopDisplayFields(group,entry,doc,fields);const image=imagePath(doc.img),cost=bulletCost(doc.system?.cost);
  return `<style>.myz-shop-purchase{max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px)}.myz-shop-purchase .window-content{overflow:auto;min-width:0}.sm-purchase{overflow-wrap:anywhere}.sm-purchase img{width:100px;height:100px;object-fit:contain}.sm-purchase dd{white-space:pre-wrap}.sm-purchase select{width:100%;min-width:0}</style><section class="sm-purchase"><h3>${esc(doc.name)}</h3>${image?`<img src="${esc(image)}" alt="${esc(doc.name)}">`:''}<dl>${shopColumns(group).filter(c=>c.key!=='link').map(c=>{const value=c.key==='travel'?vehicleTravelType(entry,doc):c.key==='passengers'?vehiclePassengers(entry,doc):fields[c.key];return value!==''&&value!==undefined?`<dt>${esc(c.label)}</dt><dd>${esc(value)}</dd>`:'';}).join('')}</dl><label>Purchasing Party member<select name="purchaser" ${members.length?'':'disabled'}><option value="">Choose a Party member</option>${members.map(actor=>`<option value="${esc(actor.uuid)}">${esc(actor.name)}</option>`).join('')}</select></label>${!members.length?'<p>No accessible Party members. Configure or repair the existing Party Roster in module settings.</p>':''}${!cost?`<p>Original Cost: ${esc(doc.system?.cost??'(missing)')}. An integer Bullet cost or range is required; Buy is unavailable.</p>`:''}<p>Informational announcement only. No resources or inventory are changed.</p></section>`;
 }
 export async function buyShopItem(host,group,entry,env=globalThis){

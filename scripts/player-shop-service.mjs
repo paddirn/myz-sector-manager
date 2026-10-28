@@ -1,4 +1,4 @@
-import {normalizeShop,resolveShopItem,shopColumns,vehiclePassengers,groupType,vehicleTravelType} from './settlement-shop.mjs';
+import {normalizeShop,resolveShopItem,shopColumns,shopDisplayFields,vehiclePassengers,groupType,vehicleTravelType} from './settlement-shop.mjs';
 import {normalizeTrading,characterResources,tradeRequestQuote,resourceLabel,RESOURCES} from './settlement-trading.mjs';
 import {escapeHTML as esc} from './travel/model.mjs';
 export const SHOP_MODULE='myz-sector-manager';
@@ -18,7 +18,7 @@ async function publicText(value,env){
 export async function shopSnapshot(id,env=globalThis){
  if(!env.game.user.isGM)throw new Error('Only the authoritative GM can publish Shop data.');
  const {sector,shop}=shopSettlement(id,env),saved=JSON.stringify(shop),groups=[];
- for(const group of shop.groups){const entries=[];for(const entry of group.entries){try{const {doc,fields}=await resolveShopItem(entry.uuid,env);entries.push({id:entry.id,name:doc.name,description:await publicText(doc.system?.description,env),cost:fields.cost,fields:Object.fromEntries(await Promise.all(shopColumns(group).filter(c=>c.key!=='link').map(async c=>[c.label,['comment','requirement'].includes(c.key)?await publicText(fields[c.key],env):String(c.key==='travel'?vehicleTravelType(entry,doc):c.key==='passengers'?vehiclePassengers(entry,doc):fields[c.key]??'')]))),stock:null});}catch{entries.push({id:entry.id,name:'Unavailable Item',unavailable:true});}}groups.push({id:group.id,name:String(group.name??''),type:groupType(group),entries});}
+ for(const group of shop.groups){const entries=[];for(const entry of group.entries){try{const {doc,fields:sourceFields}=await resolveShopItem(entry.uuid,env);const fields=shopDisplayFields(group,entry,doc,sourceFields);entries.push({id:entry.id,name:doc.name,description:await publicText(doc.system?.description,env),cost:fields.cost,weight:String(fields.weight??''),comment:await publicText(fields.comment,env),uuid:doc.uuid||entry.uuid,documentType:doc.documentName,legacyVehicle:groupType(group)==='vehicles'&&doc.documentName==='Item',fields:Object.fromEntries(await Promise.all(shopColumns(group).filter(c=>c.key!=='link').map(async c=>[c.label,['comment','requirement'].includes(c.key)?await publicText(fields[c.key],env):String(c.key==='travel'?vehicleTravelType(entry,doc):c.key==='passengers'?vehiclePassengers(entry,doc):fields[c.key]??'')]))),stock:null});}catch{entries.push({id:entry.id,name:'Unavailable Item',unavailable:true});}}groups.push({id:group.id,name:String(group.name??''),type:groupType(group),entries});}
  const snapshot={id,name:String(sector.customName||sector.name||sector.code||'Settlement'),groups,trading:publishedTrading(shop.trading)};
  const bytes=new TextEncoder().encode(JSON.stringify(snapshot)),digest=await env.crypto.subtle.digest('SHA-256',bytes);
  if(JSON.stringify(shopSettlement(id,env).shop)!==saved)throw new Error('Shop changed while loading. Refresh and review again.');
@@ -66,7 +66,7 @@ export class PlayerShopService {
    if(request.revision!==snapshot.revision)throw new Error('Shop or rates changed. Refresh the Shop and review again.');
    if(typeof request.actor!=='string'||!/^Actor\.[A-Za-z0-9_-]+$/.test(request.actor))throw new Error('Choose a world character Actor.');
    const actor=await env.fromUuid(request.actor);characterResources(actor,user,env);
-   let result;
+   let result,documentLink='';
    if(request.action==='trade'){
     const current=shopSettlement(request.settlement,env).shop;
     if(!current.trading.enabled)throw new Error('Resource trading is disabled.');
@@ -78,12 +78,14 @@ export class PlayerShopService {
     if(!Array.isArray(request.items)||request.items.length!==1||request.items[0]?.quantity!==1)throw new Error('Buy requests exactly one Item at quantity 1.');
     const selected=request.items[0],item=snapshot.groups.flatMap(g=>g.entries).find(i=>i.id===selected.id&&!i.unavailable);
     if(!item)throw new Error('Shop Item is unavailable.');
-    result={completed:true,message:`${actor.name} wants to buy something from the shop:\n\n${item.name} (cost ${item.cost??''})`};
+    result={completed:true,message:`${actor.name} wants to buy something from the shop:\n\n${item.name} (cost ${item.cost??''})${item.weight?'\n'+item.weight:''}${item.comment?'\n'+item.comment:''}`};
+    const editor=env.foundry?.applications?.ux?.TextEditor?.implementation;
+    documentLink=editor?.enrichHTML?await editor.enrichHTML(`@UUID[${item.uuid}]`,{async:true,secrets:false}):`<a class="content-link" data-uuid="${esc(item.uuid)}" data-type="${esc(item.documentType)}" draggable="true">${esc(item.name)}</a>`;
    }
    if(request.action==='purchase'&&!this.authoritative())throw new Error('GM authority changed; purchase request cancelled.');
    // Cache before posting to suppress duplicate submissions; no resource writes occur.
    this.results.set(key,result);if(this.results.size>2000)this.results.delete(this.results.keys().next().value);
-   try{await env.ChatMessage.create({content:result.message.split('\n\n').map(text=>`<p>${esc(text)}</p>`).join(''),whisper:[],blind:false});}catch{result={...result,completed:false,chatWarning:'Chat posting could not be confirmed. Check chat before retrying. No resources were changed.'};this.results.set(key,result);}
+   try{await env.ChatMessage.create({content:result.message.split('\n\n').map(text=>`<p>${esc(text).replaceAll('\n','<br>')}</p>`).join('')+documentLink,whisper:[],blind:false});}catch{result={...result,completed:false,chatWarning:'Chat posting could not be confirmed. Check chat before retrying. No resources were changed.'};this.results.set(key,result);}
    return result;
   }finally{this.inflight.delete(key);}
  }

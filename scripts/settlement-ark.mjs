@@ -34,7 +34,7 @@ export function synchronizeArkProjects(settlement,actor){
  const available=actor?.uuid===arkUuid&&actor?.documentName==='Actor'&&actor.type==='ark';
  const sources=new Map(available?Array.from(actor.items||[]).filter(item=>item.type==='project'&&typeof item.uuid==='string'&&item.uuid).map(item=>[item.uuid,item]):[]);
  const next=[],seen=new Set(),used=new Set([...['projects','inhabitants','factions','events','threads','shops'].flatMap(key=>(settlement[key]||[]).map(p=>p.id)),...(settlement.shops||[]).flatMap(shop=>(shop.inventory||[]).map(p=>p.id))]);
- const linked=(previous,item)=>({...previous,uuid:item.uuid,title:item.name||'',referenceName:item.name||'',referenceType:'project',details:String(item.system?.description??''),status:typeof item.system?.completed==='boolean'?(item.system.completed?'Completed':'Not completed'):'',progress:String(item.system?.work_points??''),notes:String(item.system?.comment??''),arkSource:{...previous.arkSource,version:1,arkUuid,projectUuid:item.uuid,missing:false}});
+ const linked=(previous,item)=>({...previous,uuid:item.uuid,title:item.name||'',referenceName:item.name||'',referenceType:'project',details:String(item.system?.description??''),status:typeof item.system?.completed==='boolean'?(item.system.completed?'Completed':previous.status==='Not available'?'Not available':'Not completed'):'',progress:String(item.system?.work_points??''),notes:String(item.system?.comment??''),arkSource:{...previous.arkSource,version:1,arkUuid,projectUuid:item.uuid,missing:false}});
  for(const entry of projects){
   if(!entry.arkSource){next.push(entry);continue;}
   const key=`${entry.arkSource.arkUuid}:${entry.arkSource.projectUuid}`;

@@ -7,7 +7,7 @@ export const SETTLEMENT_ACCENT='#47aeb3';
 export const settlementAccent=value=>/^#[0-9a-f]{6}$/i.test(value||'')?value:SETTLEMENT_ACCENT;
 export const DISPOSITIONS=['Unknown','Friendly','Neutral','Unfriendly','Hostile'];
 export const SETTLEMENT_TYPES=['Ark','Village','Town','Trading Post','Outpost','Fortress','Industrial Facility','Mobile Settlement','Other'];
-export const PROJECT_STATUSES=['Not completed','Planned','In Progress','Completed','Abandoned'];
+export const PROJECT_STATUSES=['Not completed','Completed','Not available'];
 // shops is the read-only legacy recovery archive; active inventory lives in shop.groups.
 const listKeys=['projects','inhabitants','factions','events','threads','shops'];
 const identity=()=>globalThis.foundry?.utils?.randomID?.()||globalThis.crypto.randomUUID();
@@ -29,6 +29,7 @@ export function normalizeSettlement(raw={}){
         if(next.inventory!==undefined&&!Array.isArray(next.inventory))throw new Error('Invalid Settlement inventory. Record was not changed.');
         next.inventory=(next.inventory||[]).map(normalizeEntry);
       }
+      if(key==='projects'&&next.workPoints!==undefined&&(!Number.isSafeInteger(next.workPoints)||next.workPoints<0))throw new Error('Work Points must be a nonnegative integer.');
       return key==='factions'?normalizeFaction(next):next;
     });
   }
@@ -37,7 +38,7 @@ export function normalizeSettlement(raw={}){
 }
 export function newSettlementEntry(key){
   const entry={id:identity(),title:'',details:'',notes:''};
-  if(key==='projects')Object.assign(entry,{uuid:'',status:'Planned',progress:'',completedAt:'',referenceName:''});
+  if(key==='projects')Object.assign(entry,{uuid:'',status:'Not completed',workPoints:0,progress:'',completedAt:'',referenceName:''});
   if(key==='inhabitants')Object.assign(entry,{role:'',disposition:'Unknown',factionId:'',portrait:'',uuid:''});
   if(key==='factions')Object.assign(entry,{info:'',infoVersion:1,members:[],membersVersion:1});
   if(key==='events')Object.assign(entry,{status:'Planned',trigger:'',outcomes:'',related:''});

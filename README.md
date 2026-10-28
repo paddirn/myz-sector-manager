@@ -610,3 +610,5 @@ The standalone player window is now named for its Settlement and shows portrait-
 Projects display in two columns, with highlighted Not completed entries first in stable order and Completed entries alphabetically afterward. Stored order/source data remain unchanged. Overview shows one Coordinates field, retaining the linked Ark's live read-only display and the existing safe placement fallback. See [configuration, limits and manual checks](docs/settlement-player-shop.md).
 
 Settlement Shop UI refinements in 0.1.41: wider responsive Player Shop with portrait/resource selection beside the introduction, compact three-column trade requests, non-wrapping table headings, exact decimal GM rate steppers, and Shop-specific Vehicle Passengers text. See [Player Shop documentation](docs/settlement-player-shop.md). Trading and purchases remain chat requests only.
+
+Version 0.1.42 adds Vehicle Actor Shop references/native statistics, enriched purchase-request links, system-computed character weight, and grouped Ark Projects with Work Points and checked completion synchronization. See [verified mappings, compatibility and manual testing](docs/shop-ark-projects.md).

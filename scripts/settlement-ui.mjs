@@ -1,3 +1,4 @@
+import {projectTotal,projectProgress,nextProjectProgress,writeArkProjectStatus} from './settlement-projects.mjs';
 import {hydrateArk} from './settlement-ark.mjs';
 import {sortEditorEntries} from './entry-order.mjs';
 import {renderFaction,hydrateFactions,bindFactions} from './settlement-factions-ui.mjs';
@@ -19,8 +20,7 @@ export function renderSettlement(host,{field,area,select,reference,terrainField}
   if(host.tab==='Shop')return renderShop(host);
   const key=SETTLEMENT_COLLECTIONS[host.tab],entries=sectorCollection(d,key),state=host.entryState(key),kind=key.split('.')[1];
   const fields=(item,p,i)=>{
-    if(kind==='projects'&&item.arkSource)return `<p><strong>Ark-linked Project — read-only${item.arkSource.missing?' (source missing or unlinked)':''}</strong></p><div data-project-view="${i}"></div><dl><dt>Status</dt><dd>${esc(item.status)}</dd><dt>Work points (source)</dt><dd>${esc(item.progress)}</dd><dt>Source notes</dt><dd>${esc(item.notes)}</dd></dl>`;
-    if(kind==='projects')return `${ref('projects',`${p}.uuid`,item.uuid)}<div data-project-view="${i}">${item.uuid?'Loading Project…':'Drop an Ark Project Item onto the reference field.'}</div><div class="sm-grid">${choice('Project Status',`${p}.status`,item.status,PROJECT_STATUSES)}${field('Progress',`${p}.progress`,item.progress)}${field('Date / Session Completed',`${p}.completedAt`,item.completedAt)}</div>${text('Settlement Project Notes',`${p}.notes`,item.notes)}`;
+    if(kind==='projects')return `${item.arkSource?`<p>Ark-linked Project${item.arkSource.missing?' (source unavailable)':''}</p>`:ref('projects',`${p}.uuid`,item.uuid)}<div data-project-view="${i}"></div><div class="sm-project-controls" data-project-controls="${i}"><label>Project Status<select data-project-status="${i}">${values(item.status,PROJECT_STATUSES).map(value=>`<option ${item.status===value?'selected':''} value="${esc(value)}">${esc(value)}</option>`).join('')}</select></label><label>Work Points<span><button type="button" data-project-step="-1" data-project-number="${i}" aria-label="Decrease Work Points">−</button><input type="number" min="0" step="1" data-project-points="${i}" aria-label="Current Work Points" value="${projectProgress(item)}"><button type="button" data-project-step="1" data-project-number="${i}" aria-label="Increase Work Points">+</button> / <output data-project-total="${i}">Unavailable</output></span></label></div>${item.progress?`<p>Legacy/source requirement (retained): ${esc(item.progress)}</p>`:''}${field('Date / Session Completed',`${p}.completedAt`,item.completedAt)}${text('Settlement Project Notes',`${p}.notes`,item.notes)}`;
     const common=`${field(kind==='inhabitants'?'Name':kind==='factions'?'Faction Name':`${host.tab==='Threads'?'Thread':'Event'} Title`,`${p}.title`,item.title)}${text('Description',`${p}.details`,item.details)}${kind==='inhabitants'?'<div class="sm-inhabitant-description" data-inhabitant-preview></div>':''}`;
     let body='';
     if(kind==='inhabitants'){
@@ -42,13 +42,16 @@ export function renderSettlement(host,{field,area,select,reference,terrainField}
 export async function renderProject(host,target,entry){
   const uuid=entry?.uuid,draft=host.draft,request=target.projectRequest=(target.projectRequest||0)+1;
   const current=()=>host.draft===draft&&entry.uuid===uuid&&target.projectRequest===request;
+  const retainedControls=target.closest('[data-entry]')?.querySelector('[data-project-controls]');if(retainedControls&&target.contains(retainedControls))target.after(retainedControls);
   const card=target.closest('[data-entry]');if(card)card.dataset.sortName=entry?.referenceName||entry?.title||'Unnamed project';
+  host.projectTotals??=new Map();host.projectTotals.set(entry.id,null);const totalOutput=target.closest('[data-entry]')?.querySelector('[data-project-total]');if(totalOutput)totalOutput.textContent='Unavailable';
   if(entry.arkSource?.missing){target.textContent=`Source unavailable; saved snapshot retained: ${entry.title||''} — ${entry.details||''}`;return;}
   if(!uuid){target.textContent='Drop an Ark Project Item onto the reference field.';sortEditorEntries(host,target.closest('.sm-content')?.parentElement||host.element);return;}
   try{
-    const doc=requireProject(await fromUuid(uuid),game.system?.id||'mutant-year-zero');if(!current())return;
+    const doc=requireProject(await fromUuid(uuid),game.system?.id||'mutant-year-zero');if(!current())return;host.projectTotals??=new Map();host.projectTotals.set(entry.id,projectTotal(doc));const total=target.closest('[data-entry]').querySelector('[data-project-total]');if(total)total.textContent=String(host.projectTotals.get(entry.id)??'Unavailable');
     const card=target.closest('[data-entry]');if(card){card.dataset.sortName=doc.name;const heading=card.querySelector('[data-entry-title]');if(heading)heading.textContent=doc.name;}
-    target.replaceChildren();const title=document.createElement('h4');title.textContent=doc.name;target.append(title);
+    const existingControls=target.closest('[data-entry]').querySelector('[data-project-controls]');if(existingControls)target.after(existingControls);target.replaceChildren();const title=document.createElement('h4');title.textContent=doc.name;target.append(title);
+    const controls=target.closest('[data-entry]').querySelector('[data-project-controls]');if(controls)target.append(controls);
     if(entry.arkSource){const open=document.createElement('button');open.type='button';open.textContent='Open Ark Project';open.addEventListener('click',()=>doc.sheet.render(true));target.append(open);}
     const image=document.createElement('div');image.className='sm-project-image';host.showImage(image,imagePath(doc.img),doc.name,'No project illustration');target.append(image);
     // Escape source HTML as text; the native sheet remains the authoritative rich-text view.
@@ -63,6 +66,13 @@ export async function hydrateSettlement(host,root){
   if(host.tab==='Factions')await hydrateFactions(host,root);
   for(const target of root.querySelectorAll('[data-settlement-preview]'))host.showImage(target,imagePath(target.dataset.imagePath),'Settlement image','No image selected');
   await Promise.all(Array.from(root.querySelectorAll('[data-project-view]'),target=>renderProject(host,target,host.data.settlement.projects[Number(target.dataset.projectView)])));
+  for(const input of root.querySelectorAll('[data-project-points]')){
+   const index=Number(input.dataset.projectPoints),entry=host.data.settlement.projects[index],current=projectProgress(entry),total=host.projectTotals?.get(entry.id)??null;
+   if(total!==null)input.max=String(Math.max(current,total));
+   root.querySelector(`[data-project-step="-1"][data-project-number="${index}"]`).disabled=current===0;
+   root.querySelector(`[data-project-step="1"][data-project-number="${index}"]`).disabled=current>=Number.MAX_SAFE_INTEGER||total!==null&&current>=total;
+  }
+
 }
 export function bindSettlement(host){
   const el=host.element;
@@ -79,6 +89,18 @@ export function bindSettlement(host){
   if(host.tab==='Shop'){bindShop(host);return;}
   if(host.tab==='Factions'){bindFactions(host);return;}
   if(host.tab!=='Projects')return;
+  const changeProject=(index,change)=>{
+   const selectedDraft=host.draft,selectedSector=host.sectorId,selectedId=host.draft.settlement.projects[index]?.id;
+   const task=(host.projectWrite||Promise.resolve()).catch(()=>{}).then(async()=>{
+    if(!game.user.isGM)throw new Error('Only a GM may edit Projects.');if(host.draft!==selectedDraft||host.sectorId!==selectedSector)throw new Error('Project selection changed; no update performed.');host.capture();const draft=host.draft,entry=draft.settlement.projects.find(p=>p.id===selectedId);if(!entry)throw new Error('Project selection changed.');
+    const next=change(entry,host.projectTotals?.get(entry.id)??null),changed=next.status!==entry.status;
+    host.projectSyncDepth=(host.projectSyncDepth||0)+1;
+    try{if(changed)await writeArkProjectStatus(draft.settlement,entry,next.status);if(host.draft!==draft)throw new Error('Sector changed during Project update. Reopen to refresh the Ark.');Object.assign(entry,next);host.markDirty();await host.render();}finally{host.projectSyncDepth--;}
+   });host.projectWrite=task;void report(task.catch(async error=>{if(host.draft===selectedDraft&&host.sectorId===selectedSector)await host.render();throw error;}));
+  };
+  for(const select of el.querySelectorAll('[data-project-status]'))select.addEventListener('change',()=>{const status=select.value;changeProject(Number(select.dataset.projectStatus),entry=>({...entry,status}));});
+  for(const input of el.querySelectorAll('[data-project-points]'))input.addEventListener('change',()=>{const value=input.value===''?NaN:Number(input.value);changeProject(Number(input.dataset.projectPoints),(entry,total)=>nextProjectProgress(entry,value,total));});
+  for(const button of el.querySelectorAll('[data-project-step]'))button.addEventListener('click',()=>changeProject(Number(button.dataset.projectNumber),(entry,total)=>nextProjectProgress(entry,projectProgress(entry)+Number(button.dataset.projectStep),total)));
   const content=el.querySelector('.sm-content'),blank=event=>!event.target.closest('[data-entry],input,textarea,button,select,a');
   content.addEventListener('dragover',event=>{if(blank(event)){event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy';}});
   content.addEventListener('drop',event=>{

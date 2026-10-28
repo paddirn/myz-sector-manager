@@ -7,7 +7,7 @@ export const SHOP_COLUMN_SETS=Object.freeze({
  general:[column('link','Item',24),column('cost','Cost',13),column('requirement','Req.',18),column('weight','Weight',12),column('comment','Comment',33)],
  weapons:[column('link','Item',24),column('cost','Cost',10),column('damage','Damage',11),column('range','Range',10),column('bonus','Bonus',10),column('weight','Weight',11),column('comment','Comment',24)],
  armor:[column('link','Item',25),column('cost','Cost',10),column('rating','Rating',10),column('rot','Rot Prot.',12),column('weight','Weight',10),column('comment','Comment',33)],
- vehicles:[column('link','Item',40),column('cost','Cost',15),column('passengers','Passengers',20),column('travel','Travel Type',25)],
+ vehicles:[column('link','Vehicle',25),column('cost','Cost',12),column('bonus','Gear Bonus',16),column('armor','Armor',14),column('resilience','Resilience',17),column('occupants','Occupants',16)],
  services:[column('link','Item',30),column('cost','Cost',15),column('requirement','Req.',20),column('comment','Comment',35)]
 });
 export const groupType=group=>Object.hasOwn(SHOP_GROUP_TYPES,String(group?.type||'').toLowerCase())?String(group.type).toLowerCase():'general';
@@ -49,7 +49,11 @@ export function requireShopItem(doc){
 }
 // Resolve through the configured v14 Item class (world, embedded and Compendium sources).
 export async function resolveShopDrop(payload,env=globalThis){
-  if(!payload||typeof payload!=='object'||Array.isArray(payload)||(!payload.uuid&&payload.type!=='Item'))throw new Error('Invalid or unsupported drag data. Drop a Foundry Item document.');
+  if(!payload||typeof payload!=='object'||Array.isArray(payload)||(!payload.uuid&&!['Item','Actor'].includes(payload.type)))throw new Error('Invalid or unsupported drag data. Drop a Foundry Item document.');
+  if(payload.type==='Actor'||payload.type!=='Item'&&/(?:^|[.])Actor[.][^.]+$/.test(payload.uuid||'')){
+    const ActorClass=env.CONFIG?.Actor?.documentClass||env.Actor?.implementation||env.Actor;
+    const doc=typeof ActorClass?.fromDropData==='function'?await ActorClass.fromDropData(payload):await env.fromUuid?.(payload.uuid);return requireVehicle(doc,env);
+  }
   if(payload.type&&payload.type!=='Item')throw new Error('Shop inventory requires a Foundry Item document.');
   const ItemClass=env.CONFIG?.Item?.documentClass||env.Item?.implementation||env.Item;
   let doc;
@@ -77,27 +81,42 @@ export const vehicleTravelType=(entry,doc)=>TRAVEL_TYPES.includes(entry?.travelT
 export function initializeVehicleTravel(entry,doc){if(entry.travelType===undefined)entry.travelType=vehicleTravelType(entry,doc);return entry;}
 export async function resolveShopItem(uuid,env=globalThis){
   if(typeof uuid!=='string'||!/^[A-Za-z0-9_.-]+$/.test(uuid))throw new Error('Invalid Item UUID');
-  const doc=requireShopItem(await env.fromUuid(uuid));return {doc,fields:shopItemFields(doc,env)};
+  const doc=await env.fromUuid(uuid);if(doc?.documentName==='Actor'){requireVehicle(doc,env);return {doc,fields:vehicleFields(doc)};}requireShopItem(doc);return {doc,fields:shopItemFields(doc,env)};
 }
 export function putShopItem(shop,doc,groupId,{replaceId=null}={}){
-  requireShopItem(doc);if(!doc.uuid)throw new Error('The Item needs a stable UUID.');
-  let group=shop.groups.find(g=>g.id===groupId)||shop.groups[0];if(!group){group=newShopGroup();shop.groups.push(group);}
+  if(doc?.documentName==='Actor')requireVehicle(doc);else requireShopItem(doc);if(!doc.uuid)throw new Error('The Item needs a stable UUID.');
+  let group=shop.groups.find(g=>g.id===groupId)||shop.groups[0];if(!group){if(doc.documentName==='Actor')throw new Error('Add a Vehicle Shop group before dropping a Vehicle Actor.');group=newShopGroup();shop.groups.push(group);}
+  if(groupType(group)==='vehicles')requireVehicle(doc);else if(doc.documentName==='Actor')throw new Error('Vehicle Actors require a Vehicle Shop group.');
   const previous=shop.groups.flatMap(g=>g.entries.map(entry=>({group:g,entry}))).find(row=>row.entry.uuid===doc.uuid);
   const replacement=replaceId?group.entries.find(entry=>entry.id===replaceId):null;
   if(replaceId&&!replacement)throw new Error('Selected Shop reference changed. Nothing was replaced.');
   if(previous){
     // One UUID per Settlement: a cross-group drop moves the existing record, retaining its ID.
-    if(previous.group===group){if(groupType(group)==='vehicles')initializeVehicleTravel(previous.entry,doc);return {entry:previous.entry,group,duplicate:true};}
+    if(previous.group===group){return {entry:previous.entry,group,duplicate:true};}
     previous.group.entries.splice(previous.group.entries.indexOf(previous.entry),1);
     if(replacement)group.entries.splice(group.entries.indexOf(replacement),1);
-    if(groupType(group)==='vehicles')initializeVehicleTravel(previous.entry,doc);group.entries.push(previous.entry);return {entry:previous.entry,group,moved:true};
+    group.entries.push(previous.entry);return {entry:previous.entry,group,moved:true};
   }
-  if(replacement){replacement.uuid=doc.uuid;if(groupType(group)==='vehicles')initializeVehicleTravel(replacement,doc);return {entry:replacement,group,replaced:true};}
-  const entry={id:id(),uuid:doc.uuid};if(groupType(group)==='vehicles')initializeVehicleTravel(entry,doc);group.entries.push(entry);return {entry,group};
+  if(replacement){replacement.uuid=doc.uuid;return {entry:replacement,group,replaced:true};}
+  const entry={id:id(),uuid:doc.uuid};group.entries.push(entry);return {entry,group};
 }
 export function moveShopEntry(shop,entryId,targetId,doc){
   const target=shop.groups.find(g=>g.id===targetId),source=shop.groups.find(g=>g.entries.some(entry=>entry.id===entryId));
   if(!source||!target)throw new Error('Select an existing Shop entry and destination group.');
-  const entry=source.entries.find(e=>e.id===entryId);if(groupType(target)==='vehicles')initializeVehicleTravel(entry,doc);if(source!==target){source.entries.splice(source.entries.indexOf(entry),1);target.entries.push(entry);}return entry;
+  const entry=source.entries.find(e=>e.id===entryId);if(doc?.documentName==='Actor'&&groupType(target)!=='vehicles')throw new Error('Vehicle Actors require a Vehicle Shop group.');if(source!==target){source.entries.splice(source.entries.indexOf(entry),1);target.entries.push(entry);}return entry;
 }
 export function reorderById(list,key,offset){const index=list.findIndex(entry=>entry.id===key),destination=index+offset;if(index<0||destination<0||destination>=list.length)return false;const [entry]=list.splice(index,1);list.splice(destination,0,entry);return true;}
+
+// Official MYZ 14.0.4 MYZVehicleDataModel and vehicle-header/vehicle-occupants templates.
+export function requireVehicle(doc,env=globalThis){
+ if((env.game?.system?.id&&env.game.system.id!=='mutant-year-zero')||doc?.documentName!=='Actor'||doc.type!=='vehicle')throw new Error('Vehicle groups require an official MYZ Vehicle Actor (type vehicle). Legacy Item references are retained for repair.');
+ if(doc.testUserPermission&&env.game?.user&&!doc.testUserPermission(env.game.user,'OBSERVER'))throw new Error('Vehicle Actor is inaccessible.');return doc;
+}
+const currentMax=value=>value&&typeof value==='object'?`${scalar(value.current)} / ${scalar(value.max)}`:'';
+export function vehicleFields(doc){
+ const s=requireVehicle(doc).system||{};
+ return {cost:scalar(s.cost),bonus:currentMax(s.movementBonus),armor:currentMax(s.vehicleArmor),resilience:currentMax(s.resilience),occupants:scalar(s.occupantsCount),weight:'',comment:''};
+}
+export function shopDisplayFields(group,entry,doc,fields){
+ return groupType(group)==='vehicles'?(doc.documentName==='Actor'?vehicleFields(doc):{cost:fields.cost,bonus:'—',armor:'—',resilience:'—',occupants:'—'}):fields;
+}

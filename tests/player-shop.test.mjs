@@ -28,8 +28,8 @@ test('invalid quantities/rates/same resource/zero output fail; fractions on shee
 test('publication is opt-in and rejects missing/non-Settlement references; players cannot call snapshot directly',async()=>{
  const f=fixture();for(const id of ['Actor.hero','market','JournalEntry.missing'])assert.throws(()=>shopSettlement(id,f.env));f.sector.settlement.shop.playerAccess=false;await assert.rejects(shopSnapshot(f.id,f.env),/inaccessible/);f.sector.settlement.shop.playerAccess=true;f.sector.sectorType='normal';assert.throws(()=>shopSettlement(f.id,f.env));f.sector.sectorType='settlement';f.env.game.user=f.alice;await assert.rejects(shopSnapshot(f.id,f.env),/GM/);assert.equal(normalizeShop().playerAccess,false);assert.equal(normalizeShop().trading.enabled,false);
 });
-test('snapshot is an allowlist with no sector notes, UUIDs, Ark, events, or editable sector objects',async()=>{
- const f=fixture();f.sector.settlement.shop.trading.privateNotes='PRIVATE TRADING';f.sector.settlement.shop.trading.values.hidden='PRIVATE VALUE';f.sector.settlement.shop.groups[0].privateNotes='PRIVATE GROUP';const snapshot=await shopSnapshot(f.id,f.env),text=JSON.stringify(snapshot);for(const secret of ['PRIVATE','Actor.secret','arkUuid','Item.gear','notes','settlement'])assert(!text.includes(secret),secret);assert.equal(snapshot.groups[0].entries[0].name,'Rope');assert.equal(snapshot.groups[0].entries[0].stock,null);assert.equal(snapshot.revision.length,64);f.item.system.cost='3';assert.notEqual((await shopSnapshot(f.id,f.env)).revision,snapshot.revision);
+test('snapshot is an allowlist with only published document UUIDs and no sector notes, Ark, events, or editable sector objects',async()=>{
+ const f=fixture();f.sector.settlement.shop.trading.privateNotes='PRIVATE TRADING';f.sector.settlement.shop.trading.values.hidden='PRIVATE VALUE';f.sector.settlement.shop.groups[0].privateNotes='PRIVATE GROUP';const snapshot=await shopSnapshot(f.id,f.env),text=JSON.stringify(snapshot);for(const secret of ['PRIVATE','Actor.secret','arkUuid','notes','settlement'])assert(!text.includes(secret),secret);assert.equal(snapshot.groups[0].entries[0].name,'Rope');assert.equal(snapshot.groups[0].entries[0].stock,null);assert.equal(snapshot.revision.length,64);f.item.system.cost='3';assert.notEqual((await shopSnapshot(f.id,f.env)).revision,snapshot.revision);
 });
 test('trade requests only post concise chat, never update Actor resources/flags, and duplicate IDs do not repost',async()=>{
  const f=fixture(),r=await f.request(),before=structuredClone(f.actor.system);f.actor.update=async()=>assert.fail('Actor update forbidden');f.actor.getFlag=()=>assert.fail('Obsolete receipt access forbidden');
@@ -57,7 +57,7 @@ test('single-item purchase chat is concise, preserves exact prices and safely es
  const f=fixture();f.actor.name='<Hero>';f.item.name='Hiking Boots';f.item.system.cost='1-2';
  const result=await f.service.execute(f.alice,await f.request({action:'purchase',items:[{id:'i',quantity:1}]}));
  assert.equal(result.message,'<Hero> wants to buy something from the shop:\n\nHiking Boots (cost 1-2)');
- assert.equal(f.chat[0].content,'<p>&lt;Hero&gt; wants to buy something from the shop:</p><p>Hiking Boots (cost 1-2)</p>');assert.equal(f.actor.system.resources.bullets.value,20);
+ assert.equal(f.chat[0].content,'<p>&lt;Hero&gt; wants to buy something from the shop:</p><p>Hiking Boots (cost 1-2)</p><a class="content-link" data-uuid="Item.gear" data-type="Item" draggable="true">Hiking Boots</a>');assert.equal(f.actor.system.resources.bullets.value,20);
  for(const items of [[],[{id:'i',quantity:0}],[{id:'i',quantity:2}],[{id:'unknown',quantity:1}],[{id:'i',quantity:1},{id:'i',quantity:1}]])await assert.rejects(f.service.execute(f.alice,await f.request({action:'purchase',items})));
 });
 test('API does not process arbitrary actions or invalid/replayed identities; no active GM blocks requests',async()=>{
@@ -103,7 +103,7 @@ test('all twelve decimal/Booze conversion directions use the existing relative-v
  for(const give of Object.keys(RESOURCES))for(const receive of Object.keys(RESOURCES))if(give!==receive){const q=tradeQuote(rates,give,receive,22);assert.equal(q.amount,Math.floor(22*quarters[give]/quarters[receive]),`${give} → ${receive}`);assert(q.amount>=1);}
 });
 test('all five Player Shop informational column sets match the GM definitions without management controls',()=>{
- const expected={general:['Item','Cost','Req.','Weight','Comment'],weapons:['Item','Cost','Damage','Range','Bonus','Weight','Comment'],armor:['Item','Cost','Rating','Rot Prot.','Weight','Comment'],vehicles:['Item','Cost','Passengers','Travel Type'],services:['Item','Cost','Req.','Comment']};
+ const expected={general:['Item','Cost','Req.','Weight','Comment'],weapons:['Item','Cost','Damage','Range','Bonus','Weight','Comment'],armor:['Item','Cost','Rating','Rot Prot.','Weight','Comment'],vehicles:['Vehicle','Cost','Gear Bonus','Armor','Resilience','Occupants'],services:['Item','Cost','Req.','Comment']};
  for(const [type,columns] of Object.entries(expected)){const html=playerShopContent({name:'Shop',trading:normalizeTrading(),groups:[{type,name:type,entries:[]}]},[],null);assert.deepEqual(Array.from(html.matchAll(/<th>([^<]+)<\/th>/g),m=>m[1]),[...columns,'Buy']);assert.doesNotMatch(html,/data-shop-remove|data-shop-add|data-shop-entry-up/);}
 });
 
@@ -112,8 +112,8 @@ test('GM rate steps preserve all fractional digits, enforce bounds and do not ch
  for(const value of ['0.5','1','0.000000000000000001'])assert.throws(()=>stepResourceValue(value,-1));
  assert.throws(()=>stepResourceValue('1000000',1));assert.throws(()=>stepResourceValue('invalid',1));
 });
-test('Vehicle Passengers is entry-local text, publicly read-only and survives portable serialization',async()=>{
+test('Legacy Vehicle passenger text stays stored without being presented as Actor occupants and survives portable serialization',async()=>{
  const f=fixture();f.sector.settlement.shop.groups[0].type='vehicles';f.sector.settlement.shop.groups[0].entries[0].passengers='4 passengers + cargo';f.item.system.passengers=99;
- const snapshot=await shopSnapshot(f.id,f.env);assert.equal(snapshot.groups[0].entries[0].fields.Passengers,'4 passengers + cargo');assert.equal(f.item.system.passengers,99);
+ const snapshot=await shopSnapshot(f.id,f.env);assert.equal(snapshot.groups[0].entries[0].fields.Occupants,'—');assert.equal(f.item.system.passengers,99);
  const file=serializeSector(f.sector,{moduleVersion:'0.1.41'});assert.equal(file.extensions.unknown.length,0);const restored=deserializeSector(file,{code:'A1',sceneId:'zone'});assert.equal(restored.settlement.shop.groups[0].entries[0].passengers,'4 passengers + cargo');
 });
