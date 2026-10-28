@@ -1,6 +1,6 @@
 import {PlayerShopService} from './player-shop-service.mjs';
 import {createPlayerShopClass} from './player-shop-ui.mjs';
-import {hydrateArk,requireArk} from './settlement-ark.mjs';
+import {hydrateArk,requireArk,synchronizeArkDraft} from './settlement-ark.mjs';
 import {settingsMenu,bindSettingsMenu,refreshSettingsMenu} from './settings-menu.mjs';
 import {importSector,exportSector} from './portable/ui.mjs';
 import {sortEditorEntries} from './entry-order.mjs';
@@ -110,12 +110,14 @@ const randomizeDialogContent = content => `<style>
 class SectorManager extends foundry.applications.api.ApplicationV2 {
   static DEFAULT_OPTIONS = {id:'myz-sector-manager-app', window:{title:'MYZ Sector Manager',resizable:true}, position:{width:920,height:730}, classes:['myz-sector-manager']};
   constructor(options={}) {super(options); this.sectorId = options.sectorId ?? null; this.tab='Overview'; this.draft=null; this.dirty=false; this.filter=''; this.busy=false;this.lootTypeRevisions=new WeakMap();}
+  get arkPlacementContext(){return {grid:zone.store.config?.grid,sceneId:zone.store.config?.sceneId,journals:game.journal,journalId:this.sectorId};}
   get journals(){return game.journal.filter(j=>j.getFlag(MOD,KEY)?.version===1&&sectorOnScene(j.getFlag(MOD,KEY),zone.store.config?.sceneId)).sort((a,b)=>{const ac=a.getFlag(MOD,KEY)?.code?.trim()||'', bc=b.getFlag(MOD,KEY)?.code?.trim()||''; return (ac&&bc?ac.localeCompare(bc,undefined,{numeric:true,sensitivity:'base'}):ac?-1:bc?1:0)||a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'});});}
   get journal(){return game.journal.get(this.sectorId);}
   get canRandomize(){const journal=this.journal,record=journal?.getFlag?.(MOD,KEY);return Boolean(!isAuthored(this.data)&&!isAuthored(record)&&journal?.id&&!journal.isTemporary&&record?.version===1&&record.initialSavePending!==true);}
   get data(){return this.draft ?? DEFAULT();}
   async _prepareContext(){return {};}
   async _renderHTML(){
+    if(isSettlement(this.data))await synchronizeArkDraft(this);
     const root=document.createElement('div');
     root.className='sm-root';
     root.innerHTML=this.build();
@@ -522,6 +524,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     el.querySelector('[data-expand-all]')?.addEventListener('click',()=>this.collapseAll(false));
     el.querySelector('[data-collapse-all]')?.addEventListener('click',()=>this.collapseAll(true));
     el.querySelector('[data-filter]')?.addEventListener('input',e=>{this.filter=e.target.value;el.querySelectorAll('[data-open]').forEach(b=>{b.hidden=!b.dataset.search.includes(this.filter.toLowerCase());});const empty=el.querySelector('[data-sector-empty]');if(empty)empty.hidden=Array.from(el.querySelectorAll('[data-open]')).some(b=>!b.hidden);});
+    el.querySelector('[name="settlement.arkUuid"]')?.addEventListener('change',()=>{this.capture();void this.render();});
     el.querySelectorAll('.sm-content input,.sm-content select,.sm-content textarea').forEach(e=>e.addEventListener('input',()=>{
       if(!e.name?.startsWith('pathStunts.')&&!LINKED_STUNTS[e.name])this.markDirty();
       if(e.name==='pathStunts.safePath'&&!e.checked){for(const input of el.querySelectorAll('[name^="pathStunts."],[name="travel.stalker"],[name="travel.rushed"]'))if(input!==e)input.checked=false;}
@@ -680,6 +683,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     this.capture();
     const state=this.entryState(key), entry=state.entries.find(record=>record.id===id);
     if(!entry)return;
+    if(key==='settlement.projects'&&entry.item.arkSource)return;
     if(isSettlement(this.data)){const draft=this.draft;if(!await foundry.applications.api.DialogV2.confirm({window:{title:'Remove Settlement entry?'},content:'Remove this entry? Referenced Foundry documents are not deleted; faction associations will be preserved as missing.'})||this.draft!==draft)return;}
     const index=sectorCollection(this.draft,key).indexOf(entry.item);
     if(index<0)return;
@@ -783,7 +787,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   clearReference(zone){
     zone.querySelector('input').value='';
     this.capture();this.clearReferenceWarning(zone);this.markDirty();
-    const rendering=this.renderReference(zone);if(zone.querySelector('input').name==='settlement.arkUuid')void hydrateArk(this);
+    const rendering=this.renderReference(zone);if(zone.querySelector('input').name==='settlement.arkUuid')void this.render();
     if(isSettlement(this.data)&&zone.querySelector('input').name.startsWith('settlement.projects.')){const target=zone.closest('[data-entry]').querySelector('[data-project-view]');void renderProject(this,target,this.referenceEntry(zone));}
     return rendering;
   }
@@ -806,7 +810,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       const changed=zone.querySelector('input').value!==doc.uuid;
       if(input.name?.startsWith('settlement.projects.')&&entry)Object.assign(entry,assignProject(entry,doc,game.system?.id));zone.querySelector('input').value=doc.uuid;
       this.capture();if(input.name?.endsWith('.macroUuid')){const effect=this.draft.effects[Number(input.name.split('.')[1])];effect.triggerId||=foundry.utils.randomID();}if(!entry||(this.lootTypeRevisions.get(entry)||0)===revision)this.assignLootType(zone,doc,changed);this.assignSpecialTitle(zone,doc,changed);this.clearReferenceWarning(zone);this.markDirty();
-      await this.renderReference(zone);if(input.name==='settlement.arkUuid')await hydrateArk(this);
+      await this.renderReference(zone);if(input.name==='settlement.arkUuid')await this.render();
       if(input.name?.startsWith('settlement.projects.')){const target=zone.closest('[data-entry]').querySelector('[data-project-view]');await renderProject(this,target,entry);const title=zone.closest('[data-entry]').querySelector('[data-entry-title]');title.textContent=entry.referenceName;}
     }catch(err){ui.notifications.error(`Unable to attach reference: ${err.message}`);}
   }
@@ -900,14 +904,14 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   }catch(err){this.busy=false;console.error(`${MOD} |`,err);ui.notifications.error(`Sector Manager: ${err.message}`);}}
 }
 let app;
-const refreshArk=doc=>{if(game.user.isGM&&app?.rendered&&isSettlement(app.data)&&app.tab==='Overview'&&app.data.settlement.arkUuid===(doc.documentName==='Actor'?doc.uuid:doc.parent?.uuid))void hydrateArk(app);};
+const refreshArk=doc=>{if(!game.user.isGM||!app?.rendered||!isSettlement(app.data)||app.data.settlement.arkUuid!==(doc.documentName==='Actor'?doc.uuid:doc.parent?.uuid))return;app.capture();void app.render().catch(error=>ui.notifications.error(`Ark refresh: ${error.message}`));};
 for(const hook of ['updateActor','deleteActor','createItem','updateItem','deleteItem'])Hooks.on(hook,refreshArk);
 // Refresh current Project names/statistics without replacing cards or losing unsaved progress.
 Hooks.on('updateItem',doc=>{
   if(!game.user.isGM||!app?.rendered||!isSettlement(app.data)||app.tab!=='Projects')return;
   const targets=Array.from(app.element.querySelectorAll('[data-project-view]')).filter(target=>app.data.settlement.projects[Number(target.dataset.projectView)]?.uuid===doc.uuid);
   if(!targets.length)return;app.capture();
-  void Promise.all(targets.map(async target=>{const entry=app.data.settlement.projects[Number(target.dataset.projectView)];await app.renderReference(target.closest('[data-entry]').querySelector('[data-reference]'));await renderProject(app,target,entry);})).catch(error=>ui.notifications.error(`Project refresh: ${error.message}`));
+  void Promise.all(targets.map(async target=>{const entry=app.data.settlement.projects[Number(target.dataset.projectView)];const reference=target.closest('[data-entry]').querySelector('[data-reference]');if(reference)await app.renderReference(reference);await renderProject(app,target,entry);})).catch(error=>ui.notifications.error(`Project refresh: ${error.message}`));
 });
 const organization=new JournalOrganization();
 const playerShops=new PlayerShopService();

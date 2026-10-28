@@ -1,6 +1,5 @@
 import {normalizeShop,resolveShopItem,shopColumns,groupType} from './settlement-shop.mjs';
 import {normalizeTrading,characterResources,tradeUpdate,RESOURCES} from './settlement-trading.mjs';
-import {bulletCost} from './shop-purchases.mjs';
 import {escapeHTML as esc} from './travel/model.mjs';
 export const SHOP_MODULE='myz-sector-manager';
 const publishedTrading=raw=>{const trading=normalizeTrading(raw);return {enabled:trading.enabled,values:Object.fromEntries(Object.keys(RESOURCES).map(key=>[key,trading.values[key]]))};};
@@ -85,15 +84,15 @@ export class PlayerShopService {
     // is available; manual edits/other modules are outside this service's queue.
     await actor.update({...update,[`flags.${SHOP_MODULE}.shopReceipts`]:[...recent,{key,timestamp:Date.now(),result}]});
    }else{
-    if(!Array.isArray(request.items)||!request.items.length||request.items.length>100)throw new Error('Select between 1 and 100 Items.');
-    const seen=new Set(),lines=[];let total=0,reliable=true;
-    for(const selected of request.items){if(seen.has(selected.id)||!Number.isSafeInteger(selected.quantity)||selected.quantity<1||selected.quantity>1000000)throw new Error('Invalid purchase quantities.');seen.add(selected.id);const item=snapshot.groups.flatMap(g=>g.entries).find(i=>i.id===selected.id&&!i.unavailable);if(!item)throw new Error('Shop Item is unavailable.');const cost=bulletCost(item.cost);if(!cost||cost.min!==cost.max)reliable=false;else{total+=cost.min*selected.quantity;if(!Number.isSafeInteger(total))throw new Error('Purchase total is too large.');}lines.push(`${selected.quantity} × ${item.name} (listed price: ${item.cost===''||item.cost===undefined?'unknown':item.cost})`);}
-    result={completed:true,message:`Purchase request from ${user.name}, character ${actor.name}, at ${snapshot.name}: ${lines.join('; ')}. ${reliable?`Total: ${total} Bullets.`:'Total unavailable: price is variable or unspecified.'} No Items, stock, or resources changed.`};
+    if(!Array.isArray(request.items)||request.items.length!==1||request.items[0]?.quantity!==1)throw new Error('Buy requests exactly one Item at quantity 1.');
+    const selected=request.items[0],item=snapshot.groups.flatMap(g=>g.entries).find(i=>i.id===selected.id&&!i.unavailable);
+    if(!item)throw new Error('Shop Item is unavailable.');
+    result={completed:true,message:`${actor.name} wants to buy something from the shop:\n\n${item.name} (cost ${item.cost??''})`};
    }
    if(request.action==='purchase'&&!this.authoritative())throw new Error('GM authority changed; purchase request cancelled.');
    // Cache BEFORE ChatMessage.create: a chat failure must never deduct twice.
    this.results.set(key,result);if(this.results.size>2000)this.results.delete(this.results.keys().next().value);
-   try{await env.ChatMessage.create({content:`<p>${esc(result.message)}</p>`,whisper:[],blind:false});}catch{result={...result,chatWarning:'Completed, but the chat announcement failed. Do not repeat the transaction.'};this.results.set(key,result);}
+   try{await env.ChatMessage.create({content:request.action==='purchase'?result.message.split('\n\n').map(text=>`<p>${esc(text)}</p>`).join(''):`<p>${esc(result.message)}</p>`,whisper:[],blind:false});}catch{result={...result,chatWarning:'Completed, but the chat announcement failed. Do not repeat the transaction.'};this.results.set(key,result);}
    return result;
   }finally{this.inflight.delete(key);}
  }

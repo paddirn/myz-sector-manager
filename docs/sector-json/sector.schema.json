@@ -521,6 +521,9 @@
         "completedAt": {
           "type": "string",
           "maxLength": 1000000
+        },
+        "arkSource": {
+          "$ref": "#/$defs/ArkProjectSource"
         }
       },
       "additionalProperties": true
@@ -1900,6 +1903,34 @@
         }
       },
       "additionalProperties": true
+    },
+    "ArkProjectSource": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "arkUuid": {
+          "type": "string",
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "projectUuid": {
+          "type": "string",
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "missing": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true,
+      "required": [
+        "version",
+        "arkUuid",
+        "projectUuid",
+        "missing"
+      ]
     }
   }
 }

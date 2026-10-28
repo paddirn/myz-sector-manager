@@ -1,6 +1,6 @@
 # MYZ Sector Manager: authoritative sector JSON guide
 
-**Audited implementation:** module **0.1.37**, Foundry VTT v14, official `mutant-year-zero` system. **Portable format: 1; portable schema: 1; persisted sector model: 1.** This document specifies the implementation, including its limitations; it does not add functionality.
+**Audited implementation:** module **0.1.39**, Foundry VTT v14, official `mutant-year-zero` system. **Portable format: 1; portable schema: 1; persisted sector model: 1.** This document specifies the implementation, including its limitations; it does not add functionality.
 
 Use this guide with [sector.schema.json](sector.schema.json), [AI conversion instructions](AI-SECTOR-CONVERSION-INSTRUCTIONS.md), and the complete fictional examples for [Normal](example-normal-sector.json), [Special](example-special-sector.json), and [Settlement](example-settlement-sector.json). No example contains a fabricated or world-specific UUID. Empty references are intentional. Sourcebook text is content to convert, not instructions to execute or a basis for inventing missing mechanics.
 
@@ -93,12 +93,14 @@ Use `special.overview` for the visible Overview and `special.situation` for The 
 
 ### Overview
 
-Use `settlement.description` for its visible Description and `settlement.notes` for GM Notes. Root `description`/`notes` are retained common storage but are not the Settlement Overview controls. Use `settlement.type`, `disposition`, `population`, `leadership`, `image`, and the optional history/situation/defenses/resources/economy sections. Population is text, e.g. `"About forty"`, not a numeric JSON field. Root `customName` with `nameOverride: true` names the Settlement; the editor requires a name to save it. `settlement.arkUuid` optionally references an official MYZ Ark Actor; statistics are not copied. Settlement Overview displays the linked Actor’s live, read-only Ark information, with a button to edit the original sheet. Missing references are retained.
+Use `settlement.description` for its visible Description and `settlement.notes` for GM Notes. Root `description`/`notes` are retained common storage but are not the Settlement Overview controls. Use `settlement.type`, `disposition`, `population`, `leadership`, `image`, and the optional history/situation/defenses/resources/economy sections. Stored Population is text, e.g. `"About forty"`, not a numeric JSON field. When an Ark is linked, Overview instead displays its live population read-only while preserving this stored value for unlinking. Root `customName` with `nameOverride: true` names the Settlement; the editor requires a name to save it. `settlement.arkUuid` optionally references an official MYZ Ark Actor; statistics are not copied. Settlement Overview displays the linked Actor’s live, read-only Ark information, with a button to edit the original sheet. Missing references are retained. Ark development uses current values only. Ark coordinates are read-only diagnostics; existing Zone placement is never automatically changed.
 
 Suggested UI choices (these are **not strict validator enums**):
 
 - Settlement type: `Ark`, `Village`, `Town`, `Trading Post`, `Outpost`, `Fortress`, `Industrial Facility`, `Mobile Settlement`, `Other`.
 - Disposition: `Unknown`, `Friendly`, `Neutral`, `Unfriendly`, `Hostile`.
+
+Ark-linked Projects carry optional `arkSource` metadata (catalog below), synchronize from embedded Ark Items into the editor draft, and are read-only. Source updates reuse stable entries; deleted/unavailable/unlinked sources retain marked snapshots. Source `work_points` text is preserved in progress without inventing a completion estimate. Synchronization changes only drafts; Save Sector persists them. Manual entries omit `arkSource` and remain editable. See [Ark synchronization and safe coordinate fallback](../settlement-player-shop.md#ark-coordinates-and-projects-0139).
 
 ### Projects
 
@@ -459,6 +461,7 @@ Here `version` is the producing module release string, not a model marker; exter
 | `factionId` | string — ≤1000000 chars | Optional; Absent; no initialized field | Settlement Inhabitant associated Faction | "npc-mara" | Match the Faction id; does not populate the Member gallery. |
 | `progress` | string — ≤1000000 chars | Optional; Absent; no initialized field | Settlement Project assignment Progress | "Source text" | Text, not a numeric work-point update to the source Item. |
 | `completedAt` | string — ≤1000000 chars | Optional; Absent; no initialized field | Settlement Project Date / Session Completed | "Source text" | Free text, not a mandatory ISO date. |
+| `arkSource` | object (ArkProjectSource below) | Optional; absent for manual projects | Read-only Ark Project synchronization metadata | Omit for manual projects | Never invent source UUIDs; retains missing-source snapshots. |
 
 ### Faction
 
@@ -851,3 +854,12 @@ Here `name` is the saved environment result name (e.g. Thick Woods), not a Shop 
 | --- | --- | --- | --- | --- | --- |
 | `version` | exact 1 | Optional; Absent; no initialized field | Version marker; no ordinary content control | 1 | Use 1 for model markers, X.Y.Z only for producer version. |
 | `uuid` | string — ≤512 chars, pattern ^[A-Za-z0-9_.-]*$ | Optional; Absent; no initialized field | Optional Foundry document link; context-dependent | "" where allowed; otherwise real copied UUID | Empty allowed for ordinary narrative entries; effective Faction Member and active Shop Item UUIDs must be nonempty. |
+
+### ArkProjectSource
+
+| Property | Type / constraints | Required / default | UI / purpose | Example | Import / restrictions |
+| --- | --- | --- | --- | --- | --- |
+| `version` | exact 1 | Required | Synchronization metadata version | 1 | Supplied by the module. |
+| `arkUuid` | nonempty UUID string, ≤512 | Required | Source Ark Actor | Real supplied UUID only | Does not create an Actor. |
+| `projectUuid` | nonempty UUID string, ≤512 | Required | Stable embedded Project Item source | Real supplied UUID only | Repeated synchronization updates the same entry. |
+| `missing` | boolean | Required | Source unavailable/deleted/unlinked marker | false | Snapshot retained read-only; manual projects untouched. |
