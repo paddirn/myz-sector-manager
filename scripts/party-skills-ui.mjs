@@ -1,12 +1,26 @@
+import {partyResultCard} from './party-skill-results.mjs';
 import {PARTY_SKILLS,partyRecipients,resolvePartySkill,partySkillPool} from './party-skills.mjs';
 import {escapeHTML as esc} from './travel/model.mjs';
+function summaryDice(target){
+ try{return partyResultCard({name:target.name,portrait:target.portrait,robot:target.robot,result:target.result});}
+ catch(error){return `<p>Dice display unavailable: ${esc(error.message)}</p>`;}
+}
 export function summaryContent(request,env=globalThis){
  if(!env.game.user.isGM)throw new Error('GM summary only.');
- const now=Date.now();return `<div style="max-height:65vh;overflow:auto"><table><thead><tr><th>Character</th><th>Skill</th><th>Modifier</th><th>Successes</th><th>Status</th></tr></thead><tbody>${request.targets.map(t=>{const user=env.game.users.get?.(t.userId)||Array.from(env.game.users).find(u=>u.id===t.userId),status=t.state==='pending'?(request.expires<=now?'Expired':!user?.active?'Disconnected':'Pending'):t.state==='rolling'?'Pending (evaluating)':t.state[0].toUpperCase()+t.state.slice(1);return `<tr><td>${esc(t.name)}</td><td>${esc(t.skill)}</td><td>${request.modifier}</td><td>${t.result?esc(t.result.successes):'—'}</td><td>${esc(status)}</td></tr>${t.result||t.error?`<tr><td colspan="5">${t.error?`<p>Failed: ${esc(t.error)}</p>`:''}${t.result?`<details><summary>Full dice details: ${esc(t.name)}</summary><p>${esc(t.result.formula)}</p><pre style="white-space:pre-wrap">${esc(JSON.stringify(t.result.dice,null,2))}</pre>${t.result.messageUuid?`<a class="content-link" data-uuid="${esc(t.result.messageUuid)}">Open GM chat result</a>`:''}</details>`:''}</td></tr>`:''}`;}).join('')}</tbody></table></div>`;
+ const now=Date.now();return `<div style="overflow-x:auto"><table><thead><tr><th>Character</th><th>Skill</th><th>Modifier</th><th>Successes</th><th>Status</th></tr></thead><tbody>${request.targets.map(t=>{const user=env.game.users.get?.(t.userId)||Array.from(env.game.users).find(u=>u.id===t.userId),status=t.state==='pending'?(request.expires<=now?'Expired':!user?.active?'Disconnected':'Pending'):t.state==='rolling'?'Pending (evaluating)':t.state==='submitted'?'Completed':t.state[0].toUpperCase()+t.state.slice(1);return `<tr><td>${esc(t.name)}</td><td>${esc(t.skill)}</td><td>${request.modifier}</td><td>${t.result?esc(t.result.successes):'—'}</td><td>${esc(status)}</td></tr>${t.result||t.error?`<tr><td colspan="5">${t.error?`<p>Failed: ${esc(t.error)}</p>`:''}${t.result?`<details><summary>Full dice details: ${esc(t.name)}</summary>${summaryDice(t)}${t.result.messageUuid?`<a class="content-link" data-uuid="${esc(t.result.messageUuid)}">Open GM chat result</a>`:''}</details>`:''}</td></tr>`:''}`;}).join('')}</tbody></table></div>`;
 }
 export function openPartySummary(service,request,env=globalThis){
- if(!env.game.user.isGM)throw new Error('GM summary only.');let unsubscribe;
- const dialog=new env.foundry.applications.api.DialogV2({window:{title:'Blind Party Skill Roll Summary',resizable:true},position:{width:700},content:`<div data-party-summary>${summaryContent(request,env)}</div>`,buttons:[{action:'close',label:'Close'}],render:()=>{unsubscribe?.();unsubscribe=service.subscribe(()=>{const target=dialog.element?.querySelector('[data-party-summary]');if(target)target.innerHTML=summaryContent(request,env);});},close:()=>unsubscribe?.()});dialog.render({force:true});return dialog;
+ if(!env.game.user.isGM)throw new Error('GM summary only.');
+ const existing=service.summaryDialog;if(existing&&!existing.partyClosed){existing.partyRefresh();existing.bringToFront?.();return existing;}
+ const content=()=>Array.from(service.requests.values()).map(r=>`<section data-party-request="${esc(r.id)}"><h3>${esc(PARTY_SKILLS.find(s=>s.key===r.key)?.label||r.key)} · Modifier ${r.modifier}</h3>${summaryContent(r,env)}</section>`).join('')||'<p>No requests.</p>';
+ const dialog=new env.foundry.applications.api.DialogV2({classes:['myz-party-summary'],window:{title:'Blind Party Skill Roll Summary',resizable:true},position:{width:700},content:`<div data-party-summary style="max-height:65vh;overflow:auto">${content()}</div>`,buttons:[{action:'close',label:'Close'}]});
+ service.summaryDialog=dialog;
+ const refresh=()=>{const target=dialog.element?.querySelector('[data-party-summary]');if(!target)return;const open=new Set(Array.from(target.querySelectorAll('details[open]'),d=>d.closest('[data-party-request]')?.dataset.partyRequest+':'+d.querySelector('summary')?.textContent));target.innerHTML=content();for(const details of target.querySelectorAll('details'))if(open.has(details.closest('[data-party-request]')?.dataset.partyRequest+':'+details.querySelector('summary')?.textContent))details.open=true;};
+ dialog.partyRefresh=refresh;const unsubscribe=service.subscribe(refresh);
+ // render/close callbacks belong to DialogV2.wait; constructed v14 apps emit events.
+ dialog.addEventListener('render',refresh);
+ dialog.addEventListener('close',()=>{unsubscribe();dialog.partyClosed=true;if(service.summaryDialog===dialog)service.summaryDialog=null;});
+ dialog.render({force:true});return dialog;
 }
 export async function openPartySkillRequest(service,env=globalThis){
  if(!env.game.user.isGM||!service.isGM())throw new Error('Only the active GM can request party skill rolls.');
