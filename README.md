@@ -616,3 +616,5 @@ Version 0.1.42 adds Vehicle Actor Shop references/native statistics, enriched pu
 Version 0.1.43 fixes Work Points parsing/editing, shows Ready to Complete without automatic completion, adds Not started Project grouping, and refines the four-column Player Shop trade layout and availability limits. See [current behavior and manual checks](docs/shop-ark-projects.md).
 
 Version 0.1.44 labels purchase-request Weight/Comment and adds GM-requested blind party basic skill rolls. GM Script Macro: `await game.myzSectorManager.requestPartySkillRoll();`. See [verified mappings, security/lifecycle and manual Foundry checks](docs/blind-party-skills.md).
+
+Version 0.1.45 fixes blind-party result presentation and live completion tracking: formatted GM-only MYZ dice cards, Completed rows, supported v14 application events, and one reusable management window. See [root causes and manual regression checks](docs/blind-party-skills.md#v0145-bug-causes-and-fixes).

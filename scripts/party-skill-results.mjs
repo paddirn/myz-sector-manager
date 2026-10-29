@@ -1,0 +1,12 @@
+import {escapeHTML as esc} from './travel/model.mjs';
+import {imagePath} from './sector-images.mjs';
+// The native MYZ roll.hbs includes Push/spend-bullets controls and expects public
+// roll flags. Reuse its installed dice assets, without those interactive hooks.
+export function partyResultCard({name,portrait,robot=false,result}){
+ if(!result||!Array.isArray(result.dice)||!Number.isFinite(result.successes)||!result.pool)throw new Error('Invalid party roll result card.');
+ const source=imagePath(portrait),types=[['base','Base Dice'],['skill',robot?'Program Dice':'Skill Dice'],['gear','Gear Dice']];
+ for(const die of result.dice)if(!types.some(([key])=>die.diceType===key)||!Number.isInteger(die.value)||die.value<1||die.value>6)throw new Error('Unsupported native MYZ die result.');
+ const groups=types.map(([type,label])=>{const dice=result.dice.filter(d=>d.diceType===type);return `<section class="sm-party-dice-group" style="border-top:1px solid var(--color-border-light-primary,#777);padding:4px 0"><h4>${label} (${dice.length})</h4>${dice.length?`<ol class="dices-result" style="display:flex;flex-wrap:wrap;gap:6px;padding:0;list-style:none">${dice.map(d=>`<li class="dice" style="display:flex;flex-direction:column;align-items:center"><img src="systems/mutant-year-zero/ui/dice-${type}${type==='skill'&&d.success<0?'-penalty':''}-${d.value}.png" alt="${label}: ${d.value}" title="${d.value}${d.success>0?' — success':d.success<0?' — penalty success':''}" width="32" height="32"><span>${d.value}</span></li>`).join('')}</ol>`:`<p>No ${label.toLowerCase()}.</p>`}</section>`;}).join('');
+ const baseOnes=result.dice.filter(d=>d.diceType==='base'&&d.value===1).length,gearOnes=result.dice.filter(d=>d.diceType==='gear'&&d.value===1).length;
+ return `<article class="myz chat-item sm-party-roll-card"><div class="border" style="border:1px solid var(--color-border-light-primary,#777);border-radius:4px;padding:10px"><header style="display:flex;align-items:center;gap:10px">${source?`<img src="${esc(source)}" alt="${esc(name)}" width="56" height="56" style="object-fit:contain">`:''}<div><h3>${esc(name)} — ${esc(result.pool.label)}</h3><p>GM-only blind roll</p></div></header><p>Modifier: ${esc(result.pool.modifier)} · Attribute: ${esc(result.pool.attribute)}</p><div class="sm-party-dice-pools" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${groups}</div><h4 class="sm-party-successes">Total successes: ${esc(result.successes)}</h4><p>Base 1s: ${baseOnes} · Gear 1s: ${gearOnes} · Un-pushed roll</p></div></article>`;
+}

@@ -1,3 +1,4 @@
+import {partyResultCard} from './party-skill-results.mjs';
 import {partyRoster,escapeHTML as esc} from './travel/model.mjs';
 import {imagePath} from './sector-images.mjs';
 export const PARTY_MODULE='myz-sector-manager',REQUEST_FLAG='partySkillRequests',RESPONSE_FLAG='partySkillResponses';
@@ -49,9 +50,9 @@ export async function rollPartySkill(actor,key,modifier,env=globalThis){
  return {pool,formula,dice:structuredClone(dice),successes};
 }
 export class PartySkillService {
- constructor(env=globalThis){this.env=env;this.requests=new Map();this.listeners=new Set();this.dialogs=new Map();this.responses=Promise.resolve();this.publication=Promise.resolve();}
+ constructor(env=globalThis){this.env=env;this.requests=new Map();this.listeners=new Set();this.dialogs=new Map();this.answered=new Set();this.responses=Promise.resolve();this.publication=Promise.resolve();}
  isGM(){return this.env.game.user.isGM&&partyGM(this.env)?.id===this.env.game.user.id;}
- changed(){for(const fn of this.listeners)fn();}
+ changed(){for(const fn of this.listeners)try{fn();}catch(error){this.env.console?.error('Party skill summary update failed',error);}}
  subscribe(fn){this.listeners.add(fn);return ()=>this.listeners.delete(fn);}
  async publish(){
   const task=this.publication.catch(()=>{}).then(async()=>{authority(this.env);const now=Date.now();const publicRequests=Array.from(this.requests.values()).filter(r=>r.expires>now).map(r=>({id:r.id,gmId:r.gmId,key:r.key,modifier:r.modifier,expires:r.expires,targets:r.targets.map(t=>({userId:t.userId,actorUuid:t.actorUuid,token:t.token,state:t.state}))}));await this.env.game.user.setFlag(PARTY_MODULE,REQUEST_FLAG,publicRequests);});this.publication=task;return task;
@@ -61,10 +62,16 @@ export class PartySkillService {
   if(!Array.isArray(selections)||selections.length>100||Array.from(this.requests.values()).filter(r=>r.expires>Date.now()).length>=50)throw new Error('Too many outstanding requests. Reload the GM to clear old sessions.');
   for(const [id,old] of this.requests)if(old.expires<=Date.now())this.requests.delete(id);
   const recipients=await partyRecipients(this.env),targets=[],seen=new Set();
-  for(const selection of selections){if(seen.has(selection.userId))throw new Error('Only one character per player may be targeted.');seen.add(selection.userId);const row=recipients.find(r=>r.user.id===selection.userId),actor=row?.actors.find(a=>a.uuid===selection.actorUuid);if(!row?.user.active||!actor)throw new Error('Recipient changed, disconnected or unauthorized. Review the list again.');const actual=resolvePartySkill(actor,key);partySkillPool(actor,key,modifier);targets.push({userId:row.user.id,actorUuid:actor.uuid,name:actor.name,skill:actual.label,token:this.env.crypto.randomUUID(),state:'pending',result:null,error:null});}
+  for(const selection of selections){if(seen.has(selection.userId))throw new Error('Only one character per player may be targeted.');seen.add(selection.userId);const row=recipients.find(r=>r.user.id===selection.userId),actor=row?.actors.find(a=>a.uuid===selection.actorUuid);if(!row?.user.active||!actor)throw new Error('Recipient changed, disconnected or unauthorized. Review the list again.');const actual=resolvePartySkill(actor,key);partySkillPool(actor,key,modifier);targets.push({userId:row.user.id,actorUuid:actor.uuid,name:actor.name,portrait:imagePath(actor.img),robot:actor.type==='robot',skill:actual.label,token:this.env.crypto.randomUUID(),state:'pending',result:null,error:null});}
   if(!targets.length)throw new Error('Select at least one supported connected recipient.');authority(this.env);
   const request={id:this.env.crypto.randomUUID(),gmId:this.env.game.user.id,key,modifier,expires:Date.now()+30*60*1000,targets};this.requests.set(request.id,request);
   try{await this.publish();}catch(error){this.requests.delete(request.id);throw error;}this.changed();return request;
+ }
+ complete(requestId,actorUuid,token,result){
+  authority(this.env);const request=this.requests.get(requestId),target=request?.targets.find(t=>t.actorUuid===actorUuid&&t.token===token);
+  if(!target||request.expires<=Date.now()||target.state!=='rolling')return false;
+  if(!result||!Number.isFinite(result.successes)||!Array.isArray(result.dice))throw new Error('Cannot complete an unrecorded roll.');
+  target.result={...result,requestId,actorUuid};target.state='completed';this.changed();return true;
  }
  async receive(user,response){
   authority(this.env);if(!Array.from(this.env.game.users).some(u=>u===user)||!user.active||user.isGM||!idValid(response?.requestId)||!idValid(response?.token)||!['roll','cancel'].includes(response?.choice)||!actorValid(response?.actorUuid))return;
@@ -75,8 +82,9 @@ export class PartySkillService {
   try{await this.publish();if(response.choice==='cancel')return;authority(this.env);const actor=await this.env.fromUuid(target.actorUuid);authorized(actor,user,this.env);const result=await rollPartySkill(actor,request.key,request.modifier,this.env);authority(this.env);
    const recipients=Array.from(this.env.game.users).filter(u=>u.isGM).map(u=>u.id);if(!recipients.length)throw new Error('No GM recipients.');
    // No rolls array or native MYZ dice flags: dice visualizers have no result payload to broadcast.
-   target.result=result;const message=await this.env.ChatMessage.create({user:this.env.game.user.id,whisper:recipients,blind:true,content:`<h3>${esc(target.name)} — ${esc(result.pool.label)}</h3><p>Modifier: ${request.modifier}; Successes: ${result.successes}</p><p>${esc(result.formula)}</p><pre>${esc(JSON.stringify(result.dice,null,2))}</pre>`});
-   target.result={...result,messageUuid:message?.uuid||null};target.state='submitted';
+   target.name=actor.name;target.portrait=imagePath(actor.img);target.robot=actor.type==='robot';target.skill=result.pool.label;target.result=result;const message=await this.env.ChatMessage.create({user:this.env.game.user.id,whisper:recipients,blind:true,content:partyResultCard({name:target.name,portrait:actor.img,robot:actor.type==='robot',result})});
+   if(!message?.uuid)throw new Error('GM-only result chat was not recorded.');
+   if(!this.complete(request.id,target.actorUuid,target.token,{...result,messageUuid:message.uuid}))throw new Error('Authoritative request changed before completion was recorded.');
   }catch(error){target.state='failed';target.error=error.message;}
   finally{this.changed();await this.publish().catch(error=>this.env.console?.error('Party skill status publication failed',error));}
  }
@@ -96,7 +104,7 @@ export class PartySkillService {
   this.timer=setInterval(()=>{void this.tick().catch(error=>env.console?.error('Party skill expiry',error));},15000);this.timer.unref?.();
  }
  async tick(){
-  if(this.isGM()){let changed=false;for(const request of this.requests.values())if(request.expires<=Date.now())for(const target of request.targets)if(target.state==='pending'){target.state='failed';target.error='Request expired without a submission.';changed=true;}if(changed){this.changed();await this.publish();}}else await this.syncPlayer();
+  if(this.isGM()){let changed=false;for(const request of this.requests.values())if(request.expires<=Date.now())for(const target of request.targets)if(['pending','rolling'].includes(target.state)){target.state='failed';target.error='Request expired before completion.';changed=true;}if(changed){this.changed();await this.publish();}}else await this.syncPlayer();
  }
  stop(){clearInterval(this.timer);this.timer=undefined;}
  async publishPresence(){
@@ -107,7 +115,7 @@ export class PartySkillService {
  async sendResponse(request,target,choice){
   const {env}=this;if(env.game.user.isGM||target.userId!==env.game.user.id)throw new Error('This roll request belongs to another player.');
   const task=this.responses.catch(()=>{}).then(async()=>{const gm=partyGM(env),current=publishedRequests(gm).find(r=>r?.id===request.id&&r.gmId===request.gmId),pending=current?.targets?.find(t=>t?.token===target.token&&t.userId===env.game.user.id&&t.actorUuid===target.actorUuid);if(!gm?.active||gm.id!==request.gmId||!current||current.expires<=Date.now()||pending?.state!=='pending')throw new Error('The roll request expired or is no longer pending.');
-   const previous=env.game.user.getFlag(PARTY_MODULE,RESPONSE_FLAG)||[];const responses=Array.isArray(previous)?previous.filter(r=>r.requestId!==request.id).slice(-99):[];responses.push({requestId:request.id,token:target.token,actorUuid:target.actorUuid,choice});await env.game.user.setFlag(PARTY_MODULE,RESPONSE_FLAG,responses);});this.responses=task;return task;
+   const previous=env.game.user.getFlag(PARTY_MODULE,RESPONSE_FLAG)||[];const responses=Array.isArray(previous)?previous.filter(r=>r.requestId!==request.id).slice(-99):[];responses.push({requestId:request.id,token:target.token,actorUuid:target.actorUuid,choice});await env.game.user.setFlag(PARTY_MODULE,RESPONSE_FLAG,responses);this.answered.add(`${request.id}:${target.token}`);});this.responses=task;return task;
  }
  async syncPlayer(){
   const {env}=this;if(env.game.user.isGM)return;const gm=partyGM(env);let requests=gm?.isGM&&gm.active?publishedRequests(gm):[];
@@ -115,6 +123,7 @@ export class PartySkillService {
   const current=new Set();
   for(const request of requests){if(!request||typeof request!=='object'||!idValid(request.id)||request.gmId!==gm.id||!PARTY_SKILLS.some(s=>s.key===request.key)||!Number.isSafeInteger(request.modifier)||Math.abs(request.modifier)>100||!Number.isFinite(request.expires)||request.expires<Date.now()||!Array.isArray(request.targets)||request.targets.length>100)continue;
    const target=request.targets.find(t=>t?.userId===env.game.user.id);if(!target||!idValid(target.token)||!actorValid(target.actorUuid)||target.state!=='pending')continue;
+   const previous=env.game.user.getFlag(PARTY_MODULE,RESPONSE_FLAG);if(this.answered.has(`${request.id}:${target.token}`)||Array.isArray(previous)&&previous.some(r=>r?.requestId===request.id&&r.token===target.token&&r.actorUuid===target.actorUuid&&['roll','cancel'].includes(r.choice)))continue;
    current.add(request.id);if(this.dialogs.has(request.id)){const existing=this.dialogs.get(request.id);if(existing===null||existing.element?.isConnected)continue;this.dialogs.delete(request.id);}
    // Reserve before async document resolution so duplicate update events cannot open duplicates.
    this.dialogs.set(request.id,null);void this.openPlayer(request,target).catch(error=>{this.dialogs.delete(request.id);env.ui?.notifications?.warn(`Party skill request: ${error.message}`);});
@@ -123,7 +132,8 @@ export class PartySkillService {
  }
  async openPlayer(request,target){
   const {env}=this,actor=await env.fromUuid(target.actorUuid);authorized(actor,env.game.user,env);const skill=resolvePartySkill(actor,request.key),portrait=imagePath(actor.img);const currentGM=partyGM(env),latest=publishedRequests(currentGM).find(r=>r?.id===request.id)?.targets?.find(t=>t?.token===target.token);if(currentGM?.id!==request.gmId||!currentGM?.active||!latest||latest.state!=='pending'||request.expires<=Date.now()){this.dialogs.delete(request.id);return;}let sent=false;
-  const dialog=new env.foundry.applications.api.DialogV2({window:{title:'GM Requests a Blind Skill Roll'},position:{width:400},content:`${portrait?`<img src="${esc(portrait)}" alt="" style="width:80px;height:80px;object-fit:contain">`:''}<h3>${esc(actor.name)}</h3><p>Skill: ${esc(skill.label)}</p><p>Modifier: ${request.modifier}</p><p data-party-confirmation role="status"></p>`,buttons:[{action:'roll',label:`Roll ${skill.label}`,callback:async()=>{if(sent)return;sent=true;try{await this.sendResponse(request,target,'roll');env.ui?.notifications?.info('Roll submitted');}catch(error){sent=false;throw error;}}},{action:'cancel',label:'Cancel',callback:async()=>{if(!sent){sent=true;await this.sendResponse(request,target,'cancel');}}}],close:()=>{if(!sent&&!dialog.partyRetired){sent=true;void this.sendResponse(request,target,'cancel').catch(error=>env.ui?.notifications?.error(error.message));}}});
+  const dialog=new env.foundry.applications.api.DialogV2({window:{title:'GM Requests a Blind Skill Roll'},position:{width:400},content:`<div data-party-player-request="${esc(request.id)}">${portrait?`<img src="${esc(portrait)}" alt="" style="width:80px;height:80px;object-fit:contain">`:''}<h3>${esc(actor.name)}</h3><p>Skill: ${esc(skill.label)}</p><p>Modifier: ${request.modifier}</p><p data-party-confirmation role="status"></p></div>`,buttons:[{action:'roll',label:`Roll ${skill.label}`,callback:async()=>{if(sent)return;sent=true;try{await this.sendResponse(request,target,'roll');env.ui?.notifications?.info('Roll submitted');}catch(error){sent=false;throw error;}}},{action:'cancel',label:'Cancel',callback:async()=>{if(!sent){sent=true;await this.sendResponse(request,target,'cancel');}}}]});
+  dialog.addEventListener('close',()=>{if(!sent&&!dialog.partyRetired){sent=true;void this.sendResponse(request,target,'cancel').catch(error=>env.ui?.notifications?.error(error.message));}});
   this.dialogs.set(request.id,dialog);dialog.render({force:true});
  }
 }

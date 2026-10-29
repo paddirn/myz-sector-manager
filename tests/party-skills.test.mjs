@@ -23,13 +23,13 @@ test('roster targeting prefers assigned/validated controlled hints, excludes unr
 async function request(f){return f.service.create('SNEAK',0,[{userId:'alice',actorUuid:f.hero.uuid},{userId:'bob',actorUuid:f.robot.uuid}]);}
 function response(r,index=0,choice='roll'){const t=r.targets[index];return {requestId:r.id,token:t.token,actorUuid:t.actorUuid,choice,successes:999,dice:[6,6,6]};}
 test('players only authorize rolls; GM evaluates and posts blind GM-only detail with zero-result support, no roll/DSN payload or secret response flags',async()=>{
- const f=fixture(),r=await request(f);f.env.game.myz.DiceRoller.CountSuccesses=()=>0;await f.service.receive(f.alice,response(r));assert.equal(r.targets[0].state,'submitted');assert.equal(r.targets[0].result.successes,0);assert.equal(f.chat[0].blind,true);assert.deepEqual(f.chat[0].whisper,['gm','assistant']);assert.equal(f.chat[0].rolls,undefined);assert.equal(f.chat[0].flags,undefined);assert.match(summaryContent(r,f.env),/0<\/td><td>Submitted/);const publicState=JSON.stringify(f.gm.flags[REQUEST_FLAG]);for(const secret of ['successes','dice','result','formula','pool'])assert(!publicState.includes(secret));f.env.game.user=f.alice;assert.throws(()=>summaryContent(r,f.env),/GM summary/);await assert.rejects(rollPartySkill(f.hero,'SNEAK',0,f.env),/active GM/);
+ const f=fixture(),r=await request(f);f.env.game.myz.DiceRoller.CountSuccesses=()=>0;await f.service.receive(f.alice,response(r));assert.equal(r.targets[0].state,'completed');assert.equal(r.targets[0].result.successes,0);assert.equal(f.chat[0].blind,true);assert.deepEqual(f.chat[0].whisper,['gm','assistant']);assert.equal(f.chat[0].rolls,undefined);assert.equal(f.chat[0].flags,undefined);assert.match(summaryContent(r,f.env),/0<\/td><td>Completed/);const publicState=JSON.stringify(f.gm.flags[REQUEST_FLAG]);for(const secret of ['successes','dice','result','formula','pool'])assert(!publicState.includes(secret));f.env.game.user=f.alice;assert.throws(()=>summaryContent(r,f.env),/GM summary/);await assert.rejects(rollPartySkill(f.hero,'SNEAK',0,f.env),/active GM/);
 });
 test('duplicates/replays and spoofed users/Actors/nonces/results cannot trigger extra rolls or another character',async()=>{
  const f=fixture(),r=await request(f),valid=response(r);await f.service.receive(f.bob,valid);await f.service.receive(f.alice,{...valid,token:crypto.randomUUID()});await f.service.receive(f.alice,{...valid,actorUuid:f.robot.uuid});assert.equal(f.rolls.length,0);await Promise.all([f.service.receive(f.alice,valid),f.service.receive(f.alice,valid)]);await f.service.receive(f.alice,valid);assert.equal(f.rolls.length,1);assert.notEqual(r.targets[0].result.successes,999);
 });
 test('cancel, disconnect/reconnect, expiration and simultaneous requests are isolated and never auto-roll',async()=>{
- const f=fixture(),a=await request(f),b=await request(f);await f.service.receive(f.alice,response(a,0,'cancel'));assert.equal(a.targets[0].state,'canceled');assert.equal(b.targets[0].state,'pending');assert.equal(f.rolls.length,0);f.bob.active=false;assert.match(summaryContent(a,f.env),/Disconnected/);await f.service.receive(f.bob,response(a,1));assert.equal(f.rolls.length,0);f.bob.active=true;await f.service.receive(f.bob,response(a,1));assert.equal(a.targets[1].state,'submitted');assert.equal(b.targets[1].state,'pending');b.expires=Date.now()-1;await f.service.receive(f.alice,response(b));assert.equal(f.rolls.length,1);
+ const f=fixture(),a=await request(f),b=await request(f);await f.service.receive(f.alice,response(a,0,'cancel'));assert.equal(a.targets[0].state,'canceled');assert.equal(b.targets[0].state,'pending');assert.equal(f.rolls.length,0);f.bob.active=false;assert.match(summaryContent(a,f.env),/Disconnected/);await f.service.receive(f.bob,response(a,1));assert.equal(f.rolls.length,0);f.bob.active=true;await f.service.receive(f.bob,response(a,1));assert.equal(a.targets[1].state,'completed');assert.equal(b.targets[1].state,'pending');b.expires=Date.now()-1;await f.service.receive(f.alice,response(b));assert.equal(f.rolls.length,1);
 });
 test('current ownership/roster and authority are rechecked; native errors/chat failures stay private and failed',async()=>{
  for(const change of [f=>f.roster.members=[],f=>f.hero.testUserPermission=()=>false,f=>f.env.game.myz.DiceRoller.ParseResults=()=>{throw Error('Native failure');}]){const f=fixture(),r=await request(f);change(f);await f.service.receive(f.alice,response(r));assert.equal(r.targets[0].state,'failed');assert(!JSON.stringify(f.gm.flags[REQUEST_FLAG]).includes('Native failure'));}
@@ -44,4 +44,25 @@ test('expiry consumes pending requests without rolling and stale player confirma
 });
 test('GM chat failure retains private dice for inspection but never creates a public fallback',async()=>{
  const f=fixture(),r=await request(f);let attempts=0;f.env.ChatMessage.create=async data=>{assert(data.blind);assert.deepEqual(data.whisper,['gm','assistant']);attempts++;throw Error('Chat unavailable');};await f.service.receive(f.alice,response(r));assert.equal(r.targets[0].state,'failed');assert.equal(r.targets[0].result.successes,1);assert.match(summaryContent(r,f.env),/Full dice details/);assert.match(summaryContent(r,f.env),/Chat unavailable/);assert.equal(attempts,1);assert.equal(f.chat.length,0);assert(!JSON.stringify(f.gm.flags[REQUEST_FLAG]).includes('successes'));
+});
+test('a summary observer failure cannot interrupt authoritative completion or leave another target rolling',async()=>{
+ const f=fixture(),r=await request(f),notifications=[];f.env.console={error:()=>{}};
+ f.service.subscribe(()=>{throw Error('Broken UI observer');});f.service.subscribe(()=>notifications.push(r.targets[0].state));
+ await f.service.receive(f.alice,response(r));assert.equal(r.targets[0].state,'completed');assert.equal(r.targets[0].result.requestId,r.id);assert.equal(r.targets[0].result.actorUuid,f.hero.uuid);assert.equal(r.targets[1].state,'pending');assert(notifications.includes('completed'));
+ assert.equal(f.service.complete(r.id,f.hero.uuid,r.targets[0].token,r.targets[0].result),false);assert.equal(f.rolls.length,1);
+});
+test('missing chat acknowledgement records Failed with dice retained, never an indefinitely pending successful-looking row',async()=>{
+ const f=fixture(),r=await request(f);f.env.ChatMessage.create=async()=>null;await f.service.receive(f.alice,response(r));assert.equal(r.targets[0].state,'failed');assert.match(r.targets[0].error,/not recorded/);assert.equal(r.targets[1].state,'pending');
+});
+test('formatted result cards use installed MYZ dice images, identify Mutant/Robot pools and never render raw objects',async()=>{
+ const {partyResultCard}=await import('../scripts/party-skill-results.mjs');const f=fixture();const result=await rollPartySkill(f.robot,'SNEAK',-5,f.env);
+ const html=partyResultCard({name:'<Robot>',portrait:'icons/robot.webp',robot:true,result});assert.match(html,/&lt;Robot&gt;/);assert.match(html,/Program Dice/);assert.match(html,/Base Dice/);assert.match(html,/Gear Dice/);assert.match(html,/dice-skill-penalty-6.png/);assert.match(html,/Total successes: -1/);assert.doesNotMatch(html,/diceType|<pre>|\[object Object\]|"success"/);assert.throws(()=>partyResultCard({name:'X',result:{...result,dice:[{diceType:'base',value:99}]}}),/Unsupported/);
+});
+
+test('interrupted evaluating rows expire to Failed and cannot be completed by a late result',async()=>{
+ const f=fixture(),r=await request(f);r.targets[0].state='rolling';r.expires=Date.now()-1;await f.service.tick();assert.equal(r.targets[0].state,'failed');assert.equal(f.service.complete(r.id,f.hero.uuid,r.targets[0].token,{successes:1,dice:[]}),false);
+});
+
+test('malformed native dice fail visibly without breaking the remaining request rows or leaking debug data',async()=>{
+ const f=fixture(),r=await request(f);f.env.game.myz.DiceRoller.ParseResults=async()=>[{diceType:'unknown',value:99}];f.env.game.myz.DiceRoller.CountSuccesses=()=>1;await f.service.receive(f.alice,response(r));assert.equal(r.targets[0].state,'failed');const html=summaryContent(r,f.env);assert.match(html,/Failed/);assert.match(html,/Dice display unavailable/);assert.match(html,/Pending/);assert.doesNotMatch(html,/diceType|"value"/);
 });
