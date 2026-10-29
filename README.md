@@ -614,3 +614,5 @@ Settlement Shop UI refinements in 0.1.41: wider responsive Player Shop with port
 Version 0.1.42 adds Vehicle Actor Shop references/native statistics, enriched purchase-request links, system-computed character weight, and grouped Ark Projects with Work Points and checked completion synchronization. See [verified mappings, compatibility and manual testing](docs/shop-ark-projects.md).
 
 Version 0.1.43 fixes Work Points parsing/editing, shows Ready to Complete without automatic completion, adds Not started Project grouping, and refines the four-column Player Shop trade layout and availability limits. See [current behavior and manual checks](docs/shop-ark-projects.md).
+
+Version 0.1.44 labels purchase-request Weight/Comment and adds GM-requested blind party basic skill rolls. GM Script Macro: `await game.myzSectorManager.requestPartySkillRoll();`. See [verified mappings, security/lifecycle and manual Foundry checks](docs/blind-party-skills.md).
