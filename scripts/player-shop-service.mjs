@@ -78,7 +78,7 @@ export class PlayerShopService {
     if(!Array.isArray(request.items)||request.items.length!==1||request.items[0]?.quantity!==1)throw new Error('Buy requests exactly one Item at quantity 1.');
     const selected=request.items[0],item=snapshot.groups.flatMap(g=>g.entries).find(i=>i.id===selected.id&&!i.unavailable);
     if(!item)throw new Error('Shop Item is unavailable.');
-    result={completed:true,message:`${actor.name} wants to buy something from the shop:\n\n${item.name} (cost ${item.cost??''})${item.weight?'\n'+item.weight:''}${item.comment?'\n'+item.comment:''}`};
+    result={completed:true,message:`${actor.name} wants to buy something from the shop:\n\n${item.name} (cost ${item.cost??''})${item.weight?'\nWeight: '+item.weight:''}${item.comment?'\nComment: '+item.comment:''}`};
     const editor=env.foundry?.applications?.ux?.TextEditor?.implementation;
     documentLink=editor?.enrichHTML?await editor.enrichHTML(`@UUID[${item.uuid}]`,{async:true,secrets:false}):`<a class="content-link" data-uuid="${esc(item.uuid)}" data-type="${esc(item.documentType)}" draggable="true">${esc(item.name)}</a>`;
    }
