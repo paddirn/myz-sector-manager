@@ -1,3 +1,5 @@
+import {PartySkillService} from './party-skills.mjs';
+import {openPartySkillRequest} from './party-skills-ui.mjs';
 import {PlayerShopService} from './player-shop-service.mjs';
 import {createPlayerShopClass} from './player-shop-ui.mjs';
 import {hydrateArk,requireArk,synchronizeArkDraft} from './settlement-ark.mjs';
@@ -931,6 +933,7 @@ Hooks.on('updateItem',doc=>{
 });
 const organization=new JournalOrganization();
 const playerShops=new PlayerShopService();
+const partySkills=new PartySkillService();
 const zone=new ZoneRuntime({
   onChange:()=>{if(app?.rendered){if(app.sceneScope!==zone.store.config?.sceneId){app.sceneScope=zone.store.config?.sceneId;app.capture();void app.render();}else app.refreshZoneSummary();}},
   openSector:async id=>{const manager=await game.myzSectorManager.open(id);if(manager?.sectorId===id){manager.capture();manager.tab='Overview';await manager.render();}},
@@ -944,9 +947,11 @@ Hooks.once('init',()=>{
 });
 Hooks.once('ready',async()=>{
   const referencesReady=ensureReferenceMigration().catch(error=>{console.error(`${MOD} | Document References migration`,error);ui.notifications.error(`Document References migration: ${error.message}. Open Module Settings → Document References to review/retry.`);});
-  playerShops.start();
+  playerShops.start();partySkills.start();
   const PlayerShop=createPlayerShopClass(foundry.applications.api.ApplicationV2,playerShops);
   game.myzSectorManager={
+    requestPartySkillRoll:()=>openPartySkillRequest(partySkills),
+    openPendingPartySkillRolls:()=>partySkills.syncPlayer(),
     openPlayerShop:async journalUuid=>{try{const shop=new PlayerShop(journalUuid);await shop.refresh();return shop;}catch(error){ui.notifications.error(`Player Shop: ${error.message}`);throw error;}},
     zone:zone.api(),
     travel:{weather:()=>game.user.isGM?zone.travel.state.weather:null,history:()=>game.user.isGM?zone.travel.state.history:[],configure:async()=>{if(game.user.isGM)return new zone.TravelClass().render(true);},roster:async()=>{if(game.user.isGM)return new zone.RosterClass().render(true);}},
