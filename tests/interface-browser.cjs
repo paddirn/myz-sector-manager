@@ -94,6 +94,22 @@ const path=require('node:path');
     await page.addScriptTag({type:'module',url:origin+'/scripts/sector-manager.mjs'});
     await page.evaluate(async()=>{for(const callback of initCallbacks)callback();const {REFERENCE_DEFINITIONS}=await import('/scripts/document-references.mjs');await game.settings.set('myz-sector-manager','documentReferences',{formatVersion:1,references:Object.fromEntries(REFERENCE_DEFINITIONS.filter(def=>def.legacyUuid).map(def=>[def.key,{mode:'custom',uuid:def.legacyUuid}])),migration:{version:1,outcomes:[]}});await game.settings.set('myz-sector-manager','travelEventsConfiguration',{enabled:false});await ready();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
 
+    assert.equal(await page.locator('[data-action="new"] + [data-action="campaign-log"]').count(),1);
+    assert.equal(await page.locator('[data-action="campaign-log"] + .sm-settings').count(),1);
+
+    await page.locator('[data-action="campaign-log"]').click();
+    await page.waitForSelector('.myz-campaign-log');
+    await page.evaluate(()=>game.myzSectorManager.openCampaignLog());
+    assert.equal(await page.locator('.myz-campaign-log').count(),1);
+    assert.equal(await page.locator('.myz-sector-manager').count(),1);
+    await page.waitForFunction(()=>Boolean(game.settings.get('myz-sector-manager','campaignLogJournalId')));
+    await page.evaluate(async()=>{const {applyCommand,emptyLog}=await import('/scripts/campaign/model.mjs');const doc=game.journal.get(game.settings.get('myz-sector-manager','campaignLogJournalId'));const {log}=applyCommand(emptyLog(),{action:'start',groupId:'test',durationMinutes:150},{location:()=>({groupId:'test',sceneId:'zone',tokenId:'party',coordinate:'A2'}),id:()=>foundry.utils.randomID()});await doc.setFlag('myz-sector-manager','campaignLog',log);});
+    await page.waitForSelector('.sm-header-buttons .sm-log-recording');
+    assert.equal(await page.locator('[data-action="campaign-log"]').getAttribute('aria-label'),'Log (recording)');
+    await page.evaluate(async()=>{const {emptyLog}=await import('/scripts/campaign/model.mjs');await game.journal.get(game.settings.get('myz-sector-manager','campaignLogJournalId')).setFlag('myz-sector-manager','campaignLog',emptyLog());});
+    await page.waitForFunction(()=>!document.querySelector('.sm-log-recording'));
+    await page.evaluate(()=>game.myzSectorManager.openCampaignLog().then(log=>log.close()));
+
     for(const tab of ['Overview','Find the Path','Locations','Encounters','Loot','Effects','History']){
       await page.locator(`[data-tab="${tab}"]`).click();
       await page.waitForFunction(tab=>manager.tab===tab,tab);
@@ -1128,7 +1144,7 @@ const path=require('node:path');
     // Settings popover uses the browser's top layer, native dismissal, scoped keyboard navigation.
     await saveSpecial();await page.evaluate(async()=>{await game.scenes.get('zone').view();});
     const gear=page.locator('[data-sm-settings]'),settingsMenu=page.locator('[data-sm-settings-menu]');
-    assert.equal(await page.locator('.sm-header-buttons [data-action="new"]').evaluate(el=>el.nextElementSibling?.classList.contains('sm-settings')),true);assert.equal(await page.locator('.sm-zone-summary details').count(),0);
+    assert.equal(await page.locator('.sm-header-buttons [data-action="new"]').evaluate(el=>el.nextElementSibling?.dataset.action==='campaign-log'&&el.nextElementSibling.nextElementSibling?.classList.contains('sm-settings')),true);assert.equal(await page.locator('.sm-zone-summary details').count(),0);
     await gear.click();assert.equal(await settingsMenu.isVisible(),true);assert.deepEqual(await settingsMenu.locator('button').allTextContents(),['Configure / Tracking','View Zone','Select on map','Hide overlay','Wander Now','Wandering Tokens','Enable Wandering for Selected Tokens','Disable Wandering for Selected Tokens','Import Sector','Export Sector']);
     await page.waitForFunction(()=>document.activeElement.hasAttribute('data-zone-config'));await page.keyboard.press('End');assert.equal(await page.evaluate(()=>document.activeElement.hasAttribute('data-sector-export')),true);await page.keyboard.press('Home');assert.equal(await page.evaluate(()=>document.activeElement.hasAttribute('data-zone-config')),true);await page.keyboard.press('Escape');assert.equal(await settingsMenu.isVisible(),false);
     await gear.click();await gear.click();assert.equal(await settingsMenu.isVisible(),false);await gear.click();await page.mouse.click(500,30);assert.equal(await settingsMenu.isVisible(),false);
