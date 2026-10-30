@@ -961,6 +961,7 @@ Hooks.once('ready',async()=>{
   const PlayerShop=createPlayerShopClass(foundry.applications.api.ApplicationV2,playerShops);
   game.myzSectorManager={
     openCampaignLog:()=>openCampaignLog(campaign),
+    toggleCampaignSession:()=>campaign.toggle(),
     requestPartySkillRoll:()=>openPartySkillRequest(partySkills),
     openPendingPartySkillRolls:()=>partySkills.syncPlayer(),
     openPlayerShop:async journalUuid=>{try{const shop=new PlayerShop(journalUuid);await shop.refresh();return shop;}catch(error){ui.notifications.error(`Player Shop: ${error.message}`);throw error;}},

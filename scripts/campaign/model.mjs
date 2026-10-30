@@ -2,6 +2,7 @@ import {canonicalCoordinate} from '../zone/grid.mjs';
 export const CAMPAIGN_VERSION=1;
 export const DURATIONS=Object.fromEntries(Array.from({length:12},(_,i)=>[(i+1)*30,`${Math.floor((i+1)/2)}h ${(i+1)%2?30:0}m`]));
 export const emptyLog=()=>({version:CAMPAIGN_VERSION,nextSessionNumber:1,sessions:[],receipts:[]});
+export const nextSessionNumber=log=>log.sessions.reduce((highest,s)=>Math.max(highest,s.number),0)+1;
 export const activeSession=log=>log.sessions.find(session=>session.status==='active');
 export function timestamp(value){if(typeof value!=='number'&&(typeof value!=='string'||!/[Tt].*(?:[Zz]|[+-]\d{2}:?\d{2})$/.test(value)))throw Error('Enter a valid ISO real-world timestamp with a timezone.');const ms=typeof value==='number'?value:Date.parse(value);if(!Number.isFinite(ms))throw Error('Enter a valid real-world timestamp.');return new Date(ms).toISOString();}
 export function duration(value){const n=Number(value);if(!Number.isInteger(n)||n<30||n>360||n%30)throw Error('Choose a duration from 30 to 360 minutes in 30-minute increments.');return n;}
@@ -36,14 +37,17 @@ export function finishSession(session,at){session.visits.at(-1).departureAt=at;s
 export function expireLog(log,now){const s=activeSession(log);if(!s||Date.parse(s.expiresAt)>now)return false;finishSession(s,s.expiresAt);return true;}
 export function applyCommand(saved,command,{now=Date.now(),id=()=>globalThis.crypto.randomUUID(),location=()=>null}={}){
  validateLog(saved);const log=structuredClone(saved),expired=expireLog(log,now),at=timestamp(now);
- const {action}=command;let s=log.sessions.find(s=>s.id===command.sessionId),v=s?.visits.find(v=>v.id===command.visitId);
+ let {action}=command;
+ if(action==='toggle'){const current=activeSession(log);if((current?.id||null)!==command.expectedActiveId)throw Error('Campaign Log recording changed before the toggle completed. No toggle was applied; check recording status before trying again.');action=current?'end':'start';command={...command,sessionId:current?.id};}
+ let s=log.sessions.find(s=>s.id===command.sessionId),v=s?.visits.find(v=>v.id===command.visitId);
  const session=()=>{if(!s)throw Error('The selected session no longer exists.');return s;};
  const visit=()=>{session();if(!v)throw Error('The selected visit no longer exists.');return v;};
  switch(action){
  case 'start':{
  if(activeSession(log))throw Error('A Campaign Log session is already recording.');
  const where=location(command.groupId);if(!where?.coordinate)throw Error('Locate a designated Party/Expedition token inside the managed Zone before starting.');
- const minutes=duration(command.durationMinutes),sid=id();s={id:sid,number:log.nextSessionNumber++,title:text(command.title??'',200),startAt:at,endAt:null,durationMinutes:minutes,expiresAt:timestamp(now+minutes*60000),status:'active',party:{groupId:where.groupId,sceneId:where.sceneId,tokenId:where.tokenId},visits:[]};
+ const number=nextSessionNumber(log);if(!Number.isSafeInteger(number+1))throw Error('The next session number exceeds the supported whole-number range.');
+ const minutes=duration(command.durationMinutes),sid=id();log.nextSessionNumber=number+1;s={id:sid,number,title:text(command.title??'',200),startAt:at,endAt:null,durationMinutes:minutes,expiresAt:timestamp(now+minutes*60000),status:'active',party:{groupId:where.groupId,sceneId:where.sceneId,tokenId:where.tokenId},visits:[]};
  s.visits.push(newVisit(s,where,at,id));log.sessions.push(s);break;}
  case 'end':session();if(s.status!=='active')throw Error('This session has already ended.');finishSession(s,at);break;
  case 'extend':session();if(s.status!=='active')throw Error('Expired or completed sessions cannot be extended.');if(![30,60].includes(command.minutes))throw Error('Extend by 30 or 60 minutes.');s.expiresAt=timestamp(Date.parse(s.expiresAt)+command.minutes*60000);break;
@@ -53,6 +57,8 @@ export function applyCommand(saved,command,{now=Date.now(),id=()=>globalThis.cry
  if(s.visits.at(-1).coordinate===w.coordinate)break;
  s.visits.at(-1).departureAt=at;s.visits.push(newVisit(s,w,at,id));break;}
  case 'expire':break;
+ case 'number':{
+ session();const number=command.number;if(!Number.isSafeInteger(number)||number<1||number>=Number.MAX_SAFE_INTEGER)throw Error('Session number must be a positive whole number within the supported range.');if(log.sessions.some(other=>other.id!==s.id&&other.number===number))throw Error(`Session ${number} already exists. Choose a different session number.`);s.number=number;log.nextSessionNumber=nextSessionNumber(log);break;}
  case 'title':session().title=text(command.title,200);break;
  case 'editSession':session();if(s.status==='active')throw Error('End recording before correcting session timestamps.');s.startAt=timestamp(command.startAt);s.endAt=timestamp(command.endAt);break;
  case 'editVisit':visit();if(s.status==='active')throw Error('End recording before correcting visits.');if(!canonicalCoordinate(command.coordinate))throw Error('Use sector coordinates such as F5.');v.coordinate=canonicalCoordinate(command.coordinate);v.journalId=command.journalId||null;v.arrivalAt=timestamp(command.arrivalAt);v.departureAt=timestamp(command.departureAt);break;

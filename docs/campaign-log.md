@@ -152,8 +152,7 @@ The exported structure is:
 
 An active session has `status: "active"`, `endAt: null`, and one final open visit
 with `departureAt: null`. `journalId` can be null for an unrecorded sector square.
-Notes are plain text, limited to 20,000 characters; titles to 200. IDs and the
-separate sequential session number remain stable. Visits and notes retain their
+Notes are plain text, limited to 20,000 characters; titles to 200. IDs remain stable; the separate session number is editable by the GM. Visits and notes retain their
 stored chronological order; the window presents sessions newest first. The
 persisted envelope additionally has `nextSessionNumber` and transport `receipts`;
 the internal envelope is `{version: 1, nextSessionNumber: 2, sessions: [...],
@@ -193,3 +192,86 @@ server. Perform these live checks before releasing:
 10. Export idle and active history; parse JSON and compare IDs/timestamps/notes.
     Resize to a narrow window, scroll long notes/history, and collapse sessions.
     Confirm old sector records, loot, settings, shops, and macros are unchanged.
+
+## Session numbering, compact display, and toggle macro (0.1.47)
+
+**Edit Session Number** works for active and completed sessions. Enter a positive
+whole number; duplicates are rejected. Numbers remain display metadata: session,
+visit, and note IDs and relationships are unchanged. No timestamps, notes, or
+saved expiration are changed by renumbering. A new session always uses the highest
+existing session number plus one. Lowering a number never renumbers other records.
+The persisted `nextSessionNumber` is kept in sync after number changes and starts,
+but new starts calculate from actual records rather than trusting an old cache.
+Version-1 log data and existing numbers load unchanged, without migration. Whole
+numbers are bounded by JavaScript's safe-integer range; excessively large numbers
+are rejected rather than rounded.
+
+The session list uses approximately 40% of the window, leaving 60% for notes.
+Session, selected-visit, and note action buttons are grouped into horizontal rows
+with wrapping at narrow widths. Small-window layout switches to stacked panels.
+Both panels use the same session-label formatter, including the optional title.
+Table arrival/departure cells show local times; hover for full date/time. A visit
+on a different local calendar day shows `(+1 day)`, `(+2 days)`, etc. Calendar-day
+offsets handle daylight-saving changes; they are not elapsed 24-hour periods. Full
+ISO timestamps, timestamp editors, exports, and visit details are unchanged. Note
+counts show a small document icon only when nonzero; zero remains visible in muted
+text. Counts and titles refresh on persistent updates from either GM.
+
+Create a Foundry **Script Macro**, give it a name such as **Toggle Campaign Session**,
+and paste this complete script. Run it as GM:
+
+```js
+await game.myzSectorManager.toggleCampaignSession();
+```
+
+The stable API is **`game.myzSectorManager.toggleCampaignSession()`**, added to the
+existing module API on every world load. It returns a Promise of the updated log,
+reports failures through a clear notification, and rejects on failure. No Actor
+UUIDs, coordinates, custom arguments, or separate timer are needed. Players are
+rejected. The window never opens automatically.
+
+When idle, the API reads **Default Campaign Session Duration**, resolves the Party
+using existing Zone Map / Tracking configuration, and submits a start through the
+same persistent command queue used by the window. It immediately creates the
+initial visit. When recording, it submits an end, closing the current visit with
+the session end timestamp. Notifications use the current editable number, e.g.:
+
+- `Campaign Log: Session 21 started. Recording for 2 hours 30 minutes.`
+- `Campaign Log: Session 21 ended. Recording stopped.`
+
+A single configured group is selected automatically. With multiple groups, reuse
+the last session's group if its Scene/Token assignment still matches. Otherwise a
+uniquely named **Party** group is selected. If still ambiguous, recording is not
+started: choose the existing group by starting a session in Log once. Missing
+or outside-Zone positions fail without an incomplete session. Ending does not
+require the Party token still to be available.
+
+Repeated overlapping calls in one GM client share one pending Promise. Across GM
+clients, each toggle carries the expected active session ID (or null). The single
+authoritative queue checks that expectation before applying the existing start/end
+logic. A stale simultaneous toggle is rejected instead of undoing the first GM's
+action. After an operation finishes, a later deliberate call toggles normally.
+Expiration still uses the original saved timestamp: an already expired session
+is finalized before a new start; its end is never rewritten to the macro time.
+No changes are made to Foundry pause or world time.
+
+### Additional live checks for 0.1.47
+
+1. In a backup world with existing logs, renumber Session 1 to 20. Reload and check
+   that titles, notes, IDs, timestamps, and expiration are preserved. End it and
+   start again; expect Session 21. Check duplicate/zero/fractional rejection.
+2. At normal and narrow widths, inspect horizontal button rows, 40/60 panels, long
+   titles, wrapping, notes, and scrolling. Change title/number with an older visit
+   selected; both headings must update without losing that selection.
+3. Hover compact timestamps. Check a session spanning local midnight and a
+   daylight-saving transition; verify day markers and unchanged ISO exports.
+4. Add/delete notes and check nonzero icons and muted zero counts immediately in
+   both GM clients.
+5. Close Log and run the macro twice: start, then stop. Check notifications, the
+   toolbar dot, exactly one initial visit, and no new window. Change the default
+   duration and repeat. Refresh and run the same macro again.
+6. Repeat while Log is open, double-click the macro, and trigger it simultaneously
+   from two GMs. There must be one transition; a stale competing command should
+   warn without undoing it. Test automatic expiration and offline recovery again.
+7. Check missing/outside-Zone Party handling and multiple-group selection. As a
+   player, verify API rejection and no access to private campaign data.
