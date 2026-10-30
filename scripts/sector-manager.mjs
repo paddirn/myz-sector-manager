@@ -144,7 +144,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const list=this.journals;
     const record=x=>x.id===this.sectorId?d:x.getFlag(MOD,KEY);
     const matches=x=>`${sectorTitle(record(x),x.name)} ${x.name}`.toLowerCase().includes(this.filter.toLowerCase());
-    const menu=`<aside class="sm-sidebar"><input data-filter aria-label="Search sectors by coordinates or name" placeholder="Search sectors" value="${attr(this.filter)}"><div class="sm-list">${list.map(x=>`<button type="button" data-open="${attr(x.id)}" data-search="${attr(`${sectorTitle(record(x),x.name)} ${x.name}`.toLowerCase())}" ${matches(x)?'':'hidden'} class="${x.id===this.sectorId?'selected':''} ${isSettlement(record(x))?'sm-sector-settlement':isSpecial(record(x))?'sm-sector-special':''}"><span class="sm-sector-meta"><strong data-sector-label>${escapeHTML(sectorTitle(record(x),x.name))}</strong><small> · ${escapeHTML(record(x)?.status||'')}${isSettlement(record(x))?' · Settlement':isSpecial(record(x))?' · Special':''}</small></span></button>`).join('')}<p data-sector-empty ${list.some(matches)?'hidden':''}>${list.length?'No sectors match your search.':'No sectors yet.'}</p></div></aside>`;
+    const menu=`<aside class="sm-sidebar"><input data-filter aria-label="Search sectors by coordinates or name" placeholder="Search sectors" value="${attr(this.filter)}"><div class="sm-list">${list.map(x=>`<button type="button" data-open="${attr(x.id)}" data-search="${attr(`${sectorTitle(record(x),x.name)} ${x.name}`.toLowerCase())}" ${matches(x)?'':'hidden'} class="${x.id===this.sectorId?'selected':''} ${isSettlement(record(x))?'sm-sector-settlement':isSpecial(record(x))?'sm-sector-special':''}"><span class="sm-sector-meta"><strong data-sector-label>${escapeHTML(sectorTitle(record(x),x.name))}</strong><small>${escapeHTML(record(x)?.status||'')}${isSettlement(record(x))?' • Settlement':isSpecial(record(x))?' • Special':' • Normal'}</small></span></button>`).join('')}<p data-sector-empty ${list.some(matches)?'hidden':''}>${list.length?'No sectors match your search.':'No sectors yet.'}</p></div></aside>`;
     const zoneSummary=`<div class="sm-zone-summary">${zone.summary(this.journal&&sectorOnScene(this.data,zone.store.config?.sceneId)?this.data:null)}</div>`;
     let main=`<section class="sm-main"><header class="sm-header"><h2>Zone Sectors</h2><div class="sm-header-buttons"><button type="button" disabled>Delete Sector</button><button type="button" data-action="new">+ New Sector</button>${logButton(campaignRecording())}${settingsMenu(this,zone)}</div></header>${zoneSummary}<div class="sm-content"><div class="sm-empty"><p>Create a sector or select one from the list. Each record is a GM-only Journal Entry.</p></div></div></section>`;
     if(j){
@@ -186,7 +186,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       @container(max-width:640px){.myz-sector-manager .sm-project-group-grid{grid-template-columns:minmax(0,1fr)}}
       .myz-sector-manager .sm-project-incomplete{background:color-mix(in srgb,var(--color-warm-2,#bd923e) 14%,transparent);border-inline-start:3px solid var(--color-warm-2,#bd923e)}
       @container(max-width:640px){.myz-sector-manager .sm-projects-grid{grid-template-columns:minmax(0,1fr)}}
-      .myz-sector-manager .sm-list button.sm-sector-settlement{border-left:4px double var(--sm-settlement-accent,${SETTLEMENT_ACCENT})}
+      .myz-sector-manager .sm-list button.sm-sector-settlement{border-left:4px solid var(--sm-settlement-accent,${SETTLEMENT_ACCENT})}
       .myz-sector-manager .sm-content.sm-shop-content{display:flex;overflow:hidden;padding:8px;scrollbar-gutter:auto}
       .myz-sector-manager .sm-shop{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;gap:6px}
       .myz-sector-manager .sm-shop button{width:auto;flex:none;padding:4px 7px;white-space:nowrap}
@@ -230,8 +230,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-sidebar input{width:100%;box-sizing:border-box}
       .myz-sector-manager .sm-list{overflow-y:auto;overflow-x:hidden;flex:1;min-height:0;display:flex;flex-direction:column;gap:4px;scrollbar-gutter:stable}
       .myz-sector-manager .sm-list button{height:auto;min-height:0;flex:0 0 auto;line-height:1.4;overflow-wrap:anywhere;align-items:stretch;text-align:left;padding:8px;display:flex;flex-direction:column;gap:2px;white-space:normal}
-      .myz-sector-manager .sm-sector-meta{display:block;line-height:1.4}
-      .myz-sector-manager .sm-sector-meta strong{font-size:1.15em;font-weight:700}
+      .myz-sector-manager .sm-sector-meta{display:block;line-height:1.4}.myz-sector-manager .sm-sector-meta small{display:block}
+      .myz-sector-manager .sm-sector-meta strong{display:block;font-size:1.15em;font-weight:700}
       .myz-sector-manager .sm-list button.selected,.myz-sector-manager .sm-tabs button.active{outline:2px solid #a87b3c;outline-offset:-2px}
       .myz-sector-manager .sm-list small,.myz-sector-manager .sm-header small{opacity:.75}
       .myz-sector-manager .sm-main{display:flex;flex-direction:column;min-height:0;min-width:0;flex:1;container-type:inline-size}
@@ -940,11 +940,13 @@ const organization=new JournalOrganization();
 const playerShops=new PlayerShopService();
 const partySkills=new PartySkillService();
 const zone=new ZoneRuntime({
+  onDestination:context=>campaign.captureTravelEntry(context),
   onChange:()=>{if(app?.rendered){if(app.sceneScope!==zone.store.config?.sceneId){app.sceneScope=zone.store.config?.sceneId;app.capture();void app.render();}else app.refreshZoneSummary();}},
   openSector:async id=>{const manager=await game.myzSectorManager.open(id);if(manager?.sectorId===id){manager.capture();manager.tab='Overview';await manager.render();}},
   createSector:async(code,valid)=>{const manager=await game.myzSectorManager.open();if(manager)await manager.promptNewSector(code,valid);}
 });
 const campaign=new CampaignLogService(zone);
+zone.travel.onTriggered=event=>campaign.recordTravelEvent(event);
 const campaignRecording=()=>{try{return Boolean(activeSession(campaign.state));}catch{return false;}};
 let campaignActive=false;
 campaign.subscribe(kind=>{if(kind==='tick')return;const recording=campaignRecording();if(campaignActive===recording)return;campaignActive=recording;const button=app?.element?.querySelector('[data-action="campaign-log"]');if(button){const holder=document.createElement('span');holder.innerHTML=logButton(recording);button.className=holder.firstElementChild.className;button.title=holder.firstElementChild.title;button.setAttribute('aria-label',holder.firstElementChild.getAttribute('aria-label'));button.innerHTML=holder.firstElementChild.innerHTML;}});

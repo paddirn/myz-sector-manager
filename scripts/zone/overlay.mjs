@@ -1,3 +1,4 @@
+import {buildGridFade} from './fading.mjs';
 import {isAuthored,isSettlement,sectorOnScene,sectorTitle} from '../sector-types.mjs';
 import {settlementAccent} from '../settlement.mjs';
 import {imagePath,fitImage,SPECIAL_ACCENT} from '../sector-images.mjs';
@@ -19,7 +20,7 @@ export function overlayTextResolution(env){
 export class ZoneOverlay {
   constructor(store,env=globalThis){this.store=store;this.env=env;this.root=null;this.cancelPick=null;this.suppressed=false;this.preview=null;this.cells=new Map();this.onSelect=async()=>{};this.imageLoads=new Map();this.draft=null;}
   destroy(){
-    this.unbind?.();this.unbind=null;this.tooltip?.remove();this.tooltip=null;this.hoverCode=null;this.gesture=null;this.cells.clear();this.signature=null;
+    this.unbind?.();this.unbind=null;this.tooltip?.remove();this.tooltip=null;this.hoverCode=null;this.gesture=null;this.cells.clear();this.signature=null;this.gridGraphics=null;this.gridSignature=null;
     if(this.root){this.root.parent?.removeChild(this.root);if(!this.root.destroyed)this.root.destroy({children:true});this.root=null;}
   }
   stop(){this.cancelPick?.();this.destroy();}
@@ -44,13 +45,9 @@ export class ZoneOverlay {
     if(this.root&&this.signature===signature&&this.root.parent===canvas.stage){this.refreshSectors();return;}
     this.destroy();this.signature=signature;this.clip=clip;this.labelClip=labelClip;this.config=config;
     const root=this.root=new PIXI.Container();root.eventMode='none';root.interactiveChildren=false;root.name='myz-zone-overlay';canvas.stage.addChild(root);
+    this.gridGraphics=new PIXI.Graphics();this.gridGraphics.name='zone-grid-lines';root.addChild(this.gridGraphics);
     const graphics=new PIXI.Graphics();root.addChild(graphics);
     const mask=new PIXI.Graphics().beginFill(0xffffff).drawRect(clip.x,clip.y,clip.right-clip.x,clip.bottom-clip.y).endFill();mask.eventMode='none';root.addChild(mask);root.mask=mask;
-    if(config.overlay.boundaries){
-      graphics.lineStyle(1,0xe2c98a,.7);
-      for(let x=bounds.x;x<=bounds.x+bounds.width;x+=config.grid.width)if(x>=clip.x&&x<=clip.right)graphics.moveTo(x,clip.y).lineTo(x,clip.bottom);
-      for(let y=bounds.y;y<=bounds.y+bounds.height;y+=config.grid.height)if(y>=clip.y&&y<=clip.bottom)graphics.moveTo(clip.x,y).lineTo(clip.right,y);
-    }
     const ark=coordinateToBounds(config.arkCoordinate,config.grid);
     if(ark){
       graphics.lineStyle(2,0xe7b85c,.9).beginFill(0xe7b85c,.22).drawRect(ark.x,ark.y,ark.width,ark.height).endFill();
@@ -76,7 +73,12 @@ export class ZoneOverlay {
   setDraft(id,data){this.draft={id,data};this.draw();}
   clearDraft(){this.draft=null;this.draw();}
   refreshSectors(){
-    this.records=new Map();
+    this.records=new Map();const savedCodes=new Set();
+    for(const journal of this.env.game.journal){const saved=journal.getFlag(MODULE,'sector');if(saved?.version===1&&sectorOnScene(saved,this.config.sceneId)){const code=canonicalCoordinate(saved.code);if(code&&coordinateToBounds(code,this.config.grid))savedCodes.add(code);}}
+    this.savedCodes=savedCodes;
+    const fadeSignature=JSON.stringify([this.config.sceneId,this.config.grid,[...savedCodes].sort()]);
+    if(this.fadeSignature!==fadeSignature){this.fadeSignature=fadeSignature;this.fade=buildGridFade(this.config.grid,savedCodes);}
+    this.drawGrid();
     for(const journal of this.env.game.journal){const data=this.draft&&this.draft.id===journal.id?this.draft.data:journal.getFlag(MODULE,'sector');if(data?.version!==1||!sectorOnScene(data,this.store.config.sceneId))continue;const code=canonicalCoordinate(data.code);if(code&&!this.records.has(code))this.records.set(code,data);}
     if(!this.preview&&this.labelClip)for(const [code,data] of this.records){
       if(!isAuthored(data)||this.cells.has(code))continue;const b=coordinateToBounds(code,this.config.grid),c=this.labelClip;
@@ -85,12 +87,22 @@ export class ZoneOverlay {
     for(const cell of this.cells.values())this.updateCell(cell);
     if(this.hoverCode&&this.lastPointer)this.showTooltip(this.hoverCode,this.lastPointer);
   }
+  drawGrid(){
+    if(!this.gridGraphics||this.gridSignature===this.fadeSignature)return;this.gridSignature=this.fadeSignature;const graphics=this.gridGraphics;graphics.clear();if(!this.config.overlay.boundaries)return;
+    const {grid}=this.config,b=this.fade.bounds,c={x:Math.max(this.clip.x,this.labelClip.x),y:Math.max(this.clip.y,this.labelClip.y),right:Math.min(this.clip.right,this.labelClip.right),bottom:Math.min(this.clip.bottom,this.labelClip.bottom)};
+    const segments=[];for(let line=Math.max(0,Math.ceil((c.x-b.x)/grid.width));line<=Math.floor((c.right-b.x)/grid.width);line++)segments.push(...(this.fade.verticalLines.get(line)||[]));for(let line=Math.max(0,Math.ceil((c.y-b.y)/grid.height));line<=Math.floor((c.bottom-b.y)/grid.height);line++)segments.push(...(this.fade.horizontalLines.get(line)||[]));
+    for(const segment of segments){const alpha=.7*(this.preview?1:segment.alpha);let x1,y1,x2,y2;
+      if(segment.vertical){x1=x2=b.x+segment.line*grid.width;y1=Math.max(c.y,b.y+segment.from*grid.height);y2=Math.min(c.bottom,b.y+segment.to*grid.height);if(x1<c.x||x1>c.right||y2<=y1)continue;}
+      else{y1=y2=b.y+segment.line*grid.height;x1=Math.max(c.x,b.x+segment.from*grid.width);x2=Math.min(c.right,b.x+segment.to*grid.width);if(y1<c.y||y1>c.bottom||x2<=x1)continue;}
+      graphics.lineStyle(1,0xe2c98a,alpha).moveTo(x1,y1).lineTo(x2,y2);
+    }
+  }
   updateCell(cell){
     const data=this.records.get(cell.code),info=data?sectorIndicators(data):null;
     const special=data?.sectorType==='special'&&!this.preview;
     const settlement=isSettlement(data)&&!this.preview;
     const accent=settlementAccent(this.env.game.settings?.get?.(MODULE,'settlementAccent'));
-    const signature=JSON.stringify([info,special,settlement,settlement?sectorTitle(data):null,settlement?accent:null,special?data.special?.overlayImage:settlement?data.settlement?.image:null]);if(cell.signature===signature&&cell.root)return;
+    const signature=JSON.stringify([this.savedCodes.has(cell.code),info,special,settlement,settlement?sectorTitle(data):null,settlement?accent:null,special?data.special?.overlayImage:settlement?data.settlement?.image:null]);if(cell.signature===signature&&cell.root)return;
     cell.signature=signature;
     if(cell.root){this.root.removeChild(cell.root);cell.root.destroy({children:true});}
     const {PIXI}=this.env,b=cell.bounds,root=cell.root=new PIXI.Container();root.eventMode='none';root.interactiveChildren=false;this.root.addChild(root);
@@ -104,7 +116,7 @@ export class ZoneOverlay {
     if(special&&imagePath(data.special?.overlayImage))this.addImage(cell,root,data.special.overlayImage,{x:b.x+b.width*2/3,y:b.y,width:b.width/3,height:b.height/3});
     if(settlement&&imagePath(data.settlement?.image))this.addImage(cell,root,data.settlement.image,{x:b.x+b.width*2/3,y:b.y,width:b.width/3,height:b.height/3});
     if(!this.config.overlay.labels)return;
-    text(cell.code,b.x+padding,b.y+padding,font,data?0xfaf0d4:0x929a9f);
+    const coordinate=text(cell.code,b.x+padding,b.y+padding,font,data?0xfaf0d4:0x929a9f);coordinate.name='sector-coordinate';coordinate.alpha=this.preview||this.savedCodes.has(cell.code)?1:.5;
     if(!info)return;
     if(settlement){const name=text(`Settlement: ${data.customName||'Unnamed'}`,b.x+padding,b.y+padding+font*1.25,font*.7);name.name='settlement-sector-name';}
     if(info.terrain.visible){

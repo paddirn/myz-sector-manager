@@ -647,3 +647,13 @@ It uses the existing default duration and Party/Expedition configuration, and
 updates any open Log window and toolbar indicator. With multiple groups, it reuses
 the last session's still-configured group, or a uniquely named Party group. If
 ambiguous, start one session from Log to choose the group before using the macro.
+
+Campaign Log also records actually triggered Travel Events as editable notes on
+their exact destination visit while recording is active. Processed event IDs
+prevent replay duplicates, including after note edits/deletion. **Delete Session**
+removes the selected session after confirmation; active recording requires a
+second explicit stop/delete confirmation. The sector sidebar now separates names
+from metadata and uses matching solid bars for Special and Settlement sectors.
+The Zone overlay dims empty coordinates and distant grid edges while preserving
+recorded neighborhoods and map interactions.
+See [Travel notes, session deletion, fading, and manual checks](https://github.com/paddirn/myz-sector-manager/blob/main/docs/travel-log-overlay.md).

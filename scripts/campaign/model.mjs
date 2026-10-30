@@ -1,3 +1,4 @@
+import {travelNoteText,noteChunks} from './travel-notes.mjs';
 import {canonicalCoordinate} from '../zone/grid.mjs';
 export const CAMPAIGN_VERSION=1;
 export const DURATIONS=Object.fromEntries(Array.from({length:12},(_,i)=>[(i+1)*30,`${Math.floor((i+1)/2)}h ${(i+1)%2?30:0}m`]));
@@ -14,7 +15,7 @@ export function validateLog(log){
  const unique=id=>{if(typeof id!=='string'||!id||ids.has(id))throw Error('Campaign Log contains invalid or duplicate IDs.');ids.add(id);};
  for(const s of log.sessions){unique(s.id);if(!Number.isSafeInteger(s.number)||s.number<1||numbers.has(s.number)||s.number>=log.nextSessionNumber)throw Error('Invalid session numbering.');numbers.add(s.number);duration(s.durationMinutes);timestamp(s.startAt);timestamp(s.expiresAt);if(!['active','completed'].includes(s.status)||!Array.isArray(s.visits)||!s.visits.length)throw Error('Invalid session state or missing initial visit.');if(s.status==='completed')timestamp(s.endAt);else if(s.endAt!==null)throw Error('Active sessions cannot have an end timestamp.');
  if(!s.party?.sceneId||!s.party.tokenId||!s.party.groupId)throw Error('Missing session Party identity.');
- for(const v of s.visits){unique(v.id);if(v.sessionId!==s.id||!canonicalCoordinate(v.coordinate)||!v.sceneId||!Array.isArray(v.notes))throw Error('Invalid sector visit.');timestamp(v.arrivalAt);if(v.departureAt!==null)timestamp(v.departureAt);for(const n of v.notes){unique(n.id);if(n.visitId!==v.id)throw Error('Invalid note relationship.');timestamp(n.createdAt);if(n.modifiedAt)timestamp(n.modifiedAt);text(n.text,20000);}}
+ for(const v of s.visits){unique(v.id);if(v.sessionId!==s.id||!canonicalCoordinate(v.coordinate)||!v.sceneId||!Array.isArray(v.notes))throw Error('Invalid sector visit.');if(v.travelEventIds!==undefined&&(!Array.isArray(v.travelEventIds)||v.travelEventIds.some(id=>typeof id!=='string'||!id)))throw Error('Invalid saved Travel Event note identifiers.');timestamp(v.arrivalAt);if(v.departureAt!==null)timestamp(v.departureAt);for(const n of v.notes){unique(n.id);if(n.visitId!==v.id)throw Error('Invalid note relationship.');timestamp(n.createdAt);if(n.modifiedAt)timestamp(n.modifiedAt);text(n.text,20000);}}
  if(timelineWarnings(s).length)throw Error(timelineWarnings(s).join(' '));
  }
  return log;
@@ -59,6 +60,13 @@ export function applyCommand(saved,command,{now=Date.now(),id=()=>globalThis.cry
  case 'expire':break;
  case 'number':{
  session();const number=command.number;if(!Number.isSafeInteger(number)||number<1||number>=Number.MAX_SAFE_INTEGER)throw Error('Session number must be a positive whole number within the supported range.');if(log.sessions.some(other=>other.id!==s.id&&other.number===number))throw Error(`Session ${number} already exists. Choose a different session number.`);s.number=number;log.nextSessionNumber=nextSessionNumber(log);break;}
+ case 'deleteSession':session();if(s.status==='active'&&command.stopRecording!==true)throw Error('Confirm that recording will stop before deleting an active session.');if(s.status==='active')finishSession(s,at);log.sessions=log.sessions.filter(other=>other.id!==s.id);log.nextSessionNumber=nextSessionNumber(log);break;
+ case 'travelEvent':{
+ visit();const event=command.event;if(s.status!=='active'||event?.test||!event?.id||(!event.weatherChange&&!event.encounter))break;
+ if(v.coordinate!==canonicalCoordinate(event.code)||event.expeditionId!==s.party.groupId||event.sceneId!==s.party.sceneId||event.tokenId!==s.party.tokenId)throw Error('Travel Event does not match its recorded destination visit.');
+ if(Date.parse(s.startAt)>event.timestamp||event.timestamp>=Date.parse(s.expiresAt))break;
+ if(s.visits.some(visit=>visit.travelEventIds?.includes(event.id)))break;
+ v.travelEventIds??=[];v.travelEventIds.push(event.id);for(const content of noteChunks(travelNoteText(event)))v.notes.push({id:id(),visitId:v.id,createdAt:timestamp(event.timestamp),modifiedAt:null,text:content,travelEventId:event.id});break;}
  case 'title':session().title=text(command.title,200);break;
  case 'editSession':session();if(s.status==='active')throw Error('End recording before correcting session timestamps.');s.startAt=timestamp(command.startAt);s.endAt=timestamp(command.endAt);break;
  case 'editVisit':visit();if(s.status==='active')throw Error('End recording before correcting visits.');if(!canonicalCoordinate(command.coordinate))throw Error('Use sector coordinates such as F5.');v.coordinate=canonicalCoordinate(command.coordinate);v.journalId=command.journalId||null;v.arrivalAt=timestamp(command.arrivalAt);v.departureAt=timestamp(command.departureAt);break;

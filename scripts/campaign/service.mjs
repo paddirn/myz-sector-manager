@@ -60,7 +60,7 @@ export class CampaignLogService {
  }
  async request(command){
  if(!this.isGM)throw Error('GM access only.');
- if(['move','expire'].includes(command.action))throw Error('Movement and expiration are internal commands.');
+ if(['move','expire','travelEvent'].includes(command.action))throw Error('Movement and expiration are internal commands.');
  if(!this.document)throw Error('Campaign Log is unavailable. Ensure an active GM is connected and its Journal has not been deleted.');
  const doc=this.document;
  // Foundry enforces GM-only Journal access on the server. No player-controlled transport.
@@ -88,13 +88,13 @@ export class CampaignLogService {
  try{
  const user=this.env.game.users.get(envelope.userId);
  if(!user?.isGM)throw Error('GM access only.');
- if(['move','expire'].includes(envelope.command?.action))throw Error('Internal commands cannot be submitted.');
+ if(['move','expire','travelEvent'].includes(envelope.command?.action))throw Error('Internal commands cannot be submitted.');
  ({log:state}=applyCommand(state,envelope.command,{now:Date.now(),id:()=>this.env.foundry.utils.randomID(),location:id=>this.location(id)}));
  }catch(e){error=e.message;}
  state.receipts.push(error?{id:page.id,error}:{id:page.id,ok:true});
  // Retain all pending receipts; trim only acknowledged, removed commands.
  const pageIds=new Set(Array.from(doc.pages||[]).map(p=>p.id)),stale=state.receipts.filter(r=>!pageIds.has(r.id)),discard=new Set(stale.slice(0,Math.max(0,stale.length-256)).map(r=>r.id));state.receipts=state.receipts.filter(r=>!discard.has(r.id));
- if(!this.authoritative)return;await doc.setFlag(MODULE,LOG_FLAG,state);this.emit();
+ if(!this.authoritative)return;await doc.setFlag(MODULE,LOG_FLAG,state);if(envelope.command.action==='deleteSession'&&!activeSession(state))this.pendingMovement.clear();this.emit();
  }
  if(this.authoritative)await doc.deleteEmbeddedDocuments('JournalEntryPage',[page.id]);
  }
@@ -116,13 +116,27 @@ export class CampaignLogService {
  const current=this.location(s.party.groupId),now=Date.now(),sid=s.id;
  if(!current||current.sceneId!==s.party.sceneId||current.tokenId!==s.party.tokenId){if(this.lastInvalid!==identity){this.env.ui.notifications.warn('Campaign Log: Party position is outside the managed Zone or unavailable. The current visit remains open; no location was invented.');this.lastInvalid=identity;}return this.enqueue(()=>this.expire(now));}
  this.lastInvalid=null;
- return this.enqueue(async()=>{
- if(!this.authoritative)return;await this.expire(now);if(activeSession(this.state)?.id!==sid)return;
- if(activeSession(this.state).visits.at(-1).coordinate===current.coordinate)return;
- const {log}=applyCommand(this.state,{action:'move',location:current},{now,id:()=>this.env.foundry.utils.randomID()});
- if(this.authoritative){await this.document.setFlag(MODULE,LOG_FLAG,log);this.emit();}
- });
+ return this.recordPosition(current,now,sid);
  }
+ recordPosition(current,now,sid){return this.enqueue(async()=>{
+ if(!this.authoritative)return null;await this.expire(now);const session=activeSession(this.state);if(session?.id!==sid||current.sceneId!==session.party.sceneId||current.tokenId!==session.party.tokenId||current.groupId!==session.party.groupId)return null;
+ if(session.visits.at(-1).coordinate!==current.coordinate){const {log}=applyCommand(this.state,{action:'move',location:current},{now,id:()=>this.env.foundry.utils.randomID()});if(!this.authoritative)return null;await this.document.setFlag(MODULE,LOG_FLAG,log);this.emit();}
+ const visit=activeSession(this.state)?.visits.at(-1);return visit?{sessionId:sid,visitId:visit.id}:null;
+ });}
+ captureTravelEntry(context){
+ if(!this.authoritative)return Promise.resolve(null);const session=activeSession(this.state);if(!session)return Promise.resolve(null);
+ return this.recordPosition({groupId:context.group.id,sceneId:context.group.sceneId,tokenId:context.token.id,coordinate:context.coordinate,journalId:context.journal?.id||null},context.entryAt??Date.now(),session.id);
+ }
+ recordTravelEvent(event){return this.enqueue(async()=>{
+ if(!this.authoritative||event.test||(!event.weatherChange&&!event.encounter))return false;
+ await this.expire();const session=activeSession(this.state);if(!session)return false;
+ const binding=event.campaignVisit;if(!binding||binding.sessionId!==session.id){if(event.expeditionId===session.party.groupId)this.env.ui.notifications.warn('Campaign Log: Travel Event has no matching recorded destination visit; no note was attached.');return false;}
+ const visit=session.visits.find(v=>v.id===binding.visitId);if(!visit){this.env.ui.notifications.warn('Campaign Log: Travel Event destination visit is unavailable; no note was attached.');return false;}
+ const {log}=applyCommand(this.state,{action:'travelEvent',sessionId:session.id,visitId:visit.id,event},{now:Date.now(),id:()=>this.env.foundry.utils.randomID()});
+ if(session.visits.some(v=>v.travelEventIds?.includes(event.id)))return false;
+ if(this.authoritative){await this.document.setFlag(MODULE,LOG_FLAG,log);this.emit();return true;}return false;
+ });}
+
  start(){
  if(!this.isGM||this.hooks.length)return;
  const on=(name,fn)=>this.hooks.push([name,this.env.Hooks.on(name,fn)]);

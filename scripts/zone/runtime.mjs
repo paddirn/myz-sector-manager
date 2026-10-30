@@ -13,8 +13,8 @@ import {portraitCandidates} from './presentation.mjs';
 import {registerOverlayShortcut,warnShortcutConflict} from './shortcut.mjs';
 
 export class ZoneRuntime {
-  constructor({onChange=()=>{},openSector=async()=>{},createSector=async()=>{}}={},env=globalThis){
-    this.env=env;this.store=new ZoneStore(env);this.travel=new TravelEvents(this.store,env);this.wandering=new WanderingTokens(this.store,env);this.triggers=new SectorEntryTriggers(this.store,env,{beforeMacros:context=>this.travel.onEntry(context).catch(()=>{}),afterTravel:context=>this.wandering.onEntry(context)});this.overlay=new ZoneOverlay(this.store,env);this.overlay.onSelect=code=>this.selectCoordinate(code);this.calibrator=new ZoneCalibration(this.store,this.overlay,env);
+  constructor({onChange=()=>{},openSector=async()=>{},createSector=async()=>{},onDestination=null}={},env=globalThis){
+    this.env=env;this.store=new ZoneStore(env);this.travel=new TravelEvents(this.store,env);this.wandering=new WanderingTokens(this.store,env);this.triggers=new SectorEntryTriggers(this.store,env,{onDestination,beforeMacros:context=>this.travel.onEntry(context).catch(()=>{}),afterTravel:context=>this.wandering.onEntry(context)});this.overlay=new ZoneOverlay(this.store,env);this.overlay.onSelect=code=>this.selectCoordinate(code);this.calibrator=new ZoneCalibration(this.store,this.overlay,env);
     this.onChange=onChange;this.openSector=openSector;this.createSector=createSector;this.hooks=[];this.suspended=false;this.pending=false;
   }
   register(){this.store.register();registerTravelSettings(this,this.env);registerWandering(this,this.env);this.env.Hooks.once('setup',()=>registerOverlayShortcut(this));}

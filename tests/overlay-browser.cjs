@@ -39,6 +39,7 @@ const path=require('node:path');
       globalThis.baseline=greenPixels();
       if(!Object.keys(SECTOR_ICONS).length)throw new Error('Missing icons');
     });
+    assert.equal(await page.evaluate(()=>overlay.cells.get('A1').root.children.find(c=>c.name==='sector-coordinate').alpha),1);assert.equal(await page.evaluate(()=>overlay.cells.get('B1').root.children.find(c=>c.name==='sector-coordinate').alpha),.5);assert(await page.evaluate(()=>overlay.fade.segments.some(s=>s.alpha<1)&&overlay.fade.segments.every(s=>s.alpha>=.35)));await page.evaluate(()=>{globalThis.originalFade=overlay.fade;overlay.draw();});assert(await page.evaluate(()=>overlay.fade===originalFade));
     await page.mouse.move(80,100);await page.waitForFunction(()=>overlay.hoverCode==='A1');
     assert(await page.evaluate(()=>greenPixels()>baseline+10000));
     const tooltip=page.locator('.myz-sector-overlay-tooltip');assert.match(await tooltip.innerText(),/Rot Level: 0/);assert.match(await tooltip.innerText(),/1 Inhabitant/);assert.match(await tooltip.innerText(),/1 Phenomenon/);assert.equal(await tooltip.evaluate(e=>getComputedStyle(e).pointerEvents),'none');
