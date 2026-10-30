@@ -97,6 +97,7 @@ const path=require('node:path');
     assert.equal(await page.locator('[data-action="new"] + [data-action="campaign-log"]').count(),1);
     assert.equal(await page.locator('[data-action="campaign-log"] + .sm-settings').count(),1);
 
+    assert.equal(await page.evaluate(()=>typeof game.myzSectorManager.toggleCampaignSession),'function');
     await page.locator('[data-action="campaign-log"]').click();
     await page.waitForSelector('.myz-campaign-log');
     await page.evaluate(()=>game.myzSectorManager.openCampaignLog());

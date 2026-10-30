@@ -630,3 +630,20 @@ Use **+ Entry** for notes on the selected visit, review/correct completed histor
 and **Export Log** for a JSON download. Campaign data lives in a separate GM-only
 Journal and does not alter sector records or Foundry game time.
 See [Campaign Log storage, recovery, export format, and live testing](https://github.com/paddirn/myz-sector-manager/blob/main/docs/campaign-log.md).
+
+Campaign session numbers are editable: use **Edit Session Number** (for example,
+change Session 1 to Session 20). New sessions use the highest existing number plus
+one. The compact visit table shows local times with full timestamp tooltips and
+calendar-day offsets; the wider notes panel shares the session title/number.
+
+To start/stop recording without opening Log, create a **Script Macro**, usable by
+the GM, containing:
+
+```js
+await game.myzSectorManager.toggleCampaignSession();
+```
+
+It uses the existing default duration and Party/Expedition configuration, and
+updates any open Log window and toolbar indicator. With multiple groups, it reuses
+the last session's still-configured group, or a uniquely named Party group. If
+ambiguous, start one session from Log to choose the group before using the macro.

@@ -40,6 +40,24 @@ export class CampaignLogService {
  if(found.status!=='located')return null;
  return {groupId:group.id,sceneId:group.sceneId,tokenId:group.tokenId,coordinate:found.coordinate,journalId:store.sectorRecords(found.coordinate)[0]?.id||null};
  }
+ toggle(){
+ if(!this.isGM){const error=Error('GM access only.');this.report(error);return Promise.reject(error);}
+ if(this.togglePending)return this.togglePending;
+ this.togglePending=this.performToggle().catch(error=>{this.report(error);throw error;}).finally(()=>{this.togglePending=null;});return this.togglePending;
+ }
+ async performToggle(){
+ const current=activeSession(this.state),active=current&&Date.parse(current.expiresAt)>Date.now()?current:null;
+ const groups=this.zone.store.config.groups,prior=this.state.sessions.at(-1)?.party;
+ let group=groups.length===1?groups[0]:groups.find(g=>g.id===prior?.groupId&&g.sceneId===prior.sceneId&&g.tokenId===prior.tokenId);
+ if(!active&&!group){const named=groups.filter(g=>/^party$/i.test(g.name?.trim()||''));if(named.length===1)group=named[0];}
+ if(!active&&!group)throw Error(groups.length?'Multiple Party/Expedition groups are configured. Start one session from Campaign Log to choose the group for future macros.':'Configure a Party/Expedition token in Zone Map / Tracking before starting a Campaign Log session.');
+ const log=await this.request({action:'toggle',expectedActiveId:active?.id||null,groupId:group?.id,durationMinutes:this.env.game.settings.get(MODULE,'campaignSessionDuration')});
+ const session=active?log.sessions.find(s=>s.id===active.id):activeSession(log);
+ if(!session)throw Error('Recording changed while the toggle completed; check Campaign Log status.');
+ if(active)this.env.ui.notifications.info(`Campaign Log: Session ${session.number} ended. Recording stopped.`);
+ else{const minutes=session.durationMinutes,hours=Math.floor(minutes/60),remaining=minutes%60,label=[hours?`${hours} ${hours===1?'hour':'hours'}`:'',remaining?`${remaining} ${remaining===1?'minute':'minutes'}`:''].filter(Boolean).join(' ');this.env.ui.notifications.info(`Campaign Log: Session ${session.number} started. Recording for ${label}.`);}
+ return log;
+ }
  async request(command){
  if(!this.isGM)throw Error('GM access only.');
  if(['move','expire'].includes(command.action))throw Error('Movement and expiration are internal commands.');
