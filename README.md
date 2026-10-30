@@ -618,3 +618,15 @@ Version 0.1.43 fixes Work Points parsing/editing, shows Ready to Complete withou
 Version 0.1.44 labels purchase-request Weight/Comment and adds GM-requested blind party basic skill rolls. GM Script Macro: `await game.myzSectorManager.requestPartySkillRoll();`. See [verified mappings, security/lifecycle and manual Foundry checks](docs/blind-party-skills.md).
 
 Version 0.1.45 fixes blind-party result presentation and live completion tracking: formatted GM-only MYZ dice cards, Completed rows, supported v14 application events, and one reusable management window. See [root causes and manual regression checks](docs/blind-party-skills.md#v0145-bug-causes-and-fixes).
+
+### Campaign Log
+
+GMs can open **Log**, immediately after **New Sector**, to record real-world
+sessions and Party-token sector visits in a separate window. Choose an existing
+Zone Map / Tracking group and click **Start Session**. The default recording lasts
+150 minutes; override it per session or configure **Default Campaign Session
+Duration** in Module Settings. Closing the window keeps recording active.
+Use **+ Entry** for notes on the selected visit, review/correct completed history,
+and **Export Log** for a JSON download. Campaign data lives in a separate GM-only
+Journal and does not alter sector records or Foundry game time.
+See [Campaign Log storage, recovery, export format, and live testing](https://github.com/paddirn/myz-sector-manager/blob/main/docs/campaign-log.md).
