@@ -38,7 +38,7 @@ export class TravelEvents {
  }
  diagnostic(state,error){const message=error?.message||String(error);state.diagnostics.push({timestamp:Date.now(),message,...(error?.stack?{stack:error.stack}:{})});if(error instanceof Error)this.env.console?.error('MYZ Travel Events',error);if(this.env.game.user.isGM)warnReferenceOnce(`Travel Events: ${message}`,this.env);}
  onEntry(context){return this.enqueue(()=>this.process(context));}
- async process({journal,token,group,entryId,coordinate=null,test=false,persist=!test,force=null}){
+ async process({journal,token,group,entryId,coordinate=null,test=false,persist=!test,force=null,campaignVisit=null,entryAt=null}){
   this.assertAuthority();const config=travelConfiguration(this.env),sector=journal?.getFlag(MODULE,'sector');
   if(!sector||sector.version!==1||isAuthored(sector)||sector.initialSavePending||(!test&&(!config.enabled||!config.normalEntry)))return null;
   if(coordinate&&canonicalCoordinate(sector.code)!==coordinate)return null;
@@ -47,7 +47,7 @@ export class TravelEvents {
   if(persist&&state.processed.some(entry=>entry.id===id))return null;
   if(state.history.filter(event=>event.pending).length>=1000)throw new Error('Pending travel report capacity reached; review pending events before more checks.');
   if(persist){state.processed.push({id,status:'processing',timestamp:Date.now(),sectorId:journal.id,tokenUuid:token.uuid||`${group.sceneId}.${token.id}`});await this.saveState(state,config);}
-  const event={id,test,timestamp:Date.now(),sectorId:journal.id,code:sector.code,sectorName:sectorName(sector,journal.name),terrain:sector.terrain||'',expeditionId:group.id,expeditionName:group.name||'Party',tokenUuid:token.uuid||`${group.sceneId}.${token.id}`,weatherChange:null,encounter:null,detection:null,errors:[]};
+  const event={id,test,timestamp:Date.now(),entryAt,campaignVisit,sceneId:group.sceneId,tokenId:token.id,sectorId:journal.id,code:sector.code,sectorName:sectorName(sector,journal.name),terrain:sector.terrain||'',expeditionId:group.id,expeditionName:group.name||'Party',tokenUuid:token.uuid||`${group.sceneId}.${token.id}`,weatherChange:null,encounter:null,detection:null,errors:[]};
   try{
    const weatherDue=force==='weather'||(!force&&(!state.weather||await this.chance(config.weatherChance)));
    if(weatherDue){try{const next=await this.rollWeather();const previous=state.weather;if(!previous||next.condition.trim().replace(/\s+/g,' ').toLowerCase()!==previous.condition.trim().replace(/\s+/g,' ').toLowerCase()){
@@ -62,10 +62,12 @@ export class TravelEvents {
   const meaningful=Boolean(event.weatherChange||event.encounter);
   if(persist&&!this.store.authoritative){if(this.env.game.user.isGM&&this.store.document){const key=this.env.foundry.utils.randomID();await this.store.document.setFlag(MODULE,`pendingTravelReports.${key}`,{event:{...event,pending:meaningful},meaningful,weather:state.weather,weatherBeforeTimestamp,weatherChangedAt:state.weatherChangedAt,weatherBeforeRevision,weatherRevision:state.weatherRevision});}return {event,meaningful,weather:state.weather,pending:true};}
   if(persist){const progress=state.processed.find(entry=>entry.id===id);progress.status='completed';if(meaningful){event.pending=config.showDialog;if(config.recordHistory||event.pending)state.history.push(event);}await this.saveState(state,config);}
+  if(persist&&!test&&meaningful&&this.store.authoritative)await this.logCampaignEvent(event);
   // Initial weather, unchanged weather, failed chances and configuration errors alone never open a report.
   if(meaningful&&config.showDialog&&this.store.authoritative){const shown=await this.report(event);if(persist&&shown&&this.store.authoritative)await this.acknowledge(id,config);}
   return {event,meaningful,weather:state.weather};
  }
+ async logCampaignEvent(event){try{await this.onTriggered?.(event);}catch(error){this.env.ui.notifications.warn(`Campaign Log could not record Travel Event ${event.id}: ${error.message}`);}}
  async acknowledge(id,config=travelConfiguration(this.env)){
   const state=this.state;const event=state.history.find(event=>event.id===id);if(!event)return;event.pending=false;await this.saveState(state,config);
  }
@@ -82,6 +84,7 @@ export class TravelEvents {
    if(item.meaningful&&!state.history.some(row=>row.id===event.id))state.history.push({...event,pending:true});
    const progress=state.processed.find(row=>row.id===event.id);if(progress)progress.status='interrupted';
    state.diagnostics.push({timestamp:Date.now(),message:`Recovered ${event.code} results after GM handover; any uncompleted checks were not rerolled.`});await this.saveState(state);
+   if(item.meaningful&&!event.test)await this.logCampaignEvent(event);
    this.assertAuthority();await document.update({[`flags.${MODULE}.pendingTravelReports.-=${key}`]:null});
   }
  }

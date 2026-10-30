@@ -131,8 +131,8 @@ const path=require('node:path');
     const sidebar=await page.locator('[data-open="sector1"]').evaluate(el=>{
       const meta=el.querySelector('.sm-sector-meta');return {metaHeight:meta.getBoundingClientRect().height,strongY:meta.querySelector('strong').getBoundingClientRect().y,smallY:meta.querySelector('small').getBoundingClientRect().y,buttonHeight:el.getBoundingClientRect().height};
     });
-    assert(Math.abs(sidebar.strongY-sidebar.smallY)<6);assert(sidebar.buttonHeight>0);
-    console.log('Sidebar scrolls independently; coordinate/status share a line and long names wrap');
+    assert(sidebar.smallY>sidebar.strongY+10);assert(sidebar.buttonHeight>0);assert.match(await page.locator('[data-open="sector1"] small').innerText(),/Unexplored|Explored/);assert(!(await page.locator('[data-open="sector1"] small').innerText()).startsWith(' ·'));
+    console.log('Sidebar scrolls independently; names and metadata occupy separate lines and long names wrap');
 
     await page.locator('[data-tab="Loot"]').click();await page.waitForSelector('.sm-consumables');
     const consumableRatio=()=>page.locator('.sm-consumables').evaluate(el=>el.getBoundingClientRect().width/el.closest('.sm-content').clientWidth);
@@ -904,6 +904,7 @@ const path=require('node:path');
     await page.evaluate(()=>{foundry.applications.apps.FilePicker.implementation=class{constructor(options){this.options=options;}async render(){this.options.callback('/test-wide.svg');}};});
     await page.locator('[data-settlement-image="settlement.image"]').click();await page.waitForFunction(()=>manager.draft.settlement.image==='/test-wide.svg');await saveSpecial();
     assert.equal(await page.locator(`[data-open="${await page.evaluate(()=>settlementId)}"].sm-sector-settlement`).count(),1);
+    assert.equal(await page.locator('.sm-sector-settlement').first().evaluate(el=>getComputedStyle(el).borderLeftStyle),'solid');assert.equal(await page.locator('.sm-sector-settlement').first().evaluate(el=>getComputedStyle(el).borderLeftWidth),'4px');
     await page.locator('[data-tab="Projects"]').click();
     assert.match(await page.locator('.sm-content').innerText(),/No projects have been added/);
     // Blank-area world/Compendium project drops remain draft-only until Save Sector.
