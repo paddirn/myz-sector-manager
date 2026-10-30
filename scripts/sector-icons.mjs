@@ -1,3 +1,4 @@
+import {inhabitantCollection} from './inhabitants.mjs';
 import {lootCollected} from './loot.mjs';
 import {CONSUMABLES} from './sector-content.mjs';
 // Shared offline vector primitives, in a 24×24 view box, for SVG and PIXI alike.
@@ -36,11 +37,13 @@ export function drawSectorIcon(PIXI,icon,size){
   return graphics;
 }
 export function sectorIndicators(data={}){
-  const settlement=data.sectorType==='settlement';
-  const encounters=settlement?(data.settlement?.inhabitants||[]).length:Array.isArray(data.encounters)?data.encounters.length:0;
-  const phenomena=Array.isArray(data.effects)?data.effects.filter(entry=>entry?.category==='Phenomenon'||(!entry?.category&&entry?.generated?.threatCategory==='phenomenon')).length:0;
-  const loot=(data.loot||[]).some(entry=>entry&&!lootCollected(entry)&&(['title','details','uuid'].some(key=>String(entry[key]??'').trim())||Number(entry.quantity)>0)&&(entry.quantity===undefined||Number(entry.quantity)>0))||Object.keys(CONSUMABLES).some(key=>Number(data.supplies?.[key]?.quantity)>0&&!data.supplies[key].collected);
-  const result={terrain:{icon:'terrain',title:`Terrain: ${data.terrain||'Not assigned'}`,value:data.terrain||'',visible:Boolean(data.terrain)},rot:{icon:'rot',title:`Rot Level: ${data.rot??'Not assigned'}`,value:data.rot,visible:data.rot!==undefined&&data.rot!==null&&data.rot!==''},encounters:{icon:'encounters',title:`${encounters} ${encounters===1?'Inhabitant':'Inhabitants'}`,value:encounters,visible:encounters>0},phenomena:{icon:'phenomena',title:`${phenomena} ${phenomena===1?'Phenomenon':'Phenomena'}`,value:phenomena,visible:phenomena>0},loot:{icon:'loot',title:loot?'Uncollected Gear & Artifacts Available':'No Uncollected Gear & Artifacts',value:'',visible:loot},status:{icon:STATUS_ICONS[data.status]||'unknown',title:`Exploration Status: ${data.status||'Not assigned'}`,value:'',visible:Boolean(data.status)}};
+  const settlement=data.sectorType==='settlement',special=data.sectorType==='special';
+  const key=inhabitantCollection(data,special||settlement?'Inhabitants':'Encounters'),inhabitants=key.split('.').reduce((value,part)=>value?.[part],data);
+  const encounters=Array.isArray(inhabitants)?inhabitants.length:0;
+  const phenomena=!special&&!settlement&&Array.isArray(data.effects)?data.effects.filter(entry=>entry?.category==='Phenomenon'||(!entry?.category&&entry?.generated?.threatCategory==='phenomenon')).length:0;
+  const loot=special?Boolean(data.special?.gear?.length):!settlement&&((data.loot||[]).some(entry=>entry&&!lootCollected(entry)&&(['title','details','uuid'].some(key=>String(entry[key]??'').trim())||Number(entry.quantity)>0)&&(entry.quantity===undefined||Number(entry.quantity)>0))||Object.keys(CONSUMABLES).some(key=>Number(data.supplies?.[key]?.quantity)>0&&!data.supplies[key].collected));
+  const lootTitle=special?(loot?'Gear & Artifacts Present':'No Gear & Artifacts'):(loot?'Uncollected Gear & Artifacts Available':'No Uncollected Gear & Artifacts');
+  const result={terrain:{icon:'terrain',title:`Terrain: ${data.terrain||'Not assigned'}`,value:data.terrain||'',visible:Boolean(data.terrain)},rot:{icon:'rot',title:`Rot Level: ${data.rot??'Not assigned'}`,value:data.rot,visible:data.rot!==undefined&&data.rot!==null&&data.rot!==''},encounters:{icon:'encounters',title:`${encounters} ${encounters===1?'Inhabitant':'Inhabitants'}`,value:encounters,visible:encounters>0},phenomena:{icon:'phenomena',title:`${phenomena} ${phenomena===1?'Phenomenon':'Phenomena'}`,value:phenomena,visible:phenomena>0},loot:{icon:'loot',title:lootTitle,value:'',visible:loot},status:{icon:STATUS_ICONS[data.status]||'unknown',title:`Exploration Status: ${data.status||'Not assigned'}`,value:'',visible:Boolean(data.status)}};
   if(settlement){result.rot.visible=false;result.phenomena.visible=false;result.loot.visible=false;result.status.visible=false;}
   return result;
 }

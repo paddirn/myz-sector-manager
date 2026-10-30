@@ -657,3 +657,13 @@ from metadata and uses matching solid bars for Special and Settlement sectors.
 The Zone overlay dims empty coordinates and distant grid edges while preserving
 recorded neighborhoods and map interactions.
 See [Travel notes, session deletion, fading, and manual checks](https://github.com/paddirn/myz-sector-manager/blob/main/docs/travel-log-overlay.md).
+
+### Shared entry UI foundation (0.1.49)
+
+Normal, Special, and Settlement cards share header/body rendering and accessible
+collapse handling, while Factions, Projects, Images, and Shop retain their special
+controls and existing save policies. Inhabitant indicators now use the active
+sector type's collection; Special gear indicates presence without introducing a
+Collected state. Saved custom dropdown choices remain selected and are labeled
+Legacy/custom value until explicitly replaced. Avatar standardization is deferred.
+See [Phase 0/1 compatibility, extension points, and manual checks](https://github.com/paddirn/myz-sector-manager/blob/main/docs/ui-standardization.md).
