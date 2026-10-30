@@ -1,3 +1,5 @@
+import {ScrollKeeper} from './ui/scroll.mjs';
+import {InhabitantPortraits,avatarMarkup,portraitFields} from './ui/inhabitant-portraits.mjs';
 import {entryCard,updateEntryCollapse,bindEntryCollapse,unbindEntryCollapse} from './ui/entry.mjs';
 import {selectOptions} from './ui/options.mjs';
 import {CampaignLogService} from './campaign/service.mjs';
@@ -116,7 +118,7 @@ const randomizeDialogContent = content => `<style>
 
 class SectorManager extends foundry.applications.api.ApplicationV2 {
   static DEFAULT_OPTIONS = {id:'myz-sector-manager-app', window:{title:'MYZ Sector Manager',resizable:true}, position:{width:920,height:730}, classes:['myz-sector-manager']};
-  constructor(options={}) {super(options); this.sectorId = options.sectorId ?? null; this.tab='Overview'; this.draft=null; this.dirty=false; this.filter=''; this.busy=false;this.lootTypeRevisions=new WeakMap();}
+  constructor(options={}) {super(options); this.sectorId = options.sectorId ?? null; this.tab='Overview'; this.draft=null; this.dirty=false; this.filter=''; this.busy=false;this.lootTypeRevisions=new WeakMap();this.scrollKeeper=new ScrollKeeper(globalThis);this.portraits=new InhabitantPortraits(this,globalThis);}
   get arkPlacementContext(){return {grid:zone.store.config?.grid,sceneId:zone.store.config?.sceneId,journals:game.journal,journalId:this.sectorId};}
   get journals(){return game.journal.filter(j=>j.getFlag(MOD,KEY)?.version===1&&sectorOnScene(j.getFlag(MOD,KEY),zone.store.config?.sceneId)).sort((a,b)=>{const ac=a.getFlag(MOD,KEY)?.code?.trim()||'', bc=b.getFlag(MOD,KEY)?.code?.trim()||''; return (ac&&bc?ac.localeCompare(bc,undefined,{numeric:true,sensitivity:'base'}):ac?-1:bc?1:0)||a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'});});}
   get journal(){return game.journal.get(this.sectorId);}
@@ -127,7 +129,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     if(isSettlement(this.data))await synchronizeArkDraft(this);
     const root=document.createElement('div');
     root.className='sm-root';
-    root.innerHTML=this.build();if(isSettlement(this.data)&&this.tab==='Projects')root.querySelector('.sm-content')?.classList.add('sm-projects-grid');
+    root.innerHTML=this.build();root.dataset.scrollScope=JSON.stringify([this.sectorId,this.tab]);this.portraits.prepare(root);if(isSettlement(this.data)&&this.tab==='Projects')root.querySelector('.sm-content')?.classList.add('sm-projects-grid');
     await Promise.all(Array.from(root.querySelectorAll('[data-reference]'),zone=>this.renderReference(zone)));
     if(isSettlement(this.data))await hydrateSettlement(this,root);
     hydrateInhabitants(this,root,globalThis);sortEditorEntries(this,root);
@@ -138,7 +140,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     // ApplicationV2 supplies its actual .window-content node here. Its child
     // must also be a shrinking flex container, not an auto-height wrapper.
     content.classList.add('sm-window-content');
-    content.replaceChildren(result);
+    this.scrollKeeper.capture(content.querySelector('.sm-root'));content.replaceChildren(result);this.scrollKeeper.restore(result);
   }
   build(){
     const j=this.journal, d=this.data;
@@ -160,7 +162,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
         const key=this.collectionKey(), arr=sectorCollection(d,key);
         const state=this.entryState(key);
         body=({Encounters:'encounters',Effects:'phenomena',Loot:'loot'}[this.tab]?`<h3 data-sector-section>${sectorIcon(d,{Encounters:'encounters',Effects:'phenomena',Loot:'loot'}[this.tab])} ${escapeHTML(tabLabel(this.tab))}</h3>`:'')+(this.tab==='Loot'?supplies(d,this.consumablesState().collapsed):'')+`<div class="sm-section-header"><p>${this.tab==='Effects'?'<button type="button" data-reset-all-triggers>Reset all sector Macros</button>':''}${this.tab==='Effects'?'Track weather, Zone phenomena, hazards, and special environmental effects.':`Track sector ${tabLabel(this.tab).toLowerCase()} as individual editable records.`}</p><div class="sm-entry-controls">${arr.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}" ${this.addingEntry?'disabled':''}>+ Add Entry</button>${this.tab==='History'?`<button type="button" data-action="add-event" data-collection="history" ${this.addingEntry?'disabled':''}>+ Add Event</button>`:''}</div></div>`+
-          arr.map((item,i)=>{const id=state.entries[i].id,collapsed=state.collapsed.has(id);return entryCard({id,collection:key,collapsed,classes:key==='loot'&&lootCollected(item)?'is-collected':'',title:key==='loot'?lootTitle(item,`Entry ${i+1}`):item.title||`Entry ${i+1}`,removeTitle:'Remove entry',removeLabel:`Remove ${item.title||`Entry ${i+1}`}`,body:`<div class="sm-grid">${field('Title',`${key}.${i}.title`,item.title||'')}${this.tab==='Loot'?field('Quantity',`${key}.${i}.quantity`,normalizeLoot(item).quantity,'number')+`<label class="sm-field"><span>Type</span><select name="loot.${i}.type">${LOOT_TYPES.map(type=>`<option value="${type}" ${normalizeLoot(item).type===type?'selected':''}>${type[0].toUpperCase()+type.slice(1)}</option>`).join('')}</select></label><label class="sm-loot-collected" title="Collected saves this sector’s Gear &amp; Artifacts entries automatically; other sector fields still use Save Sector."><input type="checkbox" name="loot.${i}.collected" ${lootCollected(item)?'checked':''}> Collected</label>${item.status&&item.status!=='Active'?`<small title="Previous status retained for compatibility; the checkbox now controls availability.">Previous status: ${escapeHTML(item.status)}</small>`:''}`:this.tab==='Encounters'?select('Status',`${key}.${i}.status`,normalizeEncounter(item).status,ENCOUNTER_STATUSES)+select('Type',`${key}.${i}.type`,normalizeEncounter(item).type,ENCOUNTER_TYPES)+(item.legacyStatus?`<small>Previous status: ${escapeHTML(item.legacyStatus)} (retained)</small>`:'')+(item.legacyType?`<small>Previous type: ${escapeHTML(item.legacyType)} (retained)</small>`:''):select('Status',`${key}.${i}.status`,item.status||'Active',['Active','Hidden','Discovered','Resolved','Collected','Depleted','Inactive'])}${this.tab==='Effects'?select('Category',`${key}.${i}.category`,item.category||'Weather',['Weather','Phenomenon','Special Effect','Hazard'])+reference(key,i,item.uuid||''):reference(key,i,item.uuid||'')}</div>${item.referenceWarning?`<p class="sm-reference-missing" data-reference-warning role="status">${escapeHTML(item.referenceWarning)}</p>`:''}${area('Details / Rules / Notes',`${key}.${i}.details`,item.details||'')}${this.tab==='Encounters'?`<div class="sm-inhabitant-description" data-inhabitant-preview></div><div class="sm-imported-portrait" data-imported-portrait="${i}"></div>`:''}${this.tab==='Effects'?field('Duration / Trigger',`${key}.${i}.duration`,item.duration||'')+this.macroControl(item,i):''}`});}).join('')+
+          arr.map((item,i)=>{const id=state.entries[i].id,collapsed=state.collapsed.has(id);return entryCard({id,collection:key,collapsed,headerContent:key==='encounters'?avatarMarkup():'',classes:key==='loot'&&lootCollected(item)?'is-collected':'',title:key==='loot'?lootTitle(item,`Entry ${i+1}`):item.title||`Entry ${i+1}`,removeTitle:'Remove entry',removeLabel:`Remove ${item.title||`Entry ${i+1}`}`,body:`<div class="sm-grid">${field('Title',`${key}.${i}.title`,item.title||'')}${this.tab==='Loot'?field('Quantity',`${key}.${i}.quantity`,normalizeLoot(item).quantity,'number')+`<label class="sm-field"><span>Type</span><select name="loot.${i}.type">${LOOT_TYPES.map(type=>`<option value="${type}" ${normalizeLoot(item).type===type?'selected':''}>${type[0].toUpperCase()+type.slice(1)}</option>`).join('')}</select></label><label class="sm-loot-collected" title="Collected saves this sector’s Gear &amp; Artifacts entries automatically; other sector fields still use Save Sector."><input type="checkbox" name="loot.${i}.collected" ${lootCollected(item)?'checked':''}> Collected</label>${item.status&&item.status!=='Active'?`<small title="Previous status retained for compatibility; the checkbox now controls availability.">Previous status: ${escapeHTML(item.status)}</small>`:''}`:this.tab==='Encounters'?select('Status',`${key}.${i}.status`,normalizeEncounter(item).status,ENCOUNTER_STATUSES)+select('Type',`${key}.${i}.type`,normalizeEncounter(item).type,ENCOUNTER_TYPES)+(item.legacyStatus?`<small>Previous status: ${escapeHTML(item.legacyStatus)} (retained)</small>`:'')+(item.legacyType?`<small>Previous type: ${escapeHTML(item.legacyType)} (retained)</small>`:''):select('Status',`${key}.${i}.status`,item.status||'Active',['Active','Hidden','Discovered','Resolved','Collected','Depleted','Inactive'])}${this.tab==='Effects'?select('Category',`${key}.${i}.category`,item.category||'Weather',['Weather','Phenomenon','Special Effect','Hazard'])+reference(key,i,item.uuid||''):reference(key,i,item.uuid||'')}</div>${item.referenceWarning?`<p class="sm-reference-missing" data-reference-warning role="status">${escapeHTML(item.referenceWarning)}</p>`:''}${area('Details / Rules / Notes',`${key}.${i}.details`,item.details||'')}${this.tab==='Encounters'?`<div class="sm-inhabitant-description" data-inhabitant-preview></div>${portraitFields(`${key}.${i}.portrait`,item.portrait)}`:''}${this.tab==='Effects'?field('Duration / Trigger',`${key}.${i}.duration`,item.duration||'')+this.macroControl(item,i):''}`});}).join('')+
           (!arr.length?`<div class="sm-empty">No ${escapeHTML(tabLabel(this.tab).toLowerCase())} yet. Add an entry to get started.</div>`:'');
       }
       main=`<section class="sm-main"><header class="sm-header"><div><h2 data-sector-heading>${escapeHTML(sectorTitle(d))}</h2><small>GM only · Journal-backed · ${escapeHTML(d.code||'No sector ID')}${isSettlement(d)?` · Scene: ${escapeHTML(game.scenes?.get(d.sceneId)?.name||d.sceneId||'Unassigned')}`:''}</small></div><div class="sm-header-buttons"><button type="button" data-action="change-type">Change Sector Type</button><button type="button" data-action="journal">Open Journal</button><button type="button" data-action="delete">Delete Sector</button><button type="button" data-action="new">+ New Sector</button>${logButton(campaignRecording())}${settingsMenu(this,zone)}</div></header>${zoneSummary}<nav class="sm-tabs">${tabs.map(t=>`<button type="button" data-tab="${t}" class="${t===this.tab?'active':''} ${tabHasContent(d,t)?'':'sm-tab-empty'}">${escapeHTML(tabLabel(t))}</button>`).join('')}${isAuthored(d)?'':`<button type="button" data-action="randomize" ${this.canRandomize?'':'disabled title="Save this sector before randomizing."'}>Randomize</button>`}</nav><div class="sm-content${isSettlement(d)&&this.tab==='Shop'?' sm-shop-content':''}">${body}</div><footer class="sm-footer"><span>${this.dirty?'● Unsaved changes':'Changes saved'}</span><button type="button" data-action="save" ${this.busy?'disabled':''}>Save Sector</button></footer></section>`;
@@ -223,7 +225,6 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       @container (max-width:440px){.myz-sector-manager .sm-shop-group-actions{flex-basis:100%;justify-content:flex-end}}
       .myz-sector-manager .sm-inhabitant-description{overflow-wrap:anywhere;max-height:300px;overflow:auto}
       .myz-sector-manager .sm-inhabitant-description:empty{display:none}
-      .myz-sector-manager .sm-imported-portrait img{max-width:100%;max-height:110px;object-fit:contain}
       .myz-sector-manager .sm-project-image img{max-width:100%;max-height:100px;object-fit:contain}
       .myz-sector-manager [data-project-view] dd{white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 8px}
       .myz-sector-manager [data-project-view] dt{font-weight:bold}
@@ -344,9 +345,13 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-entry-toggle [data-entry-title]{flex:1;min-width:0;text-align:left;overflow-wrap:anywhere}
       .myz-sector-manager .sm-entry-toggle [data-chevron],.myz-sector-manager .sm-entry-toggle [data-image-chevron]{margin-left:auto;flex:none}
       .myz-sector-manager .sm-inhabitant-avatar{display:flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;overflow:hidden;border:1px solid #888;border-radius:4px;background:rgba(128,128,128,.12)}
-      .myz-sector-manager .sm-inhabitant-avatar img{display:block;width:36px;height:36px;object-fit:cover}
+      .myz-sector-manager .sm-inhabitant-avatar img{display:block;width:36px;height:36px;object-fit:contain}
       .myz-sector-manager [data-image-body][hidden]{display:none!important}
       .myz-sector-manager .sm-image-heading h3{margin:0;min-width:0}
+      .myz-sector-manager .sm-inhabitant-portrait-editor{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0;min-width:0}
+      .myz-sector-manager .sm-inhabitant-portrait-editor .sm-field{flex:1 1 240px;min-width:0}.myz-sector-manager .sm-inhabitant-portrait-editor button{width:auto;height:auto;flex:none}
+      .myz-sector-manager .sm-inhabitant-portrait-preview{width:144px;height:144px;max-width:100%;display:flex;align-items:center;justify-content:center;border:1px solid #888;border-radius:4px;overflow:hidden;flex:0 0 144px}
+      .myz-sector-manager .sm-inhabitant-portrait-preview img{width:100%;height:100%;object-fit:contain}.myz-sector-manager .sm-inhabitant-portrait-editor small{flex-basis:100%;overflow-wrap:anywhere}
       .myz-sector-manager .sm-empty{padding:22px;opacity:.8;overflow-wrap:anywhere}
 
       @container (max-width:440px){.myz-sector-manager .sm-grid{grid-template-columns:1fr}}
@@ -391,18 +396,10 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const state=this.entryState('special.images');if(!state.entries.some(entry=>entry.id===id))return;
     if(collapsed)state.previewCollapsed.add(id);else state.previewCollapsed.delete(id);
     const card=this.element.querySelector(`[data-entry="${id}"]`);if(!card)return;
-    updateEntryCollapse(card,collapsed,{image:true,document});
+    updateEntryCollapse(card,collapsed,{image:true,document});this.scrollKeeper.settle();
     if(metadata){if(collapsed)state.collapsed.add(id);else state.collapsed.delete(id);card.querySelector('[data-image-metadata]').open=!collapsed;}
   }
-  renderInhabitantAvatar(zone,doc){
-    if(!zone.querySelector('input').name?.startsWith('special.inhabitants.'))return;
-    const target=zone.closest('[data-entry]')?.querySelector('[data-inhabitant-avatar]');if(!target)return;
-    const fallback=()=>{target.setAttribute('role','img');target.setAttribute('aria-label','No Actor portrait available');target.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="currentColor"><circle cx="12" cy="7" r="4"/><path d="M3 22v-3a9 9 0 0 1 18 0v3z"/></svg>';};
-    fallback();const src=doc?.documentName==='Actor'?safeImageSource(doc.img):null;if(!src)return;
-    const image=document.createElement('img');image.alt=`${doc.name||'Actor'} portrait`;image.loading='lazy';image.draggable=false;
-    image.addEventListener('error',()=>{if(image.parentNode===target)fallback();},{once:true});image.src=src;
-    target.removeAttribute('role');target.removeAttribute('aria-label');target.replaceChildren(image);
-  }
+  renderInhabitantAvatar(zone,doc){this.portraits.reference(zone,doc);}
   renderJournalImage(zone,doc,message){
     const input=zone.querySelector('input');if(!input.name?.startsWith('special.images.'))return;
     const target=zone.closest('[data-entry]')?.querySelector('[data-image-preview]');
@@ -464,8 +461,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const entries=sectorCollection(this.data,key),state=this.entryState(key),gear=key==='special.gear';
     const label=gear?'Item':key==='special.inhabitants'?'Inhabitant':'Event';
     return `<div class="sm-section-header"><p>Manually authored ${escapeHTML(tabLabel(this.tab).toLowerCase())}; no RollTables are rolled.</p><div class="sm-entry-controls">${entries.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}">+ Add ${label}</button></div></div>`+entries.map((item,i)=>{
-      const id=state.entries[i].id,collapsed=state.collapsed.has(id),prefix=`${key}.${i}`,avatar=key==='special.inhabitants'?'<span class="sm-inhabitant-avatar" data-inhabitant-avatar role="img" aria-label="No Actor portrait available"></span>':'';
-      return entryCard({id,collection:key,collapsed,title:gear?lootTitle(item,`Item ${i+1}`):item.title||`${label} ${i+1}`,headerContent:avatar,removeLabel:`Remove ${item.title||label}`,body:`<div class="sm-grid">${field('Title',`${prefix}.title`,item.title)}${gear?`<label class="sm-field"><span>Quantity</span><input name="${prefix}.quantity" type="number" min="1" step="1" value="${specialQuantity(item.quantity)}"></label><label class="sm-field"><span>Type</span><select name="${prefix}.type">${LOOT_TYPES.map(type=>`<option value="${type}" ${item.type===type?'selected':''}>${type[0].toUpperCase()+type.slice(1)}</option>`).join('')}</select></label>`:''}${reference(key,i,item.uuid)}</div>${area(key==='special.events'?'Description':'Description / Notes',`${prefix}.details`,item.details)}${key==='special.inhabitants'?'<div class="sm-inhabitant-description" data-inhabitant-preview></div>':''}`});
+      const id=state.entries[i].id,collapsed=state.collapsed.has(id),prefix=`${key}.${i}`,avatar=key==='special.inhabitants'?avatarMarkup():'';
+      return entryCard({id,collection:key,collapsed,title:gear?lootTitle(item,`Item ${i+1}`):item.title||`${label} ${i+1}`,headerContent:avatar,removeLabel:`Remove ${item.title||label}`,body:`<div class="sm-grid">${field('Title',`${prefix}.title`,item.title)}${gear?`<label class="sm-field"><span>Quantity</span><input name="${prefix}.quantity" type="number" min="1" step="1" value="${specialQuantity(item.quantity)}"></label><label class="sm-field"><span>Type</span><select name="${prefix}.type">${LOOT_TYPES.map(type=>`<option value="${type}" ${item.type===type?'selected':''}>${type[0].toUpperCase()+type.slice(1)}</option>`).join('')}</select></label>`:''}${reference(key,i,item.uuid)}</div>${area(key==='special.events'?'Description':'Description / Notes',`${prefix}.details`,item.details)}${key==='special.inhabitants'?`<div class="sm-inhabitant-description" data-inhabitant-preview></div>${portraitFields(`${prefix}.portrait`,item.portrait)}`:''}`});
     }).join('')+(!entries.length?'<p class="sm-empty">No entries yet. Add one to get started.</p>':'');
   }
   async changeSectorType(){
@@ -536,6 +533,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     el.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{clearTimeout(this.sidebarClick);this.capture();this.tab=b.dataset.tab;this.render();}));
     el.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>this.action(b.dataset.action,b.dataset.collection)));
     el.querySelectorAll('[data-remove]').forEach(b=>b.addEventListener('click',event=>{event.stopPropagation();const [key,id]=b.dataset.remove.split(':');this.removeEntry(key,id);}));
+    this.portraits.bind(el);
     bindEntryCollapse(el,(id,image)=>{const key=this.collectionKey();if(image)this.setImageCollapsed(id,!this.entryState(key).previewCollapsed.has(id));else this.setCollapsed(key,id,!this.entryState(key).collapsed.has(id));});
     el.querySelector('[data-expand-all]')?.addEventListener('click',()=>this.collapseAll(false));
     el.querySelector('[data-collapse-all]')?.addEventListener('click',()=>this.collapseAll(true));
@@ -680,7 +678,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const card=this.element.querySelector(`[data-entry="${id}"]`);
     if(!card)return;
     // State stays in ENTRY_UI; the shared controller updates existing DOM only.
-    updateEntryCollapse(card,collapsed,{document});
+    updateEntryCollapse(card,collapsed,{document});this.scrollKeeper.settle();
   }
 
   collapseAll(collapsed){
@@ -860,7 +858,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     finally{this.randomizing=false;}
   }
   async close(options={}){if(isSettlement(this.data)&&!await this.confirmLose())return this;return super.close(options);}
-  async _onClose(options){unbindEntryCollapse(this.element);clearTimeout(this.sidebarClick);await Promise.allSettled([this.stuntWrite,this.lootWrite,this.specialWrite,this.inhabitantWrite,this.shopWrite]);this.situationResize?.disconnect();zone.overlay?.clearDraft?.();return super._onClose(options);}
+  async _onClose(options){this.scrollKeeper.capture(this.element?.querySelector?.('.sm-root'));this.scrollKeeper.disconnect();this.portraits.stop();unbindEntryCollapse(this.element);clearTimeout(this.sidebarClick);await Promise.allSettled([this.stuntWrite,this.lootWrite,this.specialWrite,this.inhabitantWrite,this.shopWrite]);this.situationResize?.disconnect();zone.overlay?.clearDraft?.();return super._onClose(options);}
   persistStunts(){
     const journal=this.journal,states=normalizePathStunts(foundry.utils.deepClone(this.draft.pathStunts));
     const write=(this.autosaveWrite||Promise.resolve()).catch(()=>{}).then(async()=>{

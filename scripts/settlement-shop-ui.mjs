@@ -31,7 +31,7 @@ export function refreshShopToolbar(host,root=host.element){
 }
 function keepSelectionVisible(host){
   const state=shopState(host),viewport=host.element.querySelector('[data-shop-inventory]'),row=host.element.querySelector(`[data-shop-entry="${state.selectedEntryId}"]`);if(!viewport||!row||row.closest('[data-shop-group-body]').hidden)return;
-  const box=viewport.getBoundingClientRect(),bounds=row.getBoundingClientRect(),heading=row.closest('[data-shop-group]').querySelector('.sm-shop-sticky').getBoundingClientRect(),top=box.top+heading.height+8,bottom=box.bottom-8;
+  host.scrollKeeper?.releaseFor(row);const box=viewport.getBoundingClientRect(),bounds=row.getBoundingClientRect(),heading=row.closest('[data-shop-group]').querySelector('.sm-shop-sticky').getBoundingClientRect(),top=box.top+heading.height+8,bottom=box.bottom-8;
   if(bounds.top<top)viewport.scrollTop+=bounds.top-top;else if(bounds.bottom>bottom)viewport.scrollTop+=bounds.bottom-bottom;state.scrollTop=viewport.scrollTop;
 }
 function setExpanded(host,key,expanded){
@@ -57,7 +57,7 @@ export async function hydrateShop(host,root){
 }
 export function bindShop(host){
   const el=host.element,state=shopState(host),content=el.querySelector('.sm-content'),viewport=el.querySelector('[data-shop-inventory]');
-  viewport.scrollTop=state.scrollTop;if(state.revealSelected){keepSelectionVisible(host);state.revealSelected=false;}viewport.addEventListener('scroll',()=>{state.scrollTop=viewport.scrollTop;},{passive:true});
+  if(!host.scrollKeeper?.hasRestored(viewport))viewport.scrollTop=state.scrollTop;state.scrollTop=viewport.scrollTop;if(state.revealSelected){keepSelectionVisible(host);state.revealSelected=false;}viewport.addEventListener('scroll',()=>{state.scrollTop=viewport.scrollTop;},{passive:true});
   const report=task=>Promise.resolve(task).catch(error=>ui.notifications.error(`Shop: ${error.message}`));
   bindCopyPlayerShopMacro(el);
   bindResourceRateSteps(el,()=>host.markDirty());
@@ -96,8 +96,8 @@ export function bindShop(host){
       let payload;try{payload=foundry.applications.ux.TextEditor.implementation.getDragEventData(event);}catch{throw new Error('Invalid drag data. Drop a Foundry Item document.');}
       const doc=await resolveShopDrop(payload);
       if(host.draft!==draft||host.sectorId!==id||!host.rendered||JSON.stringify(draft)!==signature)throw new Error('Sector selection or edits changed. Nothing was added; drop again.');
-      const target=state.replace?.groupId||event.target.closest('[data-shop-group]')?.dataset.shopGroup||state.selectedGroup,result=putShopItem(draft.settlement.shop,doc,target,{replaceId:state.replace?.entryId});state.replace=null;state.selectedGroup=result.group.id;state.selectedEntryId=result.entry.id;state.collapsed.delete(result.group.id);state.revealSelected=true;
-      if(result.duplicate){ui.notifications.info('This Item is already in that group; selected its existing reference.');await host.render();return;}
+      const target=state.replace?.groupId||event.target.closest('[data-shop-group]')?.dataset.shopGroup||state.selectedGroup,result=putShopItem(draft.settlement.shop,doc,target,{replaceId:state.replace?.entryId});state.replace=null;state.selectedGroup=result.group.id;state.selectedEntryId=result.entry.id;state.collapsed.delete(result.group.id);
+      if(result.duplicate){state.revealSelected=true;ui.notifications.info('This Item is already in that group; selected its existing reference.');await host.render();return;}
       host.markDirty();const after=JSON.stringify(draft);try{await host.persistShop(journal,baseline);}catch(error){throw new Error(`Could not save Shop inventory: ${error.message}. The draft remains available; retry Save Sector.`);}if(host.draft===draft&&host.sectorId===id){if(JSON.stringify(draft)===after)host.dirty=wasDirty;await host.render();}
     }finally{host.droppingShop=false;}
   })());});
