@@ -667,3 +667,9 @@ sector type's collection; Special gear indicates presence without introducing a
 Collected state. Saved custom dropdown choices remain selected and are labeled
 Legacy/custom value until explicitly replaced. Avatar standardization is deferred.
 See [Phase 0/1 compatibility, extension points, and manual checks](https://github.com/paddirn/myz-sector-manager/blob/main/docs/ui-standardization.md).
+
+### Unified Inhabitant portraits and scroll preservation (0.1.50)
+
+Normal, Special and Settlement Inhabitants now share compact header avatars and larger previews. Linked Actor portraits take precedence over the editable **Saved Portrait (fallback)**, followed by a shared silhouette. Use **Choose Portrait** or type an image path, then **Save Sector**. Actor image updates refresh portraits without changing saved narrative snapshots or Actor documents.
+
+Sector Manager preserves sidebar and editor/nested-panel scroll positions during ordinary rerenders, including saving and reference hydration. Positions are local to the current window; nothing is added to sector records. See [Phase 2 architecture, safeguards and manual Foundry checks](docs/ui-phase2.md). The focused browser check is `node tests/ui-phase2-browser.cjs` (requires the same Playwright/Chromium setup as the other browser checks).

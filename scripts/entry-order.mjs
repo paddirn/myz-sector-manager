@@ -7,6 +7,12 @@ export function projectDisplayCompare(a,b,labelA,labelB,indexA,indexB){
 import {inhabitantCollection} from './inhabitants.mjs';
 // Move existing cards, never stored entries: field paths, IDs, progress and references stay paired.
 export function sortEditorEntries(host,root=host.element){
+ const view=root?.matches?.('.sm-root')?root:root?.querySelector?.('.sm-root');
+ const preserve=view?.isConnected&&host.scrollKeeper;
+ if(preserve)host.scrollKeeper.capture(view);
+ try{return sortEntries(host,root);}finally{if(preserve)host.scrollKeeper.restore(view);}
+}
+function sortEntries(host,root){
  const projects=host.data.sectorType==='settlement'&&host.tab==='Projects';
  if(!projects&&!inhabitantCollection(host.data,host.tab))return;
  const content=root.querySelector('.sm-content');if(!content)return;

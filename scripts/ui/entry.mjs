@@ -16,7 +16,7 @@ export function updateEntryCollapse(card,collapsed,{image=false,document=card?.o
  if(!card)return;
  const button=card.querySelector(image?'[data-image-toggle]':'[data-entry-toggle]'),body=card.querySelector(image?'[data-image-body]':'.sm-entry-body');if(!button||!body)return;
  card.classList.toggle('is-collapsed',collapsed);button.setAttribute('aria-expanded',String(!collapsed));card.querySelector(image?'[data-image-chevron]':'[data-chevron]').textContent=collapsed?'▶':'▼';
- if(collapsed&&body.contains(document?.activeElement))button.focus();body.hidden=collapsed;
+ if(collapsed&&body.contains(document?.activeElement))button.focus({preventScroll:true});body.hidden=collapsed;
 }
 const bindings=new WeakMap();
 export function unbindEntryCollapse(root){const previous=bindings.get(root);if(previous){root.removeEventListener('click',previous);bindings.delete(root);}}

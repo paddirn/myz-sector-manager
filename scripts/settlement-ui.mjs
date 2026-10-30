@@ -1,3 +1,4 @@
+import {avatarMarkup,portraitFields} from './ui/inhabitant-portraits.mjs';
 import {entryCard} from './ui/entry.mjs';
 import {selectOptions} from './ui/options.mjs';
 import {projectRequirement,projectReady,projectProgress,nextProjectProgress,writeArkProjectStatus} from './settlement-projects.mjs';
@@ -27,7 +28,7 @@ export function renderSettlement(host,{field,area,select,reference,terrainField}
     if(kind==='inhabitants'){
       const factions=[['','None'],...s.factions.map(f=>[f.id,f.title||'Unnamed faction'])];
       if(item.factionId&&!s.factions.some(f=>f.id===item.factionId))factions.push([item.factionId,'Missing faction (association preserved)']);
-      body=`${field('Role / Occupation',`${p}.role`,item.role)}${choice('Disposition Toward the Party',`${p}.disposition`,item.disposition,DISPOSITIONS)}<label class="sm-field"><span>Associated Faction</span><select name="${p}.factionId">${factions.map(([id,title])=>`<option value="${esc(id)}" ${id===item.factionId?'selected':''}>${esc(title)}</option>`).join('')}</select></label>${image('Portrait',`${p}.portrait`,item.portrait)}${ref('inhabitants',`${p}.uuid`,item.uuid)}`;
+      body=`${field('Role / Occupation',`${p}.role`,item.role)}${choice('Disposition Toward the Party',`${p}.disposition`,item.disposition,DISPOSITIONS)}<label class="sm-field"><span>Associated Faction</span><select name="${p}.factionId">${factions.map(([id,title])=>`<option value="${esc(id)}" ${id===item.factionId?'selected':''}>${esc(title)}</option>`).join('')}</select></label>${portraitFields(`${p}.portrait`,item.portrait)}${ref('inhabitants',`${p}.uuid`,item.uuid)}`;
     }
     if(kind==='events')body=choice('Status',`${p}.status`,item.status||'Planned',['Planned','Active','Resolved','Cancelled'])+[['Trigger / Conditions','trigger'],['Consequences / Outcomes','outcomes'],['Related NPCs or Factions','related']].map(([label,key])=>text(label,`${p}.${key}`,item[key],3)).join('');
     if(kind==='threads')body=choice('Status',`${p}.status`,item.status||'Open',['Open','In Progress','Resolved','Abandoned'])+[['Important NPCs','npcs'],['Associated Factions','factions'],['Clues / Discoveries','clues'],['Possible Developments','developments'],['Resolution / Outcome','resolution']].map(([label,key])=>text(label,`${p}.${key}`,item[key],3)).join('');
@@ -36,7 +37,7 @@ export function renderSettlement(host,{field,area,select,reference,terrainField}
   return `<div class="sm-section-header"><p>${kind==='projects'?'Drop an MYZ Ark Project Item from Items or a Compendium on the blank area, or add a Project and drop onto its reference. Changes save with Save Sector.':'Descriptive GM records; nothing executes or transfers automatically.'}</p><div class="sm-entry-controls">${entries.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}">+ Add ${esc(host.tab==='Projects'?'Project':host.tab==='Inhabitants'?'Inhabitant':host.tab==='Factions'?'Faction':host.tab==='Events'?'Event':'Thread')}</button></div></div>`+entries.map((item,i)=>{
     const id=state.entries[i].id,collapsed=state.collapsed.has(id),p=`${key}.${i}`;
     if(kind==='factions')return renderFaction(host,item,p,id,collapsed);
-    return entryCard({id,collection:key,collapsed,title:item.title||item.referenceName||`New ${host.tab.slice(0,-1)}`,cardAttributes:kind==='projects'?{'data-project-index':i}:{},remove:!(kind==='projects'&&item.arkSource),removeLabel:`Remove ${item.title||host.tab}`,body:fields(item,p,i)});
+    return entryCard({id,collection:key,collapsed,headerContent:kind==='inhabitants'?avatarMarkup():'',title:item.title||item.referenceName||`New ${host.tab.slice(0,-1)}`,cardAttributes:kind==='projects'?{'data-project-index':i}:{},remove:!(kind==='projects'&&item.arkSource),removeLabel:`Remove ${item.title||host.tab}`,body:fields(item,p,i)});
   }).join('')+(!entries.length?`<p class="sm-empty">No ${esc(host.tab.toLowerCase()==='shop'?'shops':host.tab.toLowerCase())} have been added to this settlement.</p>`:'');
 }
 

@@ -1,10 +1,9 @@
 import {sortEditorEntries} from './entry-order.mjs';
 import {inhabitantCollection,requireInhabitantActor,importInhabitant,safeNarrative} from './inhabitants.mjs';
 import {sectorCollection} from './sector-types.mjs';
-import {imagePath} from './sector-images.mjs';
 export async function selectInhabitant(host,key,entry,env=globalThis){
   const {ui}=env;
-  const state=host.entryState(key),record=state.entries.find(record=>record.item===entry);if(!record)return;state.collapsed.delete(record.id);await host.render();const card=host.element.querySelector(`[data-entry="${record.id}"]`);card?.scrollIntoView?.({block:'nearest'});card?.querySelector('[data-entry-toggle]')?.focus?.();ui.notifications.info('This Actor is already an Inhabitant here; selected the existing entry.');
+  const state=host.entryState(key),record=state.entries.find(record=>record.item===entry);if(!record)return;state.collapsed.delete(record.id);await host.render();const card=host.element.querySelector(`[data-entry="${record.id}"]`);host.scrollKeeper?.releaseFor(card);card?.scrollIntoView?.({block:'nearest'});card?.querySelector('[data-entry-toggle]')?.focus?.({preventScroll:true});ui.notifications.info('This Actor is already an Inhabitant here; selected the existing entry.');
 }
 export function hydrateInhabitants(host,root,env=globalThis){
   const key=inhabitantCollection(host.data,host.tab);if(!key)return;
@@ -12,9 +11,7 @@ export function hydrateInhabitants(host,root,env=globalThis){
     const card=target.closest('[data-entry]'),control=card.querySelector('textarea[name$=".details"]'),entry=sectorCollection(host.data,key)[Number(control.name.split('.').at(-2))];
     const update=()=>{target.hidden=entry?.detailsFormat!=='html';if(!target.hidden)target.innerHTML=safeNarrative(control.value,env);};update();control.addEventListener('input',update);
   }
-  for(const target of root.querySelectorAll('[data-imported-portrait]')){
-    const index=Number(target.dataset.importedPortrait),entry=sectorCollection(host.data,key)[index];target.hidden=!imagePath(entry?.portrait);if(!target.hidden)host.showImage(target,imagePath(entry.portrait),'Inhabitant portrait');
-  }
+  host.portraits?.hydrate(root);
 }
 // Called only on an explicit Actor drop, never during render/reference resolution.
 export async function linkInhabitant(host,zone,doc,env=globalThis){
