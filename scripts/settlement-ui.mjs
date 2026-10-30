@@ -1,3 +1,4 @@
+import {collectionActions} from './ui/actions.mjs';
 import {avatarMarkup,portraitFields} from './ui/inhabitant-portraits.mjs';
 import {entryCard} from './ui/entry.mjs';
 import {selectOptions} from './ui/options.mjs';
@@ -34,7 +35,7 @@ export function renderSettlement(host,{field,area,select,reference,terrainField}
     if(kind==='threads')body=choice('Status',`${p}.status`,item.status||'Open',['Open','In Progress','Resolved','Abandoned'])+[['Important NPCs','npcs'],['Associated Factions','factions'],['Clues / Discoveries','clues'],['Possible Developments','developments'],['Resolution / Outcome','resolution']].map(([label,key])=>text(label,`${p}.${key}`,item[key],3)).join('');
     return common+body+text('GM Notes',`${p}.notes`,item.notes);
   };
-  return `<div class="sm-section-header"><p>${kind==='projects'?'Drop an MYZ Ark Project Item from Items or a Compendium on the blank area, or add a Project and drop onto its reference. Changes save with Save Sector.':'Descriptive GM records; nothing executes or transfers automatically.'}</p><div class="sm-entry-controls">${entries.length>1?'<button type="button" data-expand-all>Expand All</button><button type="button" data-collapse-all>Collapse All</button>':''}<button type="button" data-action="add" data-collection="${key}">+ Add ${esc(host.tab==='Projects'?'Project':host.tab==='Inhabitants'?'Inhabitant':host.tab==='Factions'?'Faction':host.tab==='Events'?'Event':'Thread')}</button></div></div>`+entries.map((item,i)=>{
+  return `<div class="sm-section-header"><p>${kind==='projects'?'Drop an MYZ Ark Project Item from Items or a Compendium on the blank area, or add a Project and drop onto its reference. Changes save with Save Sector.':'Descriptive GM records; nothing executes or transfers automatically.'}</p>${collectionActions({key,count:entries.length})}</div>`+entries.map((item,i)=>{
     const id=state.entries[i].id,collapsed=state.collapsed.has(id),p=`${key}.${i}`;
     if(kind==='factions')return renderFaction(host,item,p,id,collapsed);
     return entryCard({id,collection:key,collapsed,headerContent:kind==='inhabitants'?avatarMarkup():'',title:item.title||item.referenceName||`New ${host.tab.slice(0,-1)}`,cardAttributes:kind==='projects'?{'data-project-index':i}:{},remove:!(kind==='projects'&&item.arkSource),removeLabel:`Remove ${item.title||host.tab}`,body:fields(item,p,i)});
@@ -104,7 +105,7 @@ export function bindSettlement(host){
     if(!game.user.isGM)throw new Error('Only a GM may edit Projects.');if(host.draft!==selectedDraft||host.sectorId!==selectedSector)throw new Error('Project selection changed; no update performed.');host.capture();const draft=host.draft,entry=draft.settlement.projects.find(p=>p.id===selectedId);if(!entry)throw new Error('Project selection changed.');
     const next=change(entry,host.projectTotals?.get(entry.id)??null),changed=next.status!==entry.status;
     host.projectSyncDepth=(host.projectSyncDepth||0)+1;
-    try{if(changed)await writeArkProjectStatus(draft.settlement,entry,next.status);if(host.draft!==draft)throw new Error('Sector changed during Project update. Reopen to refresh the Ark.');Object.assign(entry,next);host.markDirty();if(render)await host.render();else refreshProjectControls(host);}finally{host.projectSyncDepth--;}
+    try{if(changed){const written=await writeArkProjectStatus(draft.settlement,entry,next.status);if(written){host.saveNote='Native Ark Project updated; Discard cannot undo this source write';host.refreshSaveStatus?.();}}if(host.draft!==draft)throw new Error('Sector changed during Project update. Reopen to refresh the Ark.');Object.assign(entry,next);host.markDirty();if(render)await host.render();else refreshProjectControls(host);}finally{host.projectSyncDepth--;}
    });host.projectWrite=task;void report(task.catch(async error=>{if(host.draft===selectedDraft&&host.sectorId===selectedSector)await host.render();throw error;}));
   };
   for(const select of el.querySelectorAll('[data-project-status]'))select.addEventListener('change',()=>{const status=select.value;changeProject(Number(select.dataset.projectStatus),entry=>({...entry,status}),true);});
