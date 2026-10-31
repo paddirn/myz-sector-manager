@@ -20,7 +20,7 @@ test('repeated conversion retains both content sets, shared records, unknown fie
 test('Special Gear shares all six types and keeps positive integer quantities without adding collected flags',()=>{
   for(const type of ['scrap','armor','artifact','chassis','gear','weapon']){const entry=normalizeSpecialGear({title:'Unmodified',type,quantity:3,custom:'keep'});assert.equal(entry.type,type);assert.equal(entry.quantity,3);assert.equal(entry.title,'Unmodified');assert.equal(entry.collected,undefined);assert.equal(entry.custom,'keep');}
   for(const quantity of [undefined,0,-1,1.5,'bad',Infinity])assert.equal(normalizeSpecialGear({quantity}).quantity,1);
-  assert.equal(normalizeSpecialGear({type:'Unknown'}).type,'scrap');
+  assert.equal(normalizeSpecialGear({type:'Unknown'}).type,'Unknown');
 });
 test('shared display titles combine coordinates and editable names with normal fallback and no duplicate prefix',()=>{
   for(const sectorType of ['normal','special']){

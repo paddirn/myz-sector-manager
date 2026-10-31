@@ -45,5 +45,5 @@ test('documented operational distinctions are real: empty reference constraints,
  assert.throws(()=>validatePortable(file({sectorType:'settlement',settlement:{factions:[{id:'f',members:[{id:'member',uuid:''}]}]}})),/Actor reference/);
  const aliases=validatePortable(file({sectorType:'special',special:{inhabitants:[{id:'npc',name:'Mara',description:'A scout'}]}}));assert.equal(aliases.file.extensions.unknown.length,2);assert.equal(aliases.file.sector.special.inhabitants[0].title,undefined);
  const record=deserializeSector(file({sectorType:'special',special:{gear:[{quantity:0},{quantity:.5}]}}),{sceneId:'z',code:'A1'});assert.deepEqual(record.special.gear.map(entry=>entry.quantity),[1,1]);assert.equal(record.threatLevel,1);assert.equal(record.rot,0);
- const unknown=deserializeSector(file({sectorType:'special',special:{gear:[{type:'unsupported-category'}]}}),{sceneId:'z',code:'A1'});assert.equal(unknown.special.gear[0].type,'scrap');assert.equal(unknown.special.gear[0].legacyType,undefined);
+ const unknown=deserializeSector(file({sectorType:'special',special:{gear:[{type:'unsupported-category'}]}}),{sceneId:'z',code:'A1'});assert.equal(unknown.special.gear[0].type,'unsupported-category');assert.equal(unknown.special.gear[0].legacyType,undefined);
 });
