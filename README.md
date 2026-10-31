@@ -691,3 +691,13 @@ Special and Settlement Events share Event Title and Description controls while k
 Reference fields now share typed links, loading/missing/inaccessible/invalid states and **Attach or replace reference** controls. Attach accepts a Foundry UUID or you can keep dragging documents onto fields. Existing UUIDs and authored snapshots stay intact when a source is unavailable. Macro links open the editor; Scene links use GM-local viewing. Ordinary reference hydration does not block entry editing or save data.
 
 Document drops show local validation/progress feedback while retaining existing import, duplicate and collection-save rules. Image previews and FilePickers share safe loading/error handling, with the same Actor → saved portrait → silhouette policy for Inhabitants. See the [behavior matrix, architecture, changed files and live Foundry checklist](docs/ui-phase4a.md). Run `node tests/ui-phase4a-browser.cjs` using the existing browser-test setup for focused reference interactions.
+
+### Final interface consistency pass (0.1.54)
+
+Collection headings, empty messages, toolbar spacing, field sizing, reference
+buttons and image presentation now share scoped styling across sector types.
+Inhabitant name labels align, keyboard focus is visible, and narrow toolbars wrap
+while specialized Projects, Factions, Shop and Images retain their controls.
+Existing records and save behavior are unchanged. See [Phase 4C audit, changed
+files, intentional exceptions and manual checks](docs/ui-phase4c.md). Run
+`node tests/ui-phase4c-browser.cjs` for the 22-tab responsive browser check.

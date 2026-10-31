@@ -1,9 +1,10 @@
+import {collectionEmpty} from './presentation.mjs';
 // Presentation only. Callers supply model-specific quantity rules and extra
 // fields; existing manager/domain modules still own edits, links and persistence.
 import {entryCard,escapeEntryText as esc} from './entry.mjs';
 import {selectOptions} from './options.mjs';
 import {LOOT_TYPES,lootTitle} from '../loot.mjs';
-export function contentEmpty(kind){return `<div class="sm-empty">No ${esc(kind)}s yet. Add an ${esc(kind)} to get started.</div>`;}
+export function contentEmpty(kind){return collectionEmpty(kind==='item'?'loot':'special.events');}
 export function gearFields({item,prefix,quantity,minimum,step,reference='',extra='',warning=''}, {field,area}){
  const quantityControl=`<label class="sm-field"><span>Quantity</span><input name="${esc(prefix)}.quantity" type="number" min="${esc(minimum)}" step="${esc(step)}" value="${esc(quantity)}"></label>`;
  const type=`<label class="sm-field"><span>Type</span><select name="${esc(prefix)}.type">${selectOptions(item.type??'scrap',LOOT_TYPES,value=>value[0].toUpperCase()+value.slice(1))}</select></label>`;

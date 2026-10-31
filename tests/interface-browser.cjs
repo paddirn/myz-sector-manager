@@ -30,6 +30,7 @@ const path=require('node:path');
       .window-header{height:32px;flex-shrink:0}.window-content{flex:1;overflow:auto;padding:8px}
       button{cursor:pointer}textarea{font:inherit}input,select{height:28px}input[type=checkbox]{height:16px}
     </style>`);
+    await page.addStyleTag({content:readFileSync(path.join(root,'styles/interface.css'),'utf8')});
     await page.addScriptTag({content:`
       let ready;const initCallbacks=[];let identity=0;const hookCallbacks=new Map();globalThis.notifyErrors=[];globalThis.notifyWarnings=[];
       globalThis.nativeClicks=[];
@@ -98,6 +99,7 @@ const path=require('node:path');
     await page.addScriptTag({type:'module',url:origin+'/scripts/sector-manager.mjs'});
     await page.evaluate(async()=>{for(const callback of initCallbacks)callback();const {REFERENCE_DEFINITIONS}=await import('/scripts/document-references.mjs');await game.settings.set('myz-sector-manager','documentReferences',{formatVersion:1,references:Object.fromEntries(REFERENCE_DEFINITIONS.filter(def=>def.legacyUuid).map(def=>[def.key,{mode:'custom',uuid:def.legacyUuid}])),migration:{version:1,outcomes:[]}});await game.settings.set('myz-sector-manager','travelEventsConfiguration',{enabled:false});await ready();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
 
+    if(process.env.MYZ_PHASE4C_ONLY){await require('./ui-phase4c-browser.cjs')(page,assert);return;}
     if(process.env.MYZ_PHASE4A_ONLY){await require('./ui-phase4a-browser.cjs')(page,assert);return;}
     if(process.env.MYZ_PHASE4B_ONLY){await require('./ui-phase4b-browser.cjs')(page,assert);return;}
     if(process.env.MYZ_PHASE3_ONLY){await require('./ui-phase3-browser.cjs')(page,assert);return;}
@@ -939,7 +941,7 @@ const path=require('node:path');
     assert.equal(await page.locator(`[data-open="${await page.evaluate(()=>settlementId)}"].sm-sector-settlement`).count(),1);
     assert.equal(await page.locator('.sm-sector-settlement').first().evaluate(el=>getComputedStyle(el).borderLeftStyle),'solid');assert.equal(await page.locator('.sm-sector-settlement').first().evaluate(el=>getComputedStyle(el).borderLeftWidth),'4px');
     await page.locator('[data-tab="Projects"]').click();
-    assert.match(await page.locator('.sm-content').innerText(),/No projects have been added/);
+    assert.match(await page.locator('.sm-content').innerText(),/No projects available/);
     // Blank-area world/Compendium project drops remain draft-only until Save Sector.
     for(const uuid of ['Item.watchtower','Compendium.myz.projects.Item.watchtower']){
       await dropSpecial(page.locator('.sm-content'),uuid);await page.waitForFunction(()=>manager.draft.settlement.projects.length>0);

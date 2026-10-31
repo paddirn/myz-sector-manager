@@ -28,6 +28,6 @@ test('shared Event controls keep metadata and authored extensions separate witho
  assert.match(special,/Journal\/Page/);assert.doesNotMatch(special,/\.status|\.trigger|\.related|\.notes/);assert.match(settlement,/\.status/);assert.doesNotMatch(settlement,/data-reference/);
 });
 test('shared content renderers own no collection actions, listeners or save behavior; empty states match',()=>{
- assert.equal(contentEmpty('item'),'<div class="sm-empty">No items yet. Add an item to get started.</div>');assert.equal(contentEmpty('event'),'<div class="sm-empty">No events yet. Add an event to get started.</div>');
+ assert.match(contentEmpty('item'),/No gear or artifacts added/);assert.match(contentEmpty('event'),/No events added/);
  for(const html of [gearFields({item:{},prefix:'loot.0',quantity:1,minimum:0,step:'any'},render),eventFields({item:{},prefix:'special.events.0'},render)])assert.doesNotMatch(html,/data-action=|data-expand-all|onclick|onsubmit|<script/);
 });
