@@ -1,3 +1,4 @@
+import {imagePreview,pickImage} from './images.mjs';
 import {escapeEntryText as esc} from './entry.mjs';
 import {imagePath} from '../sector-images.mjs';
 import {safeImageSource} from '../zone/presentation.mjs';
@@ -10,6 +11,7 @@ export function placeholderImage(value,env=globalThis){const defaults=['icons/sv
 export function portraitSources(entry,actor,env=globalThis){const result=[],linked=actor?.documentName==='Actor'&&actor.testUserPermission?.(env.game?.user,'OBSERVER')!==false?safeImageSource(actor.img):null,saved=imagePath(entry?.portrait);if(linked&&!placeholderImage(linked,env))result.push({src:linked,kind:'Actor portrait'});if(saved&&!placeholderImage(saved,env)&&!result.some(r=>r.src===saved))result.push({src:saved,kind:'Saved portrait'});return result;}
 export class InhabitantPortraits {
  constructor(host,env=globalThis){this.host=host;this.env=env;this.cards=new WeakMap();this.hooks=[];this.liveActors=new Map();}
+ unavailable(uuid){this.liveActors.delete(uuid);}
  prepare(root){this.root=root;}
  entry(card){const key=inhabitantCollection(this.host.data,this.host.tab);if(!key||!card)return null;return this.host.entryState(key).entries.find(r=>r.id===card.dataset.entry)?.item;}
  reference(zone,actor){const card=zone.closest?.('[data-entry]');if(!card?.querySelector('[data-inhabitant-avatar]'))return;const entry=this.entry(card);if(!entry)return;this.paint(card,entry,this.liveActors.has(entry.uuid)?this.liveActors.get(entry.uuid):actor);}
@@ -17,7 +19,7 @@ export class InhabitantPortraits {
   const draft=this.host.draft,uuid=entry.uuid,request={actor,entry,draft,uuid,index:0},candidates=portraitSources(entry,actor,this.env);this.cards.set(card,request);
   const current=()=>this.cards.get(card)===request&&this.host.draft===draft&&entry.uuid===uuid&&this.root?.contains(card);
   const draw=()=>{if(!current())return;const candidate=candidates[request.index],targets=[card.querySelector('[data-inhabitant-avatar]'),card.querySelector('[data-inhabitant-portrait-preview]')].filter(Boolean);
-   for(const target of targets){target.replaceChildren();if(!candidate){target.setAttribute('role','img');target.setAttribute('aria-label','No portrait available');target.innerHTML=silhouette;continue;}target.removeAttribute('role');target.removeAttribute('aria-label');const img=this.env.document.createElement('img');img.alt=`${entry.title||'Inhabitant'} portrait`;img.draggable=false;img.loading='lazy';const index=request.index;img.addEventListener('error',()=>{if(current()&&request.index===index){request.index++;draw();}},{once:true});img.src=candidate.src;target.append(img);}
+   for(const target of targets){target.replaceChildren();if(!candidate){target.setAttribute('role','img');target.setAttribute('aria-label','No portrait available');target.innerHTML=silhouette;continue;}target.removeAttribute('role');target.removeAttribute('aria-label');const index=request.index;imagePreview(target,candidate.src,`${entry.title||'Inhabitant'} portrait`,'No portrait available',{env:this.env,current,onError:()=>{if(current()&&request.index===index){request.index++;draw();}}});}
    const status=card.querySelector('[data-inhabitant-portrait-source]');if(status)status.textContent=candidate?`${candidate.kind} displayed.${candidate.kind==='Actor portrait'?' Saved portrait is retained as a fallback.':''}`:'No portrait available; showing the default silhouette.';
   };draw();
  }
@@ -25,10 +27,10 @@ export class InhabitantPortraits {
  bind(root){
   this.unbind?.();this.root=root;const input=event=>{if(!event.target.matches('[data-inhabitant-portrait-path]'))return;const card=event.target.closest('[data-entry]'),entry=this.entry(card);if(entry)this.paint(card,entry,this.cards.get(card)?.actor);};
   const pick=async event=>{const button=event.target.closest('[data-inhabitant-portrait-pick]');if(!button)return;event.preventDefault();if(!this.env.game.user.isGM)return;const card=button.closest('[data-entry]'),entry=this.entry(card),draft=this.host.draft;if(!entry)return;
-   try{const Picker=this.env.foundry.applications.apps.FilePicker.implementation;await new Picker({type:'image',current:entry.portrait||'',callback:value=>{if(this.host.draft!==draft||!card.isConnected||this.entry(card)!==entry)return;const path=imagePath(value);if(!path){this.env.ui.notifications.warn('Choose a supported image file path.');return;}const control=card.querySelector('[data-inhabitant-portrait-path]');control.value=path;this.host.capture();this.host.markDirty();this.paint(card,entry,this.cards.get(card)?.actor);}}).render(true);}catch(error){this.env.ui.notifications.error(`Inhabitant portrait: ${error.message}`);}
+   try{await pickImage({path:entry.portrait||'',current:()=>this.host.draft===draft&&card.isConnected&&this.entry(card)===entry,onSelect:path=>{const control=card.querySelector('[data-inhabitant-portrait-path]');control.value=path;this.host.capture();this.host.markDirty();this.paint(card,entry,this.cards.get(card)?.actor);}},this.env);}catch{this.env.ui.notifications.error('Inhabitant portrait picker could not be opened.');}
   };
   root.addEventListener('input',input);root.addEventListener('click',pick);this.unbind=()=>{root.removeEventListener('input',input);root.removeEventListener('click',pick);};
-  if(!this.hooks.length){for(const name of ['updateActor','deleteActor']){const id=this.env.Hooks?.on(name,(actor)=>{if(!this.host.rendered||!this.env.game.user.isGM)return;this.liveActors.set(actor.uuid,name==='deleteActor'?null:actor);for(const card of this.root?.querySelectorAll('[data-entry]')||[]){const entry=this.entry(card);if(entry?.uuid===actor.uuid){this.paint(card,entry,name==='deleteActor'?null:actor);if(name==='deleteActor'){const zone=card.querySelector('[data-reference]');if(zone)void this.host.renderReference(zone);}}}});this.hooks.push([name,id]);}}
+  if(!this.hooks.length&&!this.host.referenceHooks?.length){for(const name of ['updateActor','deleteActor']){const id=this.env.Hooks?.on(name,(actor)=>{if(!this.host.rendered||!this.env.game.user.isGM)return;this.liveActors.set(actor.uuid,name==='deleteActor'?null:actor);for(const card of this.root?.querySelectorAll('[data-entry]')||[]){const entry=this.entry(card);if(entry?.uuid===actor.uuid){this.paint(card,entry,name==='deleteActor'?null:actor);if(name==='deleteActor'){const zone=card.querySelector('[data-reference]');if(zone)void this.host.renderReference(zone);}}}});this.hooks.push([name,id]);}}
  }
  stop(){this.unbind?.();this.unbind=null;for(const [name,id] of this.hooks)this.env.Hooks?.off(name,id);this.hooks=[];this.liveActors.clear();this.root=null;}
 }

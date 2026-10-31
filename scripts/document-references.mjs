@@ -1,3 +1,4 @@
+import {resolveDocument} from './ui/documents.mjs';
 import {resultFields,resultReference} from './rolltable-results.mjs';
 export const MODULE='myz-sector-manager',REFERENCE_SETTING='documentReferences',FORMAT_VERSION=1;
 const generation=[
@@ -50,8 +51,7 @@ export async function validateReference(key,env=globalThis,configuration=referen
  if(!uuid){if(mode!=='disabled')result.error='No bundled default is available; assign a world or compendium document.';return result;}
  if(typeof uuid!=='string'||uuid.length>512||!/^[A-Za-z0-9_.-]+$/.test(uuid)){return {...result,status:'Missing',error:'Invalid document UUID.'};}
  try{
-  const document=await env.fromUuid(uuid);
-  if(!document)return {...result,status:'Missing',error:`Document ${uuid} is missing.`};
+  const resolved=await resolveDocument(uuid,'',env);if(resolved.state!=='valid')return {...result,status:resolved.state==='missing'||resolved.state==='invalid'?'Missing':'Inaccessible',error:resolved.message};const document=resolved.doc;
   result.name=String(document.name||'');
   if(document.documentName!==definition.documentType)return {...result,status:'Wrong Document Type',error:`Expected ${definition.documentType}, got ${document.documentName}.`};
   if(document.testUserPermission&&!document.testUserPermission(env.game?.user,'OBSERVER'))return {...result,status:'Inaccessible',error:'Observer access is required.'};

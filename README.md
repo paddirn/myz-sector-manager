@@ -685,3 +685,9 @@ Closing or leaving a dirty Normal, Special or Settlement sector offers **Save Ch
 Normal Loot and Special Gear now share Item fields, card layout, labels and empty states. Normal quantities support zero and decimals (`step="any"`); Special Gear keeps positive whole quantities. Collected/consumables remain Normal-only. Nonempty custom Item types stay selected as legacy/custom choices. Reference hydration leaves stored Item classifications unchanged; explicit assignment keeps the existing inference behavior.
 
 Special and Settlement Events share Event Title and Description controls while keeping their own reference/status/trigger/outcome/related/GM-note fields. Existing saves, collection drops, removal confirmations, scroll/focus and unsaved-change protection remain. See [Phase 4B details, changed files and backup-world checks](docs/ui-phase4b.md). The focused check is `node tests/ui-phase4b-browser.cjs`, using the existing browser-test setup.
+
+### Shared references, drop feedback and image previews (0.1.53)
+
+Reference fields now share typed links, loading/missing/inaccessible/invalid states and **Attach or replace reference** controls. Attach accepts a Foundry UUID or you can keep dragging documents onto fields. Existing UUIDs and authored snapshots stay intact when a source is unavailable. Macro links open the editor; Scene links use GM-local viewing. Ordinary reference hydration does not block entry editing or save data.
+
+Document drops show local validation/progress feedback while retaining existing import, duplicate and collection-save rules. Image previews and FilePickers share safe loading/error handling, with the same Actor → saved portrait → silhouette policy for Inhabitants. See the [behavior matrix, architecture, changed files and live Foundry checklist](docs/ui-phase4a.md). Run `node tests/ui-phase4a-browser.cjs` using the existing browser-test setup for focused reference interactions.

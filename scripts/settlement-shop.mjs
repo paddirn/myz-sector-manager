@@ -1,3 +1,4 @@
+import {requireDocument,checkDocument,validUuid} from './ui/documents.mjs';
 import {normalizeTrading} from './settlement-trading.mjs';
 // The single Shop stores references only. Legacy merchant data stays in settlement.shops as a recovery archive.
 const id=()=>globalThis.foundry?.utils?.randomID?.()||globalThis.crypto.randomUUID();
@@ -52,18 +53,19 @@ export async function resolveShopDrop(payload,env=globalThis){
   if(!payload||typeof payload!=='object'||Array.isArray(payload)||(!payload.uuid&&!['Item','Actor'].includes(payload.type)))throw new Error('Invalid or unsupported drag data. Drop a Foundry Item document.');
   if(payload.type==='Actor'||payload.type!=='Item'&&/(?:^|[.])Actor[.][^.]+$/.test(payload.uuid||'')){
     const ActorClass=env.CONFIG?.Actor?.documentClass||env.Actor?.implementation||env.Actor;
-    const doc=typeof ActorClass?.fromDropData==='function'?await ActorClass.fromDropData(payload):await env.fromUuid?.(payload.uuid);return requireVehicle(doc,env);
+    if(!ActorClass?.fromDropData&&typeof env.fromUuid!=='function')throw new Error('Shop inventory requires a Foundry Vehicle Actor or Item document.');
+    const doc=typeof ActorClass?.fromDropData==='function'?await ActorClass.fromDropData(payload):await requireDocument(payload.uuid,'Actor',env);checkDocument(doc,'Actor',env);return requireVehicle(doc,env);
   }
   if(payload.type&&payload.type!=='Item')throw new Error('Shop inventory requires a Foundry Item document.');
   const ItemClass=env.CONFIG?.Item?.documentClass||env.Item?.implementation||env.Item;
   let doc;
   try{
     if(typeof ItemClass?.fromDropData==='function')doc=await ItemClass.fromDropData(payload);
-    else if(payload.uuid)doc=await env.fromUuid(payload.uuid);
+    else if(payload.uuid)doc=await requireDocument(payload.uuid,'Item',env);
     else throw new Error('The Foundry Item drop resolver is unavailable.');
   }catch(error){throw new Error(`Unable to resolve dropped Item${payload.uuid?` (${payload.uuid})`:''}. Check the source document and Compendium access: ${error.message}`);}
   if(!doc)throw new Error(`Dropped Item${payload.uuid?` (${payload.uuid})`:''} is missing or inaccessible. Check the source document and Compendium access.`);
-  requireShopItem(doc);
+  checkDocument(doc,'Item',env);requireShopItem(doc);
   if(!doc.uuid)throw new Error('The dropped Item has no stable UUID; save it before adding it to the Shop.');
   return doc;
 }
@@ -80,8 +82,8 @@ export const vehiclePassengers=(entry,doc)=>entry?.passengers!==undefined?String
 export const vehicleTravelType=(entry,doc)=>TRAVEL_TYPES.includes(entry?.travelType)?entry.travelType:TRAVEL_TYPES.includes(doc?.system?.travelType)?doc.system.travelType:'Land';
 export function initializeVehicleTravel(entry,doc){if(entry.travelType===undefined)entry.travelType=vehicleTravelType(entry,doc);return entry;}
 export async function resolveShopItem(uuid,env=globalThis){
-  if(typeof uuid!=='string'||!/^[A-Za-z0-9_.-]+$/.test(uuid))throw new Error('Invalid Item UUID');
-  const doc=await env.fromUuid(uuid);if(doc?.documentName==='Actor'){requireVehicle(doc,env);return {doc,fields:vehicleFields(doc)};}requireShopItem(doc);return {doc,fields:shopItemFields(doc,env)};
+  if(!validUuid(uuid))throw new Error('Invalid Item UUID');
+  let doc;try{doc=await requireDocument(uuid,'Item|Actor',env);}catch(error){if(error.state==='missing')throw new Error('Foundry Item document is missing or inaccessible.');throw error;}if(doc?.documentName==='Actor'){requireVehicle(doc,env);return {doc,fields:vehicleFields(doc)};}requireShopItem(doc);return {doc,fields:shopItemFields(doc,env)};
 }
 export function putShopItem(shop,doc,groupId,{replaceId=null}={}){
   if(doc?.documentName==='Actor')requireVehicle(doc);else requireShopItem(doc);if(!doc.uuid)throw new Error('The Item needs a stable UUID.');

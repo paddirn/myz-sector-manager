@@ -1,3 +1,5 @@
+import {beginDrop,dropTarget} from './ui/drop.mjs';
+import {requireDocument,parseDocumentDrop} from './ui/documents.mjs';
 import {sortEditorEntries} from './entry-order.mjs';
 import {inhabitantCollection,requireInhabitantActor,importInhabitant,safeNarrative} from './inhabitants.mjs';
 import {sectorCollection} from './sector-types.mjs';
@@ -14,30 +16,31 @@ export function hydrateInhabitants(host,root,env=globalThis){
   host.portraits?.hydrate(root);
 }
 // Called only on an explicit Actor drop, never during render/reference resolution.
-export async function linkInhabitant(host,zone,doc,env=globalThis){
+export async function linkInhabitant(host,zone,doc,env=globalThis,current=()=>true){
   const key=inhabitantCollection(host.data,host.tab);if(!key||doc.documentName!=='Actor')return true;
   host.capture();const input=zone.querySelector('input'),entry=host.referenceEntry(zone);if(!entry)return true;
   const duplicate=sectorCollection(host.data,key).find(item=>item!==entry&&item.uuid===doc.uuid);if(duplicate&&entry.uuid!==doc.uuid){await selectInhabitant(host,key,duplicate,env);return false;}
   const draft=host.draft,signature=JSON.stringify(draft),next=await importInhabitant(entry,doc,env);
-  if(host.draft!==draft||JSON.stringify(draft)!==signature||!host.element.contains(zone))throw new Error('Sector edits changed while importing Actor Info. Drop again.');
+  if(!current()||host.referenceClosed||host.draft!==draft||JSON.stringify(draft)!==signature||!host.element.contains(zone))throw new Error('Sector edits changed while importing Actor Info. Drop again.');
   Object.assign(entry,next);input.value=doc.uuid;
   const card=zone.closest('[data-entry]');for(const name of ['title','details','portrait']){const control=card?.querySelector(`[name$=".${name}"]`);if(control)control.value=entry[name]||'';}
   const title=card?.querySelector('[data-entry-title]');if(title)title.textContent=entry.title||'Inhabitant';hydrateInhabitants(host,host.element,env);sortEditorEntries(host);return true;
 }
 export async function dropInhabitant(host,event,key=inhabitantCollection(host.data,host.tab),env=globalThis){
-  const {game,foundry,ui,fromUuid}=env;
+  const {game,foundry,ui}=env;
   if(!game.user.isGM||!key||host.droppingInhabitant)return;
-  host.handledActorDrops??=new WeakSet();if(host.handledActorDrops.has(event))return;host.handledActorDrops.add(event);host.droppingInhabitant=true;
+  host.handledActorDrops??=new WeakSet();if(host.handledActorDrops.has(event))return;host.handledActorDrops.add(event);host.droppingInhabitant=true;const finish=beginDrop(host,dropTarget(event,host));
   try{
     const journal=host.journal,saved=journal?.getFlag('myz-sector-manager','sector');if(!journal?.id||journal.isTemporary||saved?.initialSavePending)throw new Error('Save this sector before dropping Actors to create Inhabitants.');
     host.capture();const draft=host.draft,id=host.sectorId,signature=JSON.stringify(draft),wasDirty=host.dirty,baseline=JSON.stringify(sectorCollection(saved,key));
-    const payload=foundry.applications.ux.TextEditor.implementation.getDragEventData(event),doc=requireInhabitantActor(payload.uuid?await fromUuid(payload.uuid):null);
+    const payload=parseDocumentDrop(event,env),doc=requireInhabitantActor(payload.uuid?await requireDocument(payload.uuid,'',env):null);
     const next=await importInhabitant({id:foundry.utils.randomID(),title:'',details:'',...(key==='encounters'?{status:'Active',type:'Encounter'}:{})},doc,env);
-    if(host.draft!==draft||host.sectorId!==id||host.rendered===false||JSON.stringify(draft)!==signature)throw new Error('Sector selection or edits changed. Nothing was added; drop again.');
-    const duplicate=sectorCollection(draft,key).find(entry=>entry.uuid===doc.uuid);if(duplicate){await selectInhabitant(host,key,duplicate,env);return;}
+    if(host.referenceClosed||host.draft!==draft||host.sectorId!==id||host.rendered===false||JSON.stringify(draft)!==signature)throw new Error('Sector selection or edits changed. Nothing was added; drop again.');
+    const duplicate=sectorCollection(draft,key).find(entry=>entry.uuid===doc.uuid);if(duplicate){await selectInhabitant(host,key,duplicate,env);finish('completed');return;}
     sectorCollection(draft,key).push(next);host.entryState(key);host.markDirty();const after=JSON.stringify(draft);await host.persistInhabitants(key,journal,baseline);
     if(host.draft===draft&&host.sectorId===id){if(JSON.stringify(draft)===after)host.dirty=wasDirty;await host.render();}
-  }catch(error){ui.notifications.error(`Inhabitants: ${error.message}`);}finally{host.droppingInhabitant=false;}
+    finish('completed');
+  }catch(error){finish('failed');ui.notifications.error(`Inhabitants: ${error.message}`);}finally{host.droppingInhabitant=false;}
 }
 export function bindInhabitantDrops(host){
   const key=inhabitantCollection(host.data,host.tab);if(!key)return;const content=host.element.querySelector('.sm-content');

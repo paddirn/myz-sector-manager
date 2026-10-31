@@ -1,3 +1,5 @@
+import {requireDocument,parseDocumentDrop} from '../ui/documents.mjs';
+import {documentLink,referenceState} from '../ui/reference.mjs';
 import {sceneCellSize,canonicalCoordinate,displayGridCounts,storedGridCounts} from './grid.mjs';
 export const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const number=(label,name,value,extra='')=>`<label>${label}<input type="number" name="${name}" value="${escapeHTML(value)}" step="any" ${extra}></label>`;
@@ -14,7 +16,7 @@ export function createZoneConfigClass(ApplicationV2) {
       return option('','None',selected)+tokens.map(token=>option(token.id,token.name,selected)).join('')+(selected&&!tokens.some(token=>token.id===selected)?option(selected,'Missing token (clear or replace)',selected):'');
     }
     async _renderHTML(){
-      const root=document.createElement('div');root.className='zm-config';
+      const root=document.createElement('div');root.className='zm-config';this.actorReferenceRoot=root;
       const grid=this.draft.grid,counts=displayGridCounts(grid), size=this.unit==='cells'?sceneCellSize(this.scene):{width:1,height:1};
       const sectors=game.journal.filter(doc=>doc.getFlag('myz-sector-manager','sector')?.version===1).filter(doc=>canonicalCoordinate(doc.getFlag('myz-sector-manager','sector').code));
       const scenes=Array.from(game.scenes.values()).sort((a,b)=>a.name.localeCompare(b.name));
@@ -58,18 +60,10 @@ export function createZoneConfigClass(ApplicationV2) {
     }
     assignToken(old,tokenId){return old?.tokenId===tokenId&&old?.sceneId===this.draft.sceneId?{...old}:{sceneId:this.draft.sceneId,tokenId,lastKnown:null};}
     async renderActor(row){
-      const uuid=row.querySelector('[name="group-actor"]').value,target=row.querySelector('[data-actor-link]');
+      const uuid=row.querySelector('[name="group-actor"]').value,target=row.querySelector('[data-actor-link]'),request=row.actorRequest=(row.actorRequest||0)+1;
+      const current=()=>row.actorRequest===request&&row.querySelector('[name="group-actor"]').value===uuid&&this.actorReferenceRoot?.contains(row);
       if(!uuid){target.textContent='Drop an optional Actor here';return;}
-      try{
-        if(!/^[A-Za-z0-9_.-]+$/.test(uuid))throw new Error('Invalid UUID');
-        const doc=await fromUuid(uuid);
-        if(!doc||doc.documentName!=='Actor')throw new Error('Actor missing');
-        const html=await foundry.applications.ux.TextEditor.implementation.enrichHTML(`@UUID[${uuid}]`,{documents:true,links:false,rolls:false,embeds:false,custom:false});
-        if(row.querySelector('[name="group-actor"]').value!==uuid)return;
-        target.innerHTML=html;
-        const link=target.querySelector('a.content-link');
-        if(link){link.tabIndex=0;link.addEventListener('click',async event=>{event.preventDefault();event.stopPropagation();try{const current=await fromUuid(uuid);if(!current)throw new Error('Actor no longer exists.');await current._onClickDocumentLink(event);}catch(error){ui.notifications.warn(error.message);}});link.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();link.click();}});}
-      }catch{if(row.querySelector('[name="group-actor"]').value===uuid)target.textContent=`Actor unavailable (${uuid})`;}
+      referenceState(target,'resolving');try{const doc=await requireDocument(uuid,'Actor',globalThis);if(!current())return;referenceState(target,'valid');target.replaceChildren(documentLink(doc,{env:globalThis,current}));}catch(error){if(current())referenceState(target,error.state||'unavailable',{uuid,types:'Actor'});}
     }
     async _onRender(context,options){
       await super._onRender(context,options);
@@ -102,7 +96,7 @@ export function createZoneConfigClass(ApplicationV2) {
         row.querySelector('.zm-actor').addEventListener('dragover',event=>event.preventDefault());
         row.querySelector('.zm-actor').addEventListener('drop',run(async event=>{
           event.preventDefault();event.stopPropagation();
-          const data=foundry.applications.ux.TextEditor.implementation.getDragEventData(event),actor=await fromUuid(data.uuid);
+          const data=parseDocumentDrop(event,globalThis),actor=await requireDocument(data.uuid,'Actor',globalThis);
           if(actor?.documentName!=='Actor')throw new Error('Drop an Actor document.');
           if(!this.element.contains(row))return;
           row.querySelector('[name="group-actor"]').value=actor.uuid;await this.renderActor(row);
@@ -120,6 +114,6 @@ export function createZoneConfigClass(ApplicationV2) {
         await this.runtime.store.save({...this.runtime.store.config,sceneId:'',grid:null,arkCoordinate:null,groups:[]});await this.close();
       }));
     }
-    async _onClose(options){this.runtime.calibrator.cancel();this.runtime.overlay.cancelPick?.();await super._onClose(options);}
+    async _onClose(options){this.actorReferenceRoot=null;this.runtime.calibrator.cancel();this.runtime.overlay.cancelPick?.();await super._onClose(options);}
   };
 }
