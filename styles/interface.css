@@ -1,0 +1,76 @@
+/* Phase 4C: targeted shared presentation; all rules are local to this app. */
+.myz-sector-manager {
+  --sm-ui-gap: .5rem;
+  --sm-ui-radius: 4px;
+  --sm-ui-border: var(--color-border-light-primary, #888);
+  --sm-ui-accent: var(--color-border-highlight, #a87b3c);
+}
+.myz-sector-manager .sm-content > [data-collection-heading] {
+  margin: 0 0 .75rem; font-size: 1.05em; line-height: 1.4;
+}
+.myz-sector-manager .sm-main .sm-section-header {
+  align-items: flex-start; gap: var(--sm-ui-gap); margin-block-end: .75rem;
+}
+.myz-sector-manager .sm-section-header > p { flex: 1 1 15rem; min-width: 0; overflow-wrap: anywhere; }
+.myz-sector-manager .sm-section-header > .sm-entry-controls {
+  flex: 0 1 auto; max-width: 100%; gap: var(--sm-ui-gap); justify-content: flex-end;
+}
+.myz-sector-manager .sm-entry-controls > button { max-width: 100%; }
+.myz-sector-manager .sm-entry-controls > [data-action="add"],
+.myz-sector-manager [data-shop-add-group],
+.myz-sector-manager [data-action="save"] { font-weight: 700; border-color: var(--sm-ui-accent); }
+.myz-sector-manager .sm-collection-action,
+.myz-sector-manager .sm-entry-remove,
+.myz-sector-manager .sm-reference-row > button { border-radius: var(--sm-ui-radius); min-height: 2rem; }
+.myz-sector-manager .sm-reference .sm-reference-row > button { width: 2rem; flex: 0 0 2rem; padding: .25rem; }
+.myz-sector-manager .sm-entry-controls i,
+.myz-sector-manager .sm-reference-row i { font-size: 1em; line-height: 1; }
+.myz-sector-manager .sm-entry-remove { color: var(--color-level-error, #9b342d); }
+.myz-sector-manager .sm-collection-action:not(:disabled):hover,
+.myz-sector-manager .sm-entry-remove:not(:disabled):hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+.myz-sector-manager .sm-shell :is(button, input, select, textarea, summary, a):focus-visible {
+  outline: 2px solid var(--sm-ui-accent); outline-offset: 2px;
+}
+.myz-sector-manager .sm-shell button:disabled { opacity: .55; cursor: not-allowed; }
+.myz-sector-manager .sm-main .sm-tabs button.active { text-decoration: underline; text-underline-offset: .2em; }
+.myz-sector-manager .sm-main .sm-field > span,
+.myz-sector-manager .sm-reference > .sm-reference-label { font-size: .95em; font-weight: 600; line-height: 1.4; }
+.myz-sector-manager .sm-grid > .sm-field:has(input[name$=".title"]) { grid-column: 1 / -1; }
+.myz-sector-manager .sm-grid .sm-field > input[name$=".quantity"] { width: min(100%, 12ch); min-width: 0; }
+.myz-sector-manager .sm-grid .sm-field > select { width: fit-content; min-width: min(12ch, 100%); max-width: 100%; }
+.myz-sector-manager .sm-main .sm-field > :is(input, select, textarea) { min-width: 0; max-width: 100%; }
+.myz-sector-manager .sm-reference > input:not([type="hidden"]) { width: 100%; min-width: 0; box-sizing: border-box; }
+.myz-sector-manager .sm-main .sm-field > :is(input:not([type="checkbox"]), select) { min-height: 2rem; }
+.myz-sector-manager .sm-main .sm-field > textarea:not([data-autosize]) { max-height: 28rem; resize: vertical; }
+.myz-sector-manager .sm-field > textarea[rows="3"] { min-height: 4.5em; }
+.myz-sector-manager .sm-field > textarea[rows="5"] { min-height: 7em; }
+.myz-sector-manager .sm-field > textarea[name$=".notes"],
+.myz-sector-manager .sm-field > textarea[name="notes"] { min-height: 8em; }
+.myz-sector-manager .sm-field > small { font-size: .9em; line-height: 1.4; }
+.myz-sector-manager .sm-main .sm-empty {
+  padding: .65rem .75rem; margin-block: .5rem; opacity: .85;
+  overflow-wrap: anywhere; border-inline-start: 2px solid var(--sm-ui-border);
+}
+.myz-sector-manager .sm-empty > p { margin: 0; }
+.myz-sector-manager .sm-empty > small { display: block; margin-block-start: .25rem; line-height: 1.4; }
+.myz-sector-manager .sm-faction-gallery > .sm-empty { flex-basis: 100%; }
+.myz-sector-manager .sm-reference [data-reference-link][data-reference-state] { border: 0; padding-inline-start: 0; font-style: normal; }
+.myz-sector-manager .sm-reference [data-reference-state="resolving"] { opacity: .8; }
+.myz-sector-manager .sm-inhabitant-avatar,
+.myz-sector-manager .sm-inhabitant-portrait-preview,
+.myz-sector-manager .sm-faction-member img,
+.myz-sector-manager [data-member-image],
+.myz-sector-manager .sm-image-preview { border-radius: var(--sm-ui-radius); }
+.myz-sector-manager .sm-image-preview { border: 1px solid var(--sm-ui-border); box-sizing: border-box; }
+.myz-sector-manager [data-image-state="loading"] img { opacity: .65; }
+.myz-sector-manager .sm-main .sm-header > div:first-child { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.myz-sector-manager .sm-header-buttons { max-width: 100%; }
+@container (max-width: 480px) {
+  .myz-sector-manager .sm-section-header > .sm-entry-controls { justify-content: flex-start; width: 100%; }
+  .myz-sector-manager .sm-section-header > p { flex-basis: 100%; }
+  .myz-sector-manager .sm-entry-controls > button { flex: 0 1 auto; }
+}
+.myz-sector-manager .sm-projects-grid > [data-collection-heading] { grid-column: 1 / -1; }
+@container (max-width: 480px) {
+  .myz-sector-manager .sm-shop .sm-shop-rates { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
