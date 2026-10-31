@@ -166,8 +166,9 @@ Use a backed-up official MYZ world. These checks require a live Foundry install.
    before completion, including one marked defeated. Rename another participant.
    Include two combatants with the same display name.
 3. Use native **End Combat**. Verify the v14 `deleteCombat` callback occurs and
-   exactly one Combat Encounter note includes all observed participants, the last
-   names/Actor UUIDs, Defeated markers, timestamp and original visit. No HP/rounds/
+   exactly one Combat Encounter note includes all observed participants grouped
+   by name/status, correct individual counts, readable local header time and the
+   original visit. UUIDs/Scene/sector context stay internal. No HP/rounds/
    victory/dice transcript should appear. If this v14 build ends without deleting
    the Combat document, stop release testing and report its actual lifecycle;
    deactivation must not be guessed as completion.
@@ -211,3 +212,39 @@ Use a backed-up official MYZ world. These checks require a live Foundry install.
   use session notes unless the existing visit/Scene relationship actually matches.
 - Terminal source-Combat receipts are deliberately retained even after note/session
   deletion to preserve idempotency. No automatic archival/pruning is introduced.
+
+## Concise presentation update (0.1.57)
+
+Only `combatNoteText` and note presentation change. New stored/exported note text
+starts with **Combat Encounter**, then Defeated and Other Participants groups.
+Grouping is exact-name and status-specific, preserving first-observed order within
+each section. Counts include every individual even when rows collapse to ×N.
+Defeated singletons show ×1; other singletons show just their name. Empty sections
+are omitted; a zero-participant encounter retains the existing explanatory text.
+
+No source encounter name, Scene/location, UUID or completion timestamp is appended
+to the new body. The existing category header supplies the visible title once;
+its date uses the viewer's locale/timezone with long date and short time. The
+saved `createdAt` remains unchanged for ordering, persistence and export. An
+explicit America/New_York test checks that 23:30:48.253Z displays as 7:30 PM rather
+than UTC, seconds or milliseconds. Native note text remains escaped plain text.
+
+No lifecycle, eligibility, snapshot/identity, visit, persistence, schema or
+deduplication logic changes. Existing bodies, including GM edits and older
+technical content, are not rewritten. The UI only avoids repeating the exact
+new constant-title prefix; editing/export still sees the full original text.
+
+Validation: 556 Node tests pass, including four new presentation/legacy/timezone
+tests and existing Campaign Log regressions. Both Campaign Log and combat browser
+suites pass; syntax, workflow lint, packaging and ZIP checks are also run for
+0.1.57. Modified files: `scripts/campaign/combat.mjs`, `scripts/campaign/ui.mjs`,
+`tests/campaign-combat.test.mjs`, `tests/campaign-combat-browser.cjs`, `module.json`,
+`README.md`, `docs/campaign-log.md` and this document.
+
+Manual check in a backup Foundry v14 world: finish a fight with duplicate names
+across both defeated states, inspect correct group counts and a single local
+header timestamp, verify the original visit, edit/export the note, and replay
+completion without duplication. Reopen an old edited note to verify its body is
+unchanged. Live Foundry/theme verification remains outstanding; local tests use
+simulated APIs. Viewer locale determines exact date punctuation and 12/24-hour
+clock. No tag or release is published by this update.
