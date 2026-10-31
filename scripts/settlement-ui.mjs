@@ -1,3 +1,4 @@
+import {eventEntry,contentEmpty} from './ui/content.mjs';
 import {collectionActions} from './ui/actions.mjs';
 import {avatarMarkup,portraitFields} from './ui/inhabitant-portraits.mjs';
 import {entryCard} from './ui/entry.mjs';
@@ -31,15 +32,15 @@ export function renderSettlement(host,{field,area,select,reference,terrainField}
       if(item.factionId&&!s.factions.some(f=>f.id===item.factionId))factions.push([item.factionId,'Missing faction (association preserved)']);
       body=`${field('Role / Occupation',`${p}.role`,item.role)}${choice('Disposition Toward the Party',`${p}.disposition`,item.disposition,DISPOSITIONS)}<label class="sm-field"><span>Associated Faction</span><select name="${p}.factionId">${factions.map(([id,title])=>`<option value="${esc(id)}" ${id===item.factionId?'selected':''}>${esc(title)}</option>`).join('')}</select></label>${portraitFields(`${p}.portrait`,item.portrait)}${ref('inhabitants',`${p}.uuid`,item.uuid)}`;
     }
-    if(kind==='events')body=choice('Status',`${p}.status`,item.status||'Planned',['Planned','Active','Resolved','Cancelled'])+[['Trigger / Conditions','trigger'],['Consequences / Outcomes','outcomes'],['Related NPCs or Factions','related']].map(([label,key])=>text(label,`${p}.${key}`,item[key],3)).join('');
     if(kind==='threads')body=choice('Status',`${p}.status`,item.status||'Open',['Open','In Progress','Resolved','Abandoned'])+[['Important NPCs','npcs'],['Associated Factions','factions'],['Clues / Discoveries','clues'],['Possible Developments','developments'],['Resolution / Outcome','resolution']].map(([label,key])=>text(label,`${p}.${key}`,item[key],3)).join('');
     return common+body+text('GM Notes',`${p}.notes`,item.notes);
   };
   return `<div class="sm-section-header"><p>${kind==='projects'?'Drop an MYZ Ark Project Item from Items or a Compendium on the blank area, or add a Project and drop onto its reference. Changes save with Save Sector.':'Descriptive GM records; nothing executes or transfers automatically.'}</p>${collectionActions({key,count:entries.length})}</div>`+entries.map((item,i)=>{
     const id=state.entries[i].id,collapsed=state.collapsed.has(id),p=`${key}.${i}`;
     if(kind==='factions')return renderFaction(host,item,p,id,collapsed);
+    if(kind==='events')return eventEntry({id,key,item,index:i,collapsed,prefix:p,metadata:choice('Status',`${p}.status`,item.status||'Planned',['Planned','Active','Resolved','Cancelled']),extra:[['Trigger / Conditions','trigger'],['Consequences / Outcomes','outcomes'],['Related NPCs or Factions','related']].map(([label,name])=>text(label,`${p}.${name}`,item[name],3)).join('')+text('GM Notes',`${p}.notes`,item.notes)},{field,area});
     return entryCard({id,collection:key,collapsed,headerContent:kind==='inhabitants'?avatarMarkup():'',title:item.title||item.referenceName||`New ${host.tab.slice(0,-1)}`,cardAttributes:kind==='projects'?{'data-project-index':i}:{},remove:!(kind==='projects'&&item.arkSource),removeLabel:`Remove ${item.title||host.tab}`,body:fields(item,p,i)});
-  }).join('')+(!entries.length?`<p class="sm-empty">No ${esc(host.tab.toLowerCase()==='shop'?'shops':host.tab.toLowerCase())} have been added to this settlement.</p>`:'');
+  }).join('')+(!entries.length?(kind==='events'?contentEmpty('event'):`<p class="sm-empty">No ${esc(host.tab.toLowerCase()==='shop'?'shops':host.tab.toLowerCase())} have been added to this settlement.</p>`):'');
 }
 
 export async function renderProject(host,target,entry){

@@ -98,6 +98,7 @@ const path=require('node:path');
     await page.addScriptTag({type:'module',url:origin+'/scripts/sector-manager.mjs'});
     await page.evaluate(async()=>{for(const callback of initCallbacks)callback();const {REFERENCE_DEFINITIONS}=await import('/scripts/document-references.mjs');await game.settings.set('myz-sector-manager','documentReferences',{formatVersion:1,references:Object.fromEntries(REFERENCE_DEFINITIONS.filter(def=>def.legacyUuid).map(def=>[def.key,{mode:'custom',uuid:def.legacyUuid}])),migration:{version:1,outcomes:[]}});await game.settings.set('myz-sector-manager','travelEventsConfiguration',{enabled:false});await ready();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
 
+    if(process.env.MYZ_PHASE4B_ONLY){await require('./ui-phase4b-browser.cjs')(page,assert);return;}
     if(process.env.MYZ_PHASE3_ONLY){await require('./ui-phase3-browser.cjs')(page,assert);return;}
 
     assert.equal(await page.locator('[data-action="new"] + [data-action="campaign-log"]').count(),1);
