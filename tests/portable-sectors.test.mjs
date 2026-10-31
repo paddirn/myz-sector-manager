@@ -107,3 +107,59 @@ test('Phase 0/1 custom dropdown strings, legacy encounter metadata and saved por
 test('Phase 4B Gear and Event round trips retain custom types, decimal versus integer quantities and separate collections',()=>{
  for(const type of ['normal','special','settlement']){const source=populated(type);source.loot[0]={...source.loot[0],title:'Normal custom',type:'Relic <custom>',typeSource:'manual',quantity:.375,collected:true};source.special.gear[0]={...source.special.gear[0],title:'Special custom',type:'Odd Gear',quantity:3};source.special.events[0]={...source.special.events[0],title:'Special event',details:'Narrative',uuid:'JournalEntry.world.JournalEntryPage.page'};source.settlement.events=[{id:'setevent',title:'Settlement event',details:'Narrative',status:'Dormant',trigger:'Dusk',outcomes:'Storm',related:'Mara / Council',notes:'Secret'}];const before=structuredClone(source),file=serializeSector(source,{moduleVersion:'0.1.52'}),restored=deserializeSector(file,{code:'B2',sceneId:'zone'});assert.equal(restored.loot[0].type,'Relic <custom>');assert.equal(restored.loot[0].quantity,.375);assert.equal(restored.loot[0].collected,true);assert.equal(restored.special.gear[0].type,'Odd Gear');assert.equal(restored.special.gear[0].quantity,3);assert.deepEqual(restored.special.events[0],source.special.events[0]);assert.deepEqual(restored.settlement.events,source.settlement.events);assert.deepEqual(source,before);}
 });
+
+test('Phase 5: omitted Settlement content and absent IDs materialize deterministically without random identity repair',()=>{
+ for(const sector of [{sectorType:'settlement'},{sectorType:'settlement',settlement:{}},{sectorType:'settlement',settlement:{shop:{groups:[{entries:[{uuid:'Item.one'}]}]}}}]){
+  const file=fileFor(sector),before=structuredClone(file),one=deserializeSector(file,{code:'A1',sceneId:'world'}),two=deserializeSector(file,{code:'A1',sceneId:'world'});
+  assert.deepEqual(one,two);assert.deepEqual(file,before);
+  let exported=serializeSector(one,{moduleVersion:'0.1.55'});for(let i=0;i<5;i++){const next=serializeSector(deserializeSector(exported,{code:'B2',sceneId:'other'}),{moduleVersion:'0.1.55'});assert.deepEqual(next.sector,exported.sector);exported=next;}
+ }
+});
+test('Phase 5: Shop IDs are unique across groups and inventory; invalid imports never repair IDs randomly or mutate destinations',async()=>{
+ const groups=[{id:'group',entries:[{id:'stock',uuid:'Item.one'}]},{id:'second',entries:[{id:'stock',uuid:'Item.two'}]}];
+ for(const data of [groups,[{id:'same',entries:[{id:'same',uuid:'Item.one'}]}]]){
+  const file=fileFor({sectorType:'settlement',settlement:{shop:{version:1,groups:data}}}),f=persistenceFixture(true),before=structuredClone(f.documents.get('old').flags);
+  assert.throws(()=>validatePortable(file),/duplicate ID.*unique across the Shop/);
+  await assert.rejects(persistImportedSector(file,captureDestination(f.runtime,f.env),f.runtime,{replace:true,env:f.env}),/duplicate ID/);assert.equal(f.writes(),0);assert.deepEqual(f.documents.get('old').flags,before);
+ }
+});
+test('Phase 5: synthetic legacy Special fixture retains 5/6/19/6 authored entries, Unicode, paragraph breaks, citations and IDs for repeated cycles',()=>{
+ const original=JSON.parse(readFileSync(new URL('./fixtures/sector-special-legacy-v1.json',import.meta.url),'utf8')),before=structuredClone(original);
+ let file=original;for(let cycle=0;cycle<6;cycle++){
+  const record=deserializeSector(file,{code:'D7',sceneId:'foreign-world'});file=serializeSector(record,{moduleVersion:'0.1.55'});
+  for(const [key,count] of [['locations',5],['inhabitants',6],['gear',19],['events',6]]){assert.equal(record.special[key].length,count);for(let i=0;i<count;i++)for(const field of ['id','title','details'])assert.equal(record.special[key][i][field],original.sector.special[key][i][field]);}
+  assert.equal(record.nameOverride,true);assert.equal(record.customName,original.sector.customName);assert.equal(record.sectorType,'special');assert.equal(file.formatVersion,1);assert.equal(file.schemaVersion,1);assert.equal(file.extensions.unknown.length,0);
+ }assert.deepEqual(original,before);
+});
+test('Phase 5: all types preserve interconnected records, every reference family, saved images and numeric edge cases through repeated cross-world round trips',async()=>{
+ for(const type of ['normal','special','settlement']){
+  const record=populated(type);record.loot[0].quantity=0;record.supplies.cleanGrub={quantity:.125,collected:false};record.supplies.bullets={quantity:0,collected:true};record.encounters[0].portrait='worlds/source/saved-portrait.webp';record.settlement.projects[0].workPoints=0;record.settlement.projects[0].arkSource={version:1,arkUuid:'Actor.ark',projectUuid:'Actor.ark.Item.project',missing:false};record.settlement.factions[0].members[0].actorUuid='Actor.guard';record.settlement.shop.playerAccess=false;record.settlement.shop.trading={enabled:false,values:{bullets:1,cleanGrub:'0.125',cleanWater:2,booze:3}};
+  record.unrecognized={zero:0,no:false,empty:'',nil:null,list:[],nested:{keep:'Écho'}};
+  const first=serializeSector(record,{moduleVersion:'0.1.55'}),before=structuredClone(record);let file=first;
+  for(let n=0;n<5;n++){
+   const imported=deserializeSector(file,{code:'C3',sceneId:'another-world'});file=serializeSector(imported,{moduleVersion:'0.1.55'});assert.deepEqual(file.sector,first.sector);assert.deepEqual(file.extensions,first.extensions);
+   assert.equal(imported.settlement.inhabitants[0].factionId,imported.settlement.factions[0].id);assert.equal(imported.loot[0].quantity,0);assert.equal(imported.supplies.cleanGrub.quantity,.125);assert.equal(imported.encounters[0].portrait,'worlds/source/saved-portrait.webp');assert.equal(imported.unrecognized,undefined);
+  }
+  const refs=await inspectReferences(file,{fromUuid:async()=>null});assert(refs.every(ref=>!ref.resolved));for(const key of ['Actor.','Item.','JournalEntry.','Scene.','Macro.','Compendium.'])assert(refs.some(ref=>ref.uuid.startsWith(key)),key);assert(refs.some(ref=>ref.uuid.includes('.JournalEntryPage.')));assert.deepEqual(record,before);
+ }
+});
+test('Phase 5: import previews do not reveal inaccessible document names or raw resolver errors; resolution remains cached and read-only',async()=>{
+ const file=fileFor({sectorType:'normal',encounters:[{uuid:'Actor.private',title:'Saved narrative'}],effects:[{uuid:'Actor.private',macroUuid:'Macro.error'}]}),calls=[];
+ const refs=await inspectReferences(file,{game:{user:{id:'gm'}},fromUuid:async uuid=>{calls.push(uuid);if(uuid==='Macro.error')throw Error('SECRET DOCUMENT NAME');return {name:'RESTRICTED NAME',documentName:'Actor',testUserPermission:()=>false};}});
+ assert.equal(calls.filter(uuid=>uuid==='Actor.private').length,1);assert(refs.every(ref=>!ref.resolved));assert(refs.every(ref=>!ref.name));const html=importPreview(file,{sceneName:'Zone',code:'C3'},null,refs,[]);assert.doesNotMatch(html,/SECRET DOCUMENT NAME|RESTRICTED NAME/);assert.match(html,/inaccessible|resolved/);assert.equal(file.sector.encounters[0].title,'Saved narrative');
+});
+test('Phase 5: malformed compatibility records and invalid nulls/collections/IDs/numbers fail before writes; safe unknown null/zero/false persist',async()=>{
+ const bad=[{...fileFor({sectorType:'normal'}),extensions:{unknown:[{value:1}]}},{...fileFor({sectorType:'normal'}),extensions:{unknown:[{path:['sector','x']}]}},...[
+  {sectorType:'normal',loot:null},{sectorType:'special',special:{images:[null]}},{sectorType:'normal',threatLevel:Number.MAX_SAFE_INTEGER+1},{sectorType:'normal',loot:[{id:''}]},{sectorType:'settlement',settlement:{inhabitants:[{id:'shared'}],factions:[{id:'shared'}]}},{sectorType:'normal',supplies:{bullets:{quantity:-1}}}
+ ].map(fileFor)];
+ for(const file of bad){const f=persistenceFixture(true),before=structuredClone(f.documents.get('old').flags);await assert.rejects(persistImportedSector(file,captureDestination(f.runtime,f.env),f.runtime,{replace:true,env:f.env}));assert.deepEqual(f.documents.get('old').flags,before);assert.equal(f.writes(),0);}
+});
+test('Phase 5: accepted quantity normalization and missing Faction associations are visible warnings without discarding references',()=>{
+ const parsed=validatePortable(fileFor({sectorType:'special',special:{gear:[{quantity:.5}]},settlement:{inhabitants:[{id:'person',factionId:'missing'}]}}));assert(parsed.warnings.some(w=>w.includes('quantity')&&w.includes('normalize')));assert(parsed.warnings.some(w=>w.includes('factionId')&&w.includes('retained')));assert.equal(deserializeSector(parsed.file).settlement.inhabitants[0].factionId,'missing');
+});
+test('Phase 5: sector type conversions preserve inactive collections and active indicators without changing portable type',async()=>{
+ const {normalizeSectorType,sectorTabs}=await import('../scripts/sector-types.mjs'),{sectorIndicators}=await import('../scripts/sector-icons.mjs');let record=populated('normal');const original=serializeSector(record,{moduleVersion:'0.1.55'});
+ for(const type of ['special','settlement','normal','settlement','special']){
+  record=normalizeSectorType({...record,sectorType:type});const file=serializeSector(record,{moduleVersion:'0.1.55'});record=deserializeSector(file,{code:'A1',sceneId:'zone'});assert.equal(file.sector.sectorType,type);for(const key of ['encounters','loot','special','settlement'])assert.deepEqual(file.sector[key],original.sector[key]);assert.equal(sectorTabs(record).includes('Shop'),type==='settlement');assert.equal(sectorIndicators(record).encounters.value,(type==='normal'?record.encounters:type==='special'?record.special.inhabitants:record.settlement.inhabitants).length);
+ }
+});

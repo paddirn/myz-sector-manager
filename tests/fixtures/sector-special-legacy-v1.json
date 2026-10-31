@@ -1,0 +1,245 @@
+{
+  "format": "myz-sector-manager",
+  "formatVersion": 1,
+  "schemaVersion": 1,
+  "sector": {
+    "sectorType": "special",
+    "nameOverride": true,
+    "customName": "Synthetic Special Round-trip Fixture",
+    "terrain": "Unscathed Ruins",
+    "description": "Synthetic regression content; not the unavailable Doom Sphere export.",
+    "special": {
+      "source": "Campaign notes",
+      "overview": "An observatory with intact windows.",
+      "situation": "Two scavenger groups are negotiating.",
+      "locations": [
+        {
+          "id": "locations-1",
+          "title": "Locations 1 — Écho",
+          "details": "Authored paragraph 1.\n\nSecond paragraph: “unchanged”; source citation p. 20."
+        },
+        {
+          "id": "locations-2",
+          "title": "Locations 2 — Écho",
+          "details": "Authored paragraph 2.\n\nSecond paragraph: “unchanged”; source citation p. 21."
+        },
+        {
+          "id": "locations-3",
+          "title": "Locations 3 — Écho",
+          "details": "Authored paragraph 3.\n\nSecond paragraph: “unchanged”; source citation p. 22."
+        },
+        {
+          "id": "locations-4",
+          "title": "Locations 4 — Écho",
+          "details": "Authored paragraph 4.\n\nSecond paragraph: “unchanged”; source citation p. 23."
+        },
+        {
+          "id": "locations-5",
+          "title": "Locations 5 — Écho",
+          "details": "Authored paragraph 5.\n\nSecond paragraph: “unchanged”; source citation p. 24."
+        }
+      ],
+      "inhabitants": [
+        {
+          "id": "inhabitants-1",
+          "title": "Inhabitants 1 — Écho",
+          "details": "Authored paragraph 1.\n\nSecond paragraph: “unchanged”; source citation p. 20."
+        },
+        {
+          "id": "inhabitants-2",
+          "title": "Inhabitants 2 — Écho",
+          "details": "Authored paragraph 2.\n\nSecond paragraph: “unchanged”; source citation p. 21."
+        },
+        {
+          "id": "inhabitants-3",
+          "title": "Inhabitants 3 — Écho",
+          "details": "Authored paragraph 3.\n\nSecond paragraph: “unchanged”; source citation p. 22."
+        },
+        {
+          "id": "inhabitants-4",
+          "title": "Inhabitants 4 — Écho",
+          "details": "Authored paragraph 4.\n\nSecond paragraph: “unchanged”; source citation p. 23."
+        },
+        {
+          "id": "inhabitants-5",
+          "title": "Inhabitants 5 — Écho",
+          "details": "Authored paragraph 5.\n\nSecond paragraph: “unchanged”; source citation p. 24."
+        },
+        {
+          "id": "inhabitants-6",
+          "title": "Inhabitants 6 — Écho",
+          "details": "Authored paragraph 6.\n\nSecond paragraph: “unchanged”; source citation p. 25."
+        }
+      ],
+      "gear": [
+        {
+          "id": "gear-1",
+          "title": "Gear 1 — Écho",
+          "details": "Authored paragraph 1.\n\nSecond paragraph: “unchanged”; source citation p. 20.",
+          "quantity": 1,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-2",
+          "title": "Gear 2 — Écho",
+          "details": "Authored paragraph 2.\n\nSecond paragraph: “unchanged”; source citation p. 21.",
+          "quantity": 2,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-3",
+          "title": "Gear 3 — Écho",
+          "details": "Authored paragraph 3.\n\nSecond paragraph: “unchanged”; source citation p. 22.",
+          "quantity": 3,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-4",
+          "title": "Gear 4 — Écho",
+          "details": "Authored paragraph 4.\n\nSecond paragraph: “unchanged”; source citation p. 23.",
+          "quantity": 4,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-5",
+          "title": "Gear 5 — Écho",
+          "details": "Authored paragraph 5.\n\nSecond paragraph: “unchanged”; source citation p. 24.",
+          "quantity": 5,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-6",
+          "title": "Gear 6 — Écho",
+          "details": "Authored paragraph 6.\n\nSecond paragraph: “unchanged”; source citation p. 25.",
+          "quantity": 6,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-7",
+          "title": "Gear 7 — Écho",
+          "details": "Authored paragraph 7.\n\nSecond paragraph: “unchanged”; source citation p. 26.",
+          "quantity": 7,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-8",
+          "title": "Gear 8 — Écho",
+          "details": "Authored paragraph 8.\n\nSecond paragraph: “unchanged”; source citation p. 27.",
+          "quantity": 8,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-9",
+          "title": "Gear 9 — Écho",
+          "details": "Authored paragraph 9.\n\nSecond paragraph: “unchanged”; source citation p. 28.",
+          "quantity": 9,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-10",
+          "title": "Gear 10 — Écho",
+          "details": "Authored paragraph 10.\n\nSecond paragraph: “unchanged”; source citation p. 29.",
+          "quantity": 10,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-11",
+          "title": "Gear 11 — Écho",
+          "details": "Authored paragraph 11.\n\nSecond paragraph: “unchanged”; source citation p. 30.",
+          "quantity": 11,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-12",
+          "title": "Gear 12 — Écho",
+          "details": "Authored paragraph 12.\n\nSecond paragraph: “unchanged”; source citation p. 31.",
+          "quantity": 12,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-13",
+          "title": "Gear 13 — Écho",
+          "details": "Authored paragraph 13.\n\nSecond paragraph: “unchanged”; source citation p. 32.",
+          "quantity": 13,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-14",
+          "title": "Gear 14 — Écho",
+          "details": "Authored paragraph 14.\n\nSecond paragraph: “unchanged”; source citation p. 33.",
+          "quantity": 14,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-15",
+          "title": "Gear 15 — Écho",
+          "details": "Authored paragraph 15.\n\nSecond paragraph: “unchanged”; source citation p. 34.",
+          "quantity": 15,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-16",
+          "title": "Gear 16 — Écho",
+          "details": "Authored paragraph 16.\n\nSecond paragraph: “unchanged”; source citation p. 35.",
+          "quantity": 16,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-17",
+          "title": "Gear 17 — Écho",
+          "details": "Authored paragraph 17.\n\nSecond paragraph: “unchanged”; source citation p. 36.",
+          "quantity": 17,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-18",
+          "title": "Gear 18 — Écho",
+          "details": "Authored paragraph 18.\n\nSecond paragraph: “unchanged”; source citation p. 37.",
+          "quantity": 18,
+          "type": "Custom Gear"
+        },
+        {
+          "id": "gear-19",
+          "title": "Gear 19 — Écho",
+          "details": "Authored paragraph 19.\n\nSecond paragraph: “unchanged”; source citation p. 38.",
+          "quantity": 19,
+          "type": "Custom Gear"
+        }
+      ],
+      "events": [
+        {
+          "id": "events-1",
+          "title": "Events 1 — Écho",
+          "details": "Authored paragraph 1.\n\nSecond paragraph: “unchanged”; source citation p. 20."
+        },
+        {
+          "id": "events-2",
+          "title": "Events 2 — Écho",
+          "details": "Authored paragraph 2.\n\nSecond paragraph: “unchanged”; source citation p. 21."
+        },
+        {
+          "id": "events-3",
+          "title": "Events 3 — Écho",
+          "details": "Authored paragraph 3.\n\nSecond paragraph: “unchanged”; source citation p. 22."
+        },
+        {
+          "id": "events-4",
+          "title": "Events 4 — Écho",
+          "details": "Authored paragraph 4.\n\nSecond paragraph: “unchanged”; source citation p. 23."
+        },
+        {
+          "id": "events-5",
+          "title": "Events 5 — Écho",
+          "details": "Authored paragraph 5.\n\nSecond paragraph: “unchanged”; source citation p. 24."
+        },
+        {
+          "id": "events-6",
+          "title": "Events 6 — Écho",
+          "details": "Authored paragraph 6.\n\nSecond paragraph: “unchanged”; source citation p. 25."
+        }
+      ],
+      "images": []
+    },
+    "version": 1
+  }
+}

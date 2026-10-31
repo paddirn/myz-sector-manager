@@ -24,6 +24,7 @@ test('standalone documentation Schema matches every runtime field/type/enum/opti
  for(const type of ['Normal','Special','Settlement']){const branch=schema.$defs[type+'Sector'];assert.deepEqual(branch.allOf[1].properties.sectorType,{const:type.toLowerCase()});assert.deepEqual(branch.allOf[1].required,['sectorType']);}
 });
 test('field catalog enumerates every declared object property and examples do not invent document references',async()=>{
+ const matrix=readFileSync(new URL('phase5-field-coverage.md',base),'utf8');for(const [family,value] of Object.entries(schema.$defs))for(const key of Object.keys(value.properties||{}))assert(matrix.includes('`'+family+'.'+key+'`'),`Missing matrix field ${family}.${key}`);
  for(const [family,value] of Object.entries(schema.$defs)){
   if(!value.properties)continue;
   const start=guide.lastIndexOf(`### ${family}\n`);assert(start>=0,`Missing catalog family ${family}`);const rest=guide.slice(start),section=rest.split('\n### ').slice(0,1).join('');

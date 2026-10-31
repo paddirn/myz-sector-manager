@@ -701,3 +701,14 @@ while specialized Projects, Factions, Shop and Images retain their controls.
 Existing records and save behavior are unchanged. See [Phase 4C audit, changed
 files, intentional exceptions and manual checks](docs/ui-phase4c.md). Run
 `node tests/ui-phase4c-browser.cjs` for the 22-tab responsive browser check.
+
+### Final regression and portable JSON compatibility (0.1.55)
+
+Portable format/schema **1** is retained. Empty Settlement imports now use
+deterministic defaults, colliding Shop IDs fail before writes, and incomplete
+extension records produce clear validation errors. Reference previews use the
+same permission checks as the editor. Missing Faction links and existing Special
+Gear quantity normalization are reported without changing gameplay rules.
+See the [Phase 5 field coverage, fixes, regression results and live Foundry
+checklist](docs/ui-phase5.md). The focused editor check is
+`node tests/ui-phase5-browser.cjs`.

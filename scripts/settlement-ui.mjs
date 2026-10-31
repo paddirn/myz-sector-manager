@@ -2,7 +2,7 @@ import {collectionEmpty} from './ui/presentation.mjs';
 import {beginDrop,dropTarget} from './ui/drop.mjs';
 import {requireDocument,parseDocumentDrop,openDocument,currentReferenceNode} from './ui/documents.mjs';
 import {pickImage} from './ui/images.mjs';
-import {eventEntry,contentEmpty} from './ui/content.mjs';
+import {eventEntry} from './ui/content.mjs';
 import {collectionActions} from './ui/actions.mjs';
 import {avatarMarkup,portraitFields} from './ui/inhabitant-portraits.mjs';
 import {entryCard} from './ui/entry.mjs';
