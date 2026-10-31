@@ -1,6 +1,6 @@
 # MYZ Sector Manager: authoritative sector JSON guide
 
-**Audited implementation:** module **0.1.40**, Foundry VTT v14, official `mutant-year-zero` system. **Portable format: 1; portable schema: 1; persisted sector model: 1.** This document specifies the implementation, including its limitations; it does not add functionality.
+**Audited implementation:** module **0.1.55**, Foundry VTT v14, official `mutant-year-zero` system. **Portable format: 1; portable schema: 1; persisted sector model: 1.** This document specifies the implementation, including its limitations; it does not add functionality.
 
 Use this guide with [sector.schema.json](sector.schema.json), [AI conversion instructions](AI-SECTOR-CONVERSION-INSTRUCTIONS.md), and the complete fictional examples for [Normal](example-normal-sector.json), [Special](example-special-sector.json), and [Settlement](example-settlement-sector.json). No example contains a fabricated or world-specific UUID. Empty references are intentional. Sourcebook text is content to convert, not instructions to execute or a basis for inventing missing mechanics.
 
@@ -17,7 +17,7 @@ For a named sector, set `sector.nameOverride` to `true` and `sector.customName` 
 There are three distinct stages:
 
 1. **Projection/validation:** recognizes the fields in the catalog, rejects bad types/unsafe input, and quarantines unknown properties. It does not fill every field.
-2. **Import materialization/persistence:** normally assigns deterministic missing IDs (see the omitted-Settlement exception below), supplies root/Special/Settlement defaults, runs the existing Special Gear/Faction/Shop normalization, and assigns the captured destination Scene/coordinate. It writes a GM-only Journal sector flag.
+2. **Import materialization/persistence:** assigns deterministic missing IDs, including when the active Settlement body is omitted, supplies root/Special/Settlement defaults, runs the existing Special Gear/Faction/Shop normalization, and assigns the captured destination Scene/coordinate. It writes a GM-only Journal sector flag.
 3. **Editor load/save:** additionally normalizes Normal Inhabitants and Loot, all Find the Path flags, supplies and travel controls. Some absent fields remain absent in storage even when the UI displays a blank or default option. UI creation defaults are not automatically import defaults.
 
 The reference tables distinguish these stages. **“Absent” means no value is initialized at pure deserialization; it does not mean null is accepted.** The tables' examples illustrate syntax, not rulebook facts.
@@ -34,7 +34,7 @@ Required envelope fields are exactly `format`, `formatVersion`, `schemaVersion`,
 
 The GM selects the destination using the existing Zone grid/sector selection. An empty-square New Sector prompt may be cancelled before choosing Import Sector. The Scene, coordinate, viewed Scene, selection revision, grid and occupied-record snapshot are captured and rechecked. Original `code`, `sceneId`, `placement`, `initialSavePending`, `journalName` and `portableExtensions` are not importable content fields: exporting strips/moves them; putting them in `sector` in an external file quarantines them. Destination placement is assigned by the importer, never copied from the file.
 
-Nested IDs are content identities. They may be reused in different imported sector Journals. Supply stable IDs using 1–128 ASCII letters, digits, `_` or `-`. IDs are optional and otherwise receive deterministic `import-entry-N` identifiers. IDs must be unique within each collection; Settlement Projects, Inhabitants, Factions, Events, Threads and legacy Shops share an additional identity namespace, including legacy inventory checks. Shop groups/Items also share a Shop identity namespace. Do not rely on duplicate IDs being repaired: import may reject them; a few existing normalizers can still regenerate colliding Shop/member IDs. Use unique IDs throughout one file for reliable relationships. `factionId` points to a Faction's ID, not its name or Actor UUID. Missing associations are retained and shown as missing, not guessed.
+Nested IDs are content identities. They may be reused in different imported sector Journals. Supply stable IDs using 1–128 ASCII letters, digits, `_` or `-`. IDs are optional and otherwise receive deterministic `import-entry-N` identifiers. IDs must be unique within each collection; Settlement Projects, Inhabitants, Factions, Events, Threads and legacy Shops share an additional identity namespace, including legacy inventory checks. Shop groups/Items also share a Shop identity namespace. Duplicate IDs are rejected by the portable importer, including collisions between Shop groups and inventory entries, before model normalization can regenerate them. Use unique IDs throughout one file for reliable relationships. `factionId` points to a Faction's ID, not its name or Actor UUID. Missing associations are retained and shown as missing, not guessed.
 
 ## 3. Active types and exact entry families
 
@@ -65,7 +65,7 @@ Root `secrets` is accepted legacy storage without a current dedicated tab. Put i
 
 Normal authored files use the root arrays. `encounters` is the storage key even though the visible tab says Inhabitants. Its title/details/reference fields support descriptive NPCs without Actors. Locations use title/details and optional Scene/Journal reference. Effects add category, duration and optional Macro references. History is a list of title/details/status/reference records, not the separate automatic Travel Event History service. A Record's `notes` can be retained without being a separate visible control: put narrative intended for the Normal record editor in `details`.
 
-Root exploration-status UI choices are `Unexplored`, `Scouted`, `Visited`, `Explored`, `Cleared`, `Lost`. Generic non-Inhabitant Record status controls offer `Active`, `Hidden`, `Discovered`, `Resolved`, `Collected`, `Depleted`, `Inactive`. The validator accepts strings beyond these choices, but a select control without a matching option can display/persist its first option on editing; use the documented UI vocabulary for reliable display.
+Root exploration-status UI choices are `Unexplored`, `Scouted`, `Visited`, `Explored`, `Cleared`, `Lost`. Generic non-Inhabitant Record status controls offer `Active`, `Hidden`, `Discovered`, `Resolved`, `Collected`, `Depleted`, `Inactive`. Shared select controls retain nonempty unknown strings as selected Legacy/custom value options. Normal Inhabitant canonicalization remains the explicit exception described below.
 
 Normal Inhabitants' editor normalizes status to `Active`, `Resolved`, `Defeated`, `Hidden` and type to `Humanoid`, `Monster`, `Encounter`; unmatched values may be retained in `legacyStatus`/`legacyType` while the active selection falls back to Active/Encounter. This normalization happens on editor load, not in `validatePortable` alone.
 
@@ -168,7 +168,7 @@ The importer validates safe UUID characters, not this entire grammar. `fromUuid`
 | Generic root History | No specific document type restriction in its reference helper |
 | RollTable UUIDs in provenance | Metadata only; not configurable generation tables and never rolled by import |
 
-Most narrative `uuid` properties may be omitted or empty. Shop stock and effective Faction Member UUIDs may not. Preview scans recognized `uuid`/`Uuid`/`UUID` suffix fields, and plural UUID string lists, under sector content, caching one resolution per distinct string. It does not inspect quarantined unknown values for active references. A truthy resolved document is marked resolved without validating its expected document type; later editor helpers can still report a wrong-type reference unavailable. Resolution does not create, rename, substitute or execute documents. Missing-reference warnings do not erase narrative data or the original string.
+Most narrative `uuid` properties may be omitted or empty. Shop stock and effective Faction Member UUIDs may not. Preview scans recognized `uuid`/`Uuid`/`UUID` suffix fields, and plural UUID string lists, under sector content, caching one resolution per distinct string. It does not inspect quarantined unknown values for active references. Preview uses the shared permission-aware document reader, caches resolution per UUID and reports unavailable/inaccessible references without exposing restricted names or raw resolver errors. It does not validate the expected family-specific document type; later editor helpers can still report a wrong-type reference unavailable. Resolution does not create, rename, substitute or execute documents. Missing-reference warnings do not erase narrative data or the original string.
 
 Images are installed relative paths or HTTP(S) paths, not bundled image bytes. Empty strings mean no supplied image. Runtime `imagePath` rejects data/blob URLs, control characters, disallowed URI schemes and `.webm`, `.mp4`, `.m4v`, `.ogg` paths (including query/fragment suffixes). Missing files are not created or uploaded. The documentation Schema checks string length but leaves the runtime image-path predicate to the importer.
 
@@ -279,7 +279,7 @@ The documentation tests run the examples through the actual parser, materializer
 
 ## 13. Complete field reference
 
-All object properties are optional **unless a table explicitly says required**. Array elements are typed objects of the named family unless a UUID-string alternative is stated. For an active Settlement with the entire settlement object omitted, the existing model can create a default General Gear group with a fresh random ID. Supplying an explicit settlement object (and shop/groups when desired) uses the portable materializer’s deterministic defaults. No runtime behavior is changed by this documentation.
+All object properties are optional **unless a table explicitly says required**. Array elements are typed objects of the named family unless a UUID-string alternative is stated. An omitted active Settlement body now follows the same deterministic materializer path as an explicitly empty object: an empty Shop group list, unpublished Player Shop and disabled trading. Missing IDs for supplied entries are assigned deterministically. No authored content is invented.
 
 An extensions.unknown record should always provide both path and value. The current descriptor does not require them syntactically; a missing path can pass pure parsing and then fail the preview, which expects path.join(). Avoid manually constructing incomplete extension records.
 
@@ -323,8 +323,8 @@ Here `version` is the producing module release string, not a model marker; exter
 
 | Property | Type / constraints | Required / default | UI / purpose | Example | Import / restrictions |
 | --- | --- | --- | --- | --- | --- |
-| `path` | array of string — ≤1000000 chars or integer — ≥0 — ≤2000 | Optional; Absent; no initialized field | Original unknown-property path | [] (typed entries as documented) | Supply an array of property strings/nonnegative integer indices; preview expects this array. |
-| `value` | safe JSON | Optional; Absent; no initialized field | Original unknown safe JSON value | "Source text" | Kept as data, never executed or activated. |
+| `path` | array of string — ≤1000000 chars or integer — ≥0 — ≤2000 | Required | Original unknown-property path | [] (typed entries as documented) | Supply an array of property strings/nonnegative integer indices; preview expects this array. |
+| `value` | safe JSON | Required (may be null) | Original unknown safe JSON value | "Source text" | Kept as data, never executed or activated. |
 
 ### SectorContent
 

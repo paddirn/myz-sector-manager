@@ -1,8 +1,9 @@
-import {SECTOR_SCHEMA,PORTABLE_SCHEMA} from './schema.mjs';
+import {PORTABLE_SCHEMA} from './schema.mjs';
 import {sectorThreatLevel} from '../sector-fields.mjs';
 import {normalizeSectorType} from '../sector-types.mjs';
 import {sectorNaming} from '../journal-organization.mjs';
 import {imagePath} from '../sector-images.mjs';
+import {requireDocument} from '../ui/documents.mjs';
 export const FORMAT='myz-sector-manager',FORMAT_VERSION=1,SCHEMA_VERSION=1,MAX_BYTES=5*1024*1024;
 const forbidden=new Set(['__proto__','prototype','constructor']);
 const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&(Object.getPrototypeOf(value)===Object.prototype||Object.getPrototypeOf(value)===null);
@@ -48,6 +49,8 @@ function checkIdentities(value){
 }
 function materialize(content){
  const data=structuredClone(content),used=new Set();let sequence=0;
+ // Use the same deterministic path for omitted and explicitly empty Settlement data.
+ if(data.sectorType==='settlement')data.settlement??={};
  const identify=entry=>{if(!entry.id){let id;do{id=`import-entry-${++sequence}`;}while(used.has(id));entry.id=id;}used.add(entry.id);return entry;};
  const gather=value=>{if(!value||typeof value!=='object')return;if(value.id)used.add(value.id);for(const child of Object.values(value))if(child&&typeof child==='object')gather(child);};gather(data);
  for(const key of ['locations','encounters','effects','loot','secrets','history'])for(const entry of data[key]||[])identify(entry);
@@ -64,6 +67,7 @@ function materialize(content){
   // Retain the old archive and perform the existing reference-only migration deterministically.
   if(!settlement.shop){const seen=new Set();let unlinked=0,duplicates=0;const groups=(settlement.shops||[]).map(shop=>{const entries=[];for(const item of shop.inventory||[]){if(!item.uuid){unlinked++;continue;}if(seen.has(item.uuid)){duplicates++;continue;}seen.add(item.uuid);entries.push(identify({uuid:item.uuid,legacyEntryId:item.id||''}));}return identify({name:shop.title||'Recovered inventory',type:'general',entries});});settlement.shop={version:1,groups,...(settlement.shops?.length?{migration:{version:1,source:'settlement.shops',unlinked,duplicates}}:{})};}
   settlement.shop.version??=1;settlement.shop.groups??=[];
+  const shopIds=new Set();for(const group of settlement.shop.groups||[])for(const record of [group,...(group.entries||[])]){if(record.id&&shopIds.has(record.id))throw new Error(`settlement.shop: duplicate ID ${record.id}; group and inventory IDs must be unique across the Shop.`);if(record.id)shopIds.add(record.id);}
   for(const group of settlement.shop.groups||[]){identify(group);group.entries??=[];for(const entry of group.entries){identify(entry);if(!entry.uuid)throw new Error('Shop inventory entries require a nonempty Item or Vehicle Actor UUID.');}}
  }
  return normalizeSectorType({version:1,nameOverride:false,customName:'',threatLevel:sectorThreatLevel(data),terrain:'',rot:0,status:'Unexplored',description:'',notes:'',locations:[],encounters:[],loot:[],effects:[],secrets:[],history:[],supplies:{},pathStunts:{},...data});
@@ -77,7 +81,12 @@ export function validatePortable(input){
  const extensions={unknown:[...(file.extensions?.unknown||[]),...unknown]};
  if(extensions.unknown.length>2000)throw new Error('At most 2,000 unknown extension fields are supported.');
  if(new TextEncoder().encode(JSON.stringify({...file,extensions})).length>MAX_BYTES)throw new Error('Sector JSON must be at most 5 MiB.');
- return {file:{...file,extensions},warnings:[...migrated.warnings,...(file.sector.settlement?.factions?.some(f=>!f.infoVersion)?['Legacy Faction Info will be migrated once; original fields are retained.']:[]),...(extensions.unknown.length?[`${extensions.unknown.length} unknown field(s) preserved in extensions, not applied to the active model.`]:[])]};
+ const warnings=[...migrated.warnings];
+ if(file.sector.settlement?.factions?.some(f=>!f.infoVersion))warnings.push('Legacy Faction Info will be migrated once; original fields are retained.');
+ for(const [index,entry] of (file.sector.special?.gear||[]).entries())if(entry.quantity!==undefined&&(!Number.isSafeInteger(entry.quantity)||entry.quantity<1))warnings.push(`sector.special.gear.${index}.quantity: existing Special Gear rules normalize zero or fractional quantities to 1.`);
+ for(const [index,entry] of (file.sector.settlement?.inhabitants||[]).entries())if(entry.factionId&&!file.sector.settlement?.factions?.some(f=>f.id===entry.factionId))warnings.push(`sector.settlement.inhabitants.${index}.factionId: missing Faction; association retained for relinking.`);
+ if(extensions.unknown.length)warnings.push(`${extensions.unknown.length} unknown field(s) preserved in extensions, not applied to the active model.`);
+ return {file:{...file,extensions},warnings};
 }
 export function parsePortable(text){
  if(typeof text!=='string'||new TextEncoder().encode(text).length>MAX_BYTES)throw new Error('Sector JSON must be at most 5 MiB.');
@@ -107,7 +116,7 @@ export function referenceEntries(file){
  const found=[];const walk=(value,path=[])=>{if(!value||typeof value!=='object')return;for(const [key,child] of Object.entries(value)){if(typeof child==='string'&&child&&/(?:uuid|Uuid|UUID)$/.test(key))found.push({uuid:child,path:[...path,key].join('.')});else if(Array.isArray(child)&&/(?:uuid|Uuid|UUID)s$/.test(key)){for(const [index,uuid] of child.entries())if(typeof uuid==='string'&&uuid)found.push({uuid,path:[...path,key,index].join('.')});}else if(child&&typeof child==='object')walk(child,[...path,key]);}};walk(file.sector,['sector']);return found;
 }
 export async function inspectReferences(file,env=globalThis){
- const cache=new Map(),references=[];for(const item of referenceEntries(file)){if(!/^[A-Za-z0-9_.-]{1,512}$/.test(item.uuid))throw new Error(`${item.path}: invalid UUID.`);if(!cache.has(item.uuid))cache.set(item.uuid,Promise.resolve().then(()=>env.fromUuid(item.uuid)).then(doc=>doc?{resolved:true,name:doc.name,type:doc.documentName}:{resolved:false}).catch(error=>({resolved:false,error:error.message})));references.push({...item,...await cache.get(item.uuid)});}return references;
+ const cache=new Map(),references=[];for(const item of referenceEntries(file)){if(!/^[A-Za-z0-9_.-]{1,512}$/.test(item.uuid))throw new Error(`${item.path}: invalid UUID.`);if(!cache.has(item.uuid))cache.set(item.uuid,requireDocument(item.uuid,'',env).then(doc=>({resolved:true,name:doc.name,type:doc.documentName})).catch(error=>({resolved:false,error:error.message})));references.push({...item,...await cache.get(item.uuid)});}return references;
 }
 export function sectorCounts(sector){
  const result={};for(const key of ['locations','encounters','effects','loot','history','secrets'])if(sector[key])result[key]=sector[key].length;

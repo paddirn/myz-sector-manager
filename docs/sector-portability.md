@@ -53,7 +53,7 @@ Example envelope:
 
 `format`, `formatVersion`, `schemaVersion`, and `sector.sectorType` are required. Use exactly `normal`, `special` or `settlement`; no speculative aliases are inferred. The optional `exportedBy` identifies the producing module and its real installed version. Module release version, envelope format version and sector schema version are separate. Optional `source.coordinates`/`source.name` describe provenance only. Coordinates, Scene identity, placement and Journal identity are not required content fields and never override import placement. To name a sector, use the existing `nameOverride: true` and `customName` fields, not an invented `name` field. Provide actual descriptions; defaults do not fabricate narrative content.
 
-Optional fields and nested structures are enumerated in the Schema generated from the same descriptors as runtime validation. Common entry fields include `id`, `title`, `details`, `notes` and optional `uuid`. Normal Inhabitants use the existing `encounters` key. Special arrays live under `special`. Settlement arrays and `shop` live under `settlement`. All nested IDs are at most 128 characters and use safe letters, numbers, underscores and hyphens and must be unique in their applicable collection/namespace. Inhabitant `factionId` must refer to the intended Faction `id`; the importer never guesses associations from text. Current typed values are required (numbers, booleans, strings and arrays are not silently interchanged). Project progress/status and descriptive narrative are strings. Quantities and Threat Level are nonnegative numbers; Threat Level is an integer. Omit missing document references for descriptive entries. Active Shop Item entries require an Item `uuid`; omit the entry or use an empty group for narrative-only inventories.
+Optional fields and nested structures are enumerated in the Schema generated from the same descriptors as runtime validation. Common entry fields include `id`, `title`, `details`, `notes` and optional `uuid`. Normal Inhabitants use the existing `encounters` key. Special arrays live under `special`. Settlement arrays and `shop` live under `settlement`. All nested IDs are at most 128 characters and use safe letters, numbers, underscores and hyphens and must be unique in their applicable collection/namespace. Inhabitant `factionId` must refer to the intended Faction `id`; the importer never guesses associations from text. Current typed values are required (numbers, booleans, strings and arrays are not silently interchanged). Project progress/status and descriptive narrative are strings. Quantities and Threat Level are nonnegative numbers; Threat Level is an integer. Omit missing document references for descriptive entries. Active Shop entries require an Item or Vehicle Actor `uuid`; omit the entry or use an empty group for narrative-only inventories.
 
 UUIDs are strings up to 512 characters using letters, digits, underscores, dots and hyphens. Both world and Compendium UUIDs are resolved through Foundry's `fromUuid`, once per distinct UUID in a preview. The illustrative UUIDs in the Settlement example intentionally produce missing-reference warnings until replaced with real destination references. A failed lookup identifies the affected path; the original UUID and descriptive content remain. No name matching, document duplication, UUID substitution or document creation occurs. Relative image paths can be shared, but the underlying image files are not bundled or uploaded by JSON export; make those assets available in the receiving installation.
 
@@ -89,3 +89,44 @@ Automated tests simulate Foundry APIs; these live checks have **not** been perfo
 ## Linked Ark and Player Shop additions (0.1.37)
 
 The existing `settlement.arkUuid` reference now powers a read-only live Ark panel. New `settlement.shop.playerAccess` and `settlement.shop.trading` configuration round trip through the v1 format without changing sector/schema versions. Existing records default to unpublished Shops and disabled trading. See the [complete field/default and official MYZ source mapping](settlement-player-shop.md#persistence-and-portable-json); the published [JSON Schema](sector-portable.schema.json) includes all new fields. Import preserves explicit enabled states: review player publication before sharing the imported Settlement's macro. User request flags and Actor transaction receipts are runtime state and are not portable sector fields.
+
+## Phase 5 compatibility audit (0.1.55)
+
+Format 1 / schema 1 remains sufficient; no save migration is introduced. See the
+[final audit, field coverage and regression report](ui-phase5.md). Omitted active
+Settlement data now has the same deterministic empty-Shop defaults as an explicit
+empty body. Shop group and inventory IDs must be unique across that entire Shop;
+collisions fail before normalization rather than silently receiving random IDs.
+
+Compatibility extension records require both `path` and `value` (null is a valid
+unknown value). Incomplete records previously passed projection but could break
+the preview; they now fail clearly before writes. Nonnegative integer limits in
+the published operational Schema reflect the runtime's existing safe-integer
+limit. Valid older v1 exports remain supported.
+
+Preview uses the editor's permission-aware document reader and does not reveal
+restricted names or raw resolver diagnostics. Missing references retain UUIDs and
+authored snapshots. Warnings identify missing Faction associations without
+remapping them, and Special Gear zero/fractional quantities that the existing
+normalizer changes to 1. Normal Loot and supplies retain supported zero/decimal
+quantities; false and empty strings are retained where their field types allow.
+Known string/array/object fields do not accept null; safe unknown null values
+remain quarantined extensions.
+
+World Actor/Item/Journal/Page/Scene/Macro UUIDs generally need relinking in another
+world. Compendium references can resolve when the same package and document IDs
+are installed. Saved portraits, overlay and Settlement paths, and Special Image
+source snapshots are preserved; binaries are not copied. Actor-derived display
+portraits, placeholder images, reference hydration, scroll/collapse state and
+loading status are not synthesized into exported data. If Actor import previously
+saved a portrait snapshot, that saved path is ordinary portable content.
+
+Ark Project assignments retain IDs, references, local Work Points, notes and the
+established saved `arkSource` snapshots. Export does not read/copy live Ark system
+data. Import writes only the sector Journal; subsequent editor synchronization
+can refresh the draft from a resolvable Ark, but does not write native projects.
+
+The supplied `myz-sector-THE-DOOM-SPHERE.json` was unavailable in this workspace.
+The regression suite instead uses an explicitly synthetic Special fixture with
+5 Locations, 6 Inhabitants, 19 Gear entries and 6 Events; this is not a claim to
+have tested the user's export.

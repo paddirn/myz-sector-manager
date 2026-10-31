@@ -1809,7 +1809,11 @@
         },
         "value": {}
       },
-      "additionalProperties": true
+      "additionalProperties": true,
+      "required": [
+        "path",
+        "value"
+      ]
     },
     "Id": {
       "type": "string",

@@ -1,5 +1,5 @@
 // Shared descriptors drive runtime projection and the published JSON Schema.
-const string={type:'string',maxLength:1000000},bool={type:'boolean'},number={type:'number'},integer={type:'integer',minimum:0},uuid={type:'string',maxLength:512,pattern:'^[A-Za-z0-9_.-]*$'},image={...string,format:'image-path'};
+const string={type:'string',maxLength:1000000},bool={type:'boolean'},number={type:'number'},integer={type:'integer',minimum:0,maximum:Number.MAX_SAFE_INTEGER},uuid={type:'string',maxLength:512,pattern:'^[A-Za-z0-9_.-]*$'},image={...string,format:'image-path'};
 const id={type:'string',maxLength:128,pattern:'^[A-Za-z0-9_-]+$'};
 const object=properties=>({type:'object',properties,additionalProperties:true});
 const array=items=>({type:'array',items,maxItems:2000});
@@ -29,5 +29,5 @@ export const SECTOR_SCHEMA=object({
 SECTOR_SCHEMA.required=['sectorType'];
 export const PORTABLE_SCHEMA={
  $schema:'https://json-schema.org/draft/2020-12/schema',title:'MYZ Sector Manager single-sector export',type:'object',required:['format','formatVersion','schemaVersion','sector'],additionalProperties:true,
- properties:{format:{const:'myz-sector-manager'},formatVersion:{const:1},schemaVersion:{const:1},exportedBy:object({module:{const:'myz-sector-manager'},version:{type:'string',pattern:'^\\d+\\.\\d+\\.\\d+$'}}),source:object({coordinates:string,name:string}),sector:SECTOR_SCHEMA,extensions:object({unknown:array(object({path:array({anyOf:[string,integer]}),value:json}))})}
+ properties:{format:{const:'myz-sector-manager'},formatVersion:{const:1},schemaVersion:{const:1},exportedBy:object({module:{const:'myz-sector-manager'},version:{type:'string',pattern:'^\\d+\\.\\d+\\.\\d+$'}}),source:object({coordinates:string,name:string}),sector:SECTOR_SCHEMA,extensions:object({unknown:array({...object({path:array({anyOf:[string,integer]}),value:json}),required:['path','value']})})}
 };
