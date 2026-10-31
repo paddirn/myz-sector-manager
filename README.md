@@ -712,3 +712,14 @@ Gear quantity normalization are reported without changing gameplay rules.
 See the [Phase 5 field coverage, fixes, regression results and live Foundry
 checklist](docs/ui-phase5.md). The focused editor check is
 `node tests/ui-phase5-browser.cjs`.
+
+### Automatic Campaign Log combat summaries (0.1.56)
+
+Combat started while a session is recording now produces one editable **Combat
+Encounter** note when the Combat document is ended/deleted. It retains late and
+removed participants and Foundry's **Defeated** flag, with a fixed starting visit
+when matched; otherwise it uses a clearly labeled session note. Reload-safe
+snapshots and persisted source identities prevent normal duplicate hooks from
+recreating notes or overwriting GM edits. No session, damage, loot or XP is created
+automatically. See [behavior and limits](docs/campaign-log.md#automatic-combat-encounter-notes-0156)
+and the [lifecycle audit, tests and live Foundry checklist](docs/campaign-combat.md).

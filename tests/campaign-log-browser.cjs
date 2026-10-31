@@ -17,6 +17,7 @@ await page.evaluate(async()=>{
 });
 const log=page.locator('.myz-campaign-log'),editor=page.locator('.myz-campaign-editor');assert.equal(await log.count(),1);assert.match(await log.locator('[data-duration]').inputValue(),/^150$/);await page.evaluate(()=>Promise.all([openLog(),openLog()]));assert.equal(await log.count(),1);assert.equal(await page.evaluate(()=>service.window.focused),true);
 await log.locator('[data-start]').click();await page.waitForFunction(()=>service.state.sessions.length===1);await page.waitForFunction(()=>document.querySelector('[data-note-add]'));assert.match(await log.innerText(),/F5/);assert.match(await page.locator('#manager-toolbar').innerText(),/New Sector[\s\S]*● Log[\s\S]*Settings/);assert.match(await log.locator('[data-countdown]').innerText(),/02:29:|02:30:/);
+if(process.env.MYZ_COMBAT_ONLY){await require('./campaign-combat-browser.cjs')(page,assert);return;}
 // Shared labels, renumbering and compact timestamps do not change persisted history.
 const originalVisit=await page.evaluate(()=>structuredClone(service.state.sessions[0].visits[0]));
 await log.locator('[data-number]').click();await editor.locator('[name="number"]').fill('20');await editor.locator('[data-action="save"]').click();await page.waitForFunction(()=>document.querySelector('[data-detail-session-label]').textContent==='Session 20');

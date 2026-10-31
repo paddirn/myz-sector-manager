@@ -1,3 +1,4 @@
+import {validateCombatTracking,COMBAT_NOTE_LIMIT} from './combat.mjs';
 import {travelNoteText,noteChunks} from './travel-notes.mjs';
 import {canonicalCoordinate} from '../zone/grid.mjs';
 export const CAMPAIGN_VERSION=1;
@@ -11,11 +12,14 @@ const text=(value,max)=>{if(typeof value!=='string'||value.length>max)throw Erro
 export function validateLog(log){
  if(log?.version!==1||!Array.isArray(log.sessions)||!Number.isSafeInteger(log.nextSessionNumber)||log.nextSessionNumber<1||!Array.isArray(log.receipts))throw Error('Unsupported or invalid Campaign Log data; recording is disabled. Saved data has not been changed.');
  if(log.sessions.filter(s=>s.status==='active').length>1)throw Error('Campaign Log has multiple active sessions; saved data has not been changed.');
+ validateCombatTracking(log.combatEncounters);
  const ids=new Set(),numbers=new Set();
  const unique=id=>{if(typeof id!=='string'||!id||ids.has(id))throw Error('Campaign Log contains invalid or duplicate IDs.');ids.add(id);};
+ const note=(n,visitId)=>{unique(n.id);if(n.visitId!==visitId)throw Error('Invalid note relationship.');timestamp(n.createdAt);if(n.modifiedAt)timestamp(n.modifiedAt);text(n.text,n.combatUuid?COMBAT_NOTE_LIMIT:20000);if(n.combatUuid&&(typeof n.combatUuid!=='string'||n.category!=='Combat Encounter'))throw Error('Invalid Combat Encounter note.');};
  for(const s of log.sessions){unique(s.id);if(!Number.isSafeInteger(s.number)||s.number<1||numbers.has(s.number)||s.number>=log.nextSessionNumber)throw Error('Invalid session numbering.');numbers.add(s.number);duration(s.durationMinutes);timestamp(s.startAt);timestamp(s.expiresAt);if(!['active','completed'].includes(s.status)||!Array.isArray(s.visits)||!s.visits.length)throw Error('Invalid session state or missing initial visit.');if(s.status==='completed')timestamp(s.endAt);else if(s.endAt!==null)throw Error('Active sessions cannot have an end timestamp.');
  if(!s.party?.sceneId||!s.party.tokenId||!s.party.groupId)throw Error('Missing session Party identity.');
- for(const v of s.visits){unique(v.id);if(v.sessionId!==s.id||!canonicalCoordinate(v.coordinate)||!v.sceneId||!Array.isArray(v.notes))throw Error('Invalid sector visit.');if(v.travelEventIds!==undefined&&(!Array.isArray(v.travelEventIds)||v.travelEventIds.some(id=>typeof id!=='string'||!id)))throw Error('Invalid saved Travel Event note identifiers.');timestamp(v.arrivalAt);if(v.departureAt!==null)timestamp(v.departureAt);for(const n of v.notes){unique(n.id);if(n.visitId!==v.id)throw Error('Invalid note relationship.');timestamp(n.createdAt);if(n.modifiedAt)timestamp(n.modifiedAt);text(n.text,20000);}}
+ for(const v of s.visits){unique(v.id);if(v.sessionId!==s.id||!canonicalCoordinate(v.coordinate)||!v.sceneId||!Array.isArray(v.notes))throw Error('Invalid sector visit.');if(v.travelEventIds!==undefined&&(!Array.isArray(v.travelEventIds)||v.travelEventIds.some(id=>typeof id!=='string'||!id)))throw Error('Invalid saved Travel Event note identifiers.');timestamp(v.arrivalAt);if(v.departureAt!==null)timestamp(v.departureAt);for(const n of v.notes)note(n,v.id);}
+ if(s.notes!==undefined){if(!Array.isArray(s.notes))throw Error('Invalid session notes.');for(const n of s.notes)note(n,null);}
  if(timelineWarnings(s).length)throw Error(timelineWarnings(s).join(' '));
  }
  return log;
@@ -73,7 +77,7 @@ export function applyCommand(saved,command,{now=Date.now(),id=()=>globalThis.cry
  case 'deleteVisit':visit();if(s.status==='active')throw Error('End recording before deleting visits.');if(s.visits.length===1)throw Error('Keep at least one visit in a session.');s.visits=s.visits.filter(x=>x!==v);break;
  case 'addNote':visit();v.notes.push({id:id(),visitId:v.id,createdAt:at,modifiedAt:null,text:text(command.text,20000)});break;
  case 'editNote':case 'deleteNote':{
- visit();const note=v.notes.find(n=>n.id===command.noteId);if(!note)throw Error('The selected note no longer exists.');if(action==='editNote'){note.text=text(command.text,20000);note.modifiedAt=at;}else v.notes=v.notes.filter(n=>n!==note);break;}
+ session();const owner=command.visitId?visit():s,notes=owner.notes||[],note=notes.find(n=>n.id===command.noteId);if(!note)throw Error('The selected note no longer exists.');if(action==='editNote'){note.text=text(command.text,note.combatUuid?COMBAT_NOTE_LIMIT:20000);note.modifiedAt=at;}else owner.notes=notes.filter(n=>n!==note);break;}
  default:throw Error('Unknown Campaign Log command.');
  }
  validateLog(log);return {log,expired};

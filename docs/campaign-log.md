@@ -275,3 +275,76 @@ No changes are made to Foundry pause or world time.
    warn without undoing it. Test automatic expiration and offline recovery again.
 7. Check missing/outside-Zone Party handling and multiple-group selection. As a
    player, verify API rejection and no access to private campaign data.
+
+## Automatic Combat Encounter notes (0.1.56)
+
+A combat that **starts while a Campaign Log session is recording** is eligible for
+one automatic **Combat Encounter** note. Finish using the Combat Tracker's normal
+**End Combat** action or delete the Combat document directly. The integration
+finalizes on the confirmed deletion, not on round/turn changes, initiative reset,
+deactivation or switching encounters. Cancelling End Combat does not create a
+note. Deleting an encounter that never started does not log a completed fight.
+
+The original session must still be active and unexpired when the note is saved.
+Combat begun outside a session is not adopted if recording starts midway through
+it. Ending/deleting/replacing its original session prevents logging to another
+session. Reload restores saved tracking; already-running combats without a saved
+binding are deliberately not adopted. Start a new Combat document for a new
+encounter; resetting the same document does not create another automatic record.
+
+Participants are tracked by Combatant identity, not display name. The initial
+roster, later additions and last known changes persist in the existing private
+Campaign Log Journal. Removed combatants remain, with their last observed names,
+Actor UUIDs and defeated state. **Defeated** means Foundry's Combatant `defeated`
+flag, not dead, zero Strength or zero HP. No damage, initiative, dice, round count,
+loot, XP or victory assessment is recorded. Names/reference strings remain even
+if an Actor or Scene is unavailable. No replacement documents are created.
+
+At combat start, a matching open Sector Visit is captured only if its Scene and
+coordinate match the session's configured Party position and the combat Scene.
+That binding stays fixed if the party moves during the fight. No visit is inferred
+from the newest history entry or the GM's viewed Scene. A separate battle Scene,
+globally unlinked combat, unavailable Party position, or otherwise unmatched combat
+uses a **session-level note**. If its captured visit disappears, it also falls back
+to session scope. No visit is fabricated. The existing visit detail panel displays
+session-level notes beneath a clearly labeled **Session Notes (not associated with
+a sector visit)** section; the session header shows their count separately.
+
+Each note includes a title, completion timestamp, captured Scene/sector context,
+all observed participants, Actor UUIDs where available, and Defeated markers.
+Timestamps use the existing real-world UTC ISO storage and local created/edited
+labels; the body explicitly labels its completion timestamp as UTC. Rename the
+encounter by editing the first line using **Edit Note**, add commentary or correct
+the roster in the same editor, or **Delete Note** normally. This does not change
+combat documents. Export Log includes both visit notes and session notes. Combat
+notes allow up to 1,000,000 characters so larger rosters remain one note; ordinary
+manual notes keep their existing 20,000-character limit. Oversized summaries fail
+with a GM warning rather than creating an incomplete or split encounter note.
+
+The existing elected active GM and serialized Campaign Log queue perform writes.
+The note and its completed source-Combat marker are saved in the **same Journal
+flag update**. Replayed hooks, normal completion followed by another deletion
+notification, reloads and ordinary multiple-GM connections cannot normally create
+a second note. Completed markers remain even after the GM edits/deletes a note or
+deletes its session, so replay cannot overwrite edits or recreate deleted notes.
+Players neither record nor see these entries.
+
+Tracking is an additive optional `combatEncounters` array in the existing
+`campaignLog` flag (model version 1); unmatched notes use optional `session.notes`.
+Notes reuse the established text/timestamp/ID model, with `category` and
+`combatUuid` provenance. Existing sessions need no migration. Sector portable
+JSON, sector schemas, Travel Events, native Ark documents and combat mechanics
+are unchanged. Internal tracking is excluded from Export Log; the normal notes
+and their source UUID provenance are exported.
+
+Logging never awaits, cancels or vetoes a combat hook. Failed writes leave the
+previous saved log intact and do not create empty placeholder notes. GMs receive
+a brief error; the console includes diagnostic details and the captured snapshot.
+There is no background retry loop. A repeated confirmed deletion can safely retry
+because persisted markers and existing note provenance are checked first. As
+with other Campaign Log writes, Foundry supplies no server-side compare-and-swap:
+a GM handoff during an already-in-flight server write remains a concurrency risk.
+Keep one stable active GM during recording and back up the world. Events occurring
+while all GM clients are offline cannot be reconstructed.
+
+See [combat lifecycle, implementation, validation and manual checklist](campaign-combat.md).
