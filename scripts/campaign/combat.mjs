@@ -19,11 +19,16 @@ export function encounterSnapshot(combat,env=globalThis,includeRoster=true){
  const scene=combat.scene||env.game.scenes?.get?.(combat.sceneId);
  return {combatUuid:combatIdentity(combat),combatId:String(combat.id||''),name:label(combat.name,'Unnamed encounter'),sceneId:scene?.id||combat.sceneId||null,sceneName:label(scene?.name),participants:includeRoster?documents(combat.combatants).map(participantSnapshot).filter(Boolean):[]};
 }
-export function combatNoteText(encounter,completedAt){
- const location=[encounter.sceneName|| (encounter.sceneId?`Scene ${encounter.sceneId}`:'Scene unavailable'),encounter.coordinate?`Sector ${encounter.coordinate}${encounter.sectorName?` — ${encounter.sectorName}`:''}`:''].filter(Boolean).join(' · ');
- const lines=[`Combat Encounter: ${encounter.name}`,`Location: ${location}`,`Completed: ${completedAt} (real-world UTC)`, '', 'Participants'];
- if(!encounter.participants.length)lines.push('No combatants were observed.');
- for(const p of encounter.participants)lines.push(`- ${p.name}${p.defeated?' — Defeated':''}${p.actorUuid?` [${p.actorUuid}]`:''}`);
+export function combatNoteText(encounter){
+ const lines=['Combat Encounter'];
+ for(const defeated of [true,false]){
+  const participants=encounter.participants.filter(p=>p.defeated===defeated);if(!participants.length)continue;
+  const groups=new Map();for(const p of participants)groups.set(p.name,(groups.get(p.name)||0)+1);
+  lines.push('',`${defeated?'Defeated':'Other Participants'} (${participants.length})`);
+  for(const [name,count] of groups)lines.push(`- ${name}${defeated||count>1?` ×${count}`:''}`);
+ }
+ if(!encounter.participants.length)lines.push('','No combatants were observed.');
+ // Completion time is already shown by the note header from the saved createdAt.
  return lines.join('\n');
 }
 export function validateCombatTracking(records){

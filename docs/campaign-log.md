@@ -310,11 +310,18 @@ to session scope. No visit is fabricated. The existing visit detail panel displa
 session-level notes beneath a clearly labeled **Session Notes (not associated with
 a sector visit)** section; the session header shows their count separately.
 
-Each note includes a title, completion timestamp, captured Scene/sector context,
-all observed participants, Actor UUIDs where available, and Defeated markers.
-Timestamps use the existing real-world UTC ISO storage and local created/edited
-labels; the body explicitly labels its completion timestamp as UTC. Rename the
-encounter by editing the first line using **Edit Note**, add commentary or correct
+New notes use the fixed title **Combat Encounter**. Participants are grouped by
+exact display name within **Defeated (N)** and **Other Participants (N)** sections;
+counts represent individuals, not grouped rows. Empty sections are omitted.
+Defeated rows show quantities (including ×1); other rows show ×N for duplicates.
+The body contains no encounter name, Scene/location/sector information, UUIDs or
+technical timestamp. The existing header shows the completion time once in the
+viewer's local long-date/short-time format, without seconds or milliseconds.
+The original ISO creation time, individual identities, source references and visit
+context remain internal. Existing generated or GM-edited bodies are not rewritten.
+The saved/exported text retains its constant title; the display reuses the category
+header rather than repeating that title in the body. Rename it by editing the
+first line using **Edit Note**, add commentary or correct
 the roster in the same editor, or **Delete Note** normally. This does not change
 combat documents. Export Log includes both visit notes and session notes. Combat
 notes allow up to 1,000,000 characters so larger rosters remain one note; ordinary

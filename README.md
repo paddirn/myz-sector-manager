@@ -723,3 +723,11 @@ snapshots and persisted source identities prevent normal duplicate hooks from
 recreating notes or overwriting GM edits. No session, damage, loot or XP is created
 automatically. See [behavior and limits](docs/campaign-log.md#automatic-combat-encounter-notes-0156)
 and the [lifecycle audit, tests and live Foundry checklist](docs/campaign-combat.md).
+
+### Concise combat notes (0.1.57)
+
+New automatic notes use **Combat Encounter** with separate Defeated and Other
+Participants groups, individual counts and repeated-name quantities. The header
+shows local time once; encounter names, locations and UUIDs stay out of the new
+body. Tracking identities and visit links remain intact. Existing notes and GM
+edits are not rewritten. See the [formatting details and verification notes](docs/campaign-combat.md#concise-presentation-update-0157).
