@@ -1,3 +1,6 @@
+import {beginDrop,dropTarget} from './ui/drop.mjs';
+import {requireDocument,parseDocumentDrop,openDocument,currentReferenceNode} from './ui/documents.mjs';
+import {pickImage} from './ui/images.mjs';
 import {eventEntry,contentEmpty} from './ui/content.mjs';
 import {collectionActions} from './ui/actions.mjs';
 import {avatarMarkup,portraitFields} from './ui/inhabitant-portraits.mjs';
@@ -45,18 +48,18 @@ export function renderSettlement(host,{field,area,select,reference,terrainField}
 
 export async function renderProject(host,target,entry){
   const uuid=entry?.uuid,draft=host.draft,request=target.projectRequest=(target.projectRequest||0)+1;
-  const current=()=>host.draft===draft&&entry.uuid===uuid&&target.projectRequest===request;
+  const current=()=>host.draft===draft&&entry.uuid===uuid&&target.projectRequest===request&&currentReferenceNode(host,target);
   const retainedControls=target.closest('[data-entry]')?.querySelector('[data-project-controls]');if(retainedControls&&target.contains(retainedControls))target.after(retainedControls);
   const card=target.closest('[data-entry]');if(card)card.dataset.sortName=entry?.referenceName||entry?.title||'Unnamed project';
   host.projectTotals??=new Map();host.projectTotals.set(entry.id,null);const totalOutput=target.closest('[data-entry]')?.querySelector('[data-project-total]');if(totalOutput)totalOutput.textContent='Unavailable';
   if(entry.arkSource?.missing){target.textContent=`Source unavailable; saved snapshot retained: ${entry.title||''} — ${entry.details||''}`;return;}
   if(!uuid){target.textContent='Drop an Ark Project Item onto the reference field.';sortEditorEntries(host,target.closest('.sm-content')?.parentElement||host.element);return;}
   try{
-    const doc=requireProject(await fromUuid(uuid),game.system?.id||'mutant-year-zero');if(!current())return;host.projectTotals??=new Map();const requirement=projectRequirement(doc);host.projectTotals.set(entry.id,requirement.total);host.projectDiagnostics??=new Map();host.projectDiagnostics.set(entry.id,requirement.diagnostic);const total=target.closest('[data-entry]').querySelector('[data-project-total]');if(total)total.textContent=String(host.projectTotals.get(entry.id)??'Unavailable');
+    const doc=requireProject(await requireDocument(uuid,'Item',globalThis),game.system?.id||'mutant-year-zero');if(!current())return;host.projectTotals??=new Map();const requirement=projectRequirement(doc);host.projectTotals.set(entry.id,requirement.total);host.projectDiagnostics??=new Map();host.projectDiagnostics.set(entry.id,requirement.diagnostic);const total=target.closest('[data-entry]').querySelector('[data-project-total]');if(total)total.textContent=String(host.projectTotals.get(entry.id)??'Unavailable');
     const card=target.closest('[data-entry]');if(card){card.dataset.sortName=doc.name;const heading=card.querySelector('[data-entry-title]');if(heading)heading.textContent=doc.name;}
     const existingControls=target.closest('[data-entry]').querySelector('[data-project-controls]');if(existingControls)target.after(existingControls);target.replaceChildren();const title=document.createElement('h4');title.textContent=doc.name;target.append(title);
     const controls=target.closest('[data-entry]').querySelector('[data-project-controls]');if(controls)target.append(controls);
-    if(entry.arkSource){const open=document.createElement('button');open.type='button';open.textContent='Open Ark Project';open.addEventListener('click',()=>doc.sheet.render(true));target.append(open);}
+    if(entry.arkSource){const open=document.createElement('button');open.type='button';open.textContent='Open Ark Project';open.addEventListener('click',()=>{void requireDocument(uuid,'Item',globalThis).then(doc=>{if(current())return doc.sheet.render(true);}).catch(()=>ui.notifications.error('Project reference is missing or inaccessible.'));});target.append(open);}
     const image=document.createElement('div');image.className='sm-project-image';host.showImage(image,imagePath(doc.img),doc.name,'No project illustration');target.append(image);
     // Escape source HTML as text; the native sheet remains the authoritative rich-text view.
     const details=document.createElement('dl');for(const [label,value] of projectInformation(doc)){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;const parsed=new DOMParser().parseFromString(String(value),'text/html');dd.textContent=parsed.body.textContent;details.append(dt,dd);}target.append(details);
@@ -90,12 +93,7 @@ export function bindSettlement(host){
   const report=task=>Promise.resolve(task).catch(error=>ui.notifications.error(`Settlement: ${error.message}`));
   el.querySelectorAll('[data-settlement-image]').forEach(button=>button.addEventListener('click',()=>report((async()=>{
     const draft=host.draft,id=host.sectorId,path=button.dataset.settlementImage,control=el.querySelector(`[name="${path}"]`);
-    const Picker=foundry.applications.apps.FilePicker.implementation;
-    await new Picker({type:'image',current:control.value,callback:value=>{
-      if(host.draft!==draft||host.sectorId!==id||!host.rendered)return;
-      const image=imagePath(value);if(!image){ui.notifications.warn('Choose a supported image file path.');return;}
-      control.value=image;host.capture();host.markDirty();const target=el.querySelector(`[data-settlement-preview="${path}"]`);host.showImage(target,image,'Settlement image');
-    }}).render(true);
+    await pickImage({path:control.value,current:()=>host.draft===draft&&host.sectorId===id&&host.rendered&&control.isConnected,onSelect:image=>{control.value=image;host.capture();host.markDirty();const target=el.querySelector(`[data-settlement-preview="${path}"]`);host.showImage(target,image,'Settlement image');}},globalThis);
   })())));
   if(host.tab==='Shop'){bindShop(host);return;}
   if(host.tab==='Factions'){bindFactions(host);return;}
@@ -116,13 +114,14 @@ export function bindSettlement(host){
   content.addEventListener('dragover',event=>{if(blank(event)){event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy';}});
   content.addEventListener('drop',event=>{
     if(!blank(event))return;event.preventDefault();event.stopPropagation();void report((async()=>{
-      if(!game.user.isGM||host.droppingProject)return;host.droppingProject=true;
+      if(!game.user.isGM||host.droppingProject)return;host.droppingProject=true;const finish=beginDrop(host,dropTarget(event,host));
       try{
-        host.capture();const draft=host.draft,id=host.sectorId,signature=JSON.stringify(draft),payload=foundry.applications.ux.TextEditor.implementation.getDragEventData(event);
-        const doc=requireProject(payload.uuid?await fromUuid(payload.uuid):null,game.system?.id||'mutant-year-zero');
-        if(host.draft!==draft||host.sectorId!==id||!host.rendered||JSON.stringify(draft)!==signature)throw new Error('Sector selection or edits changed. Nothing was added; drop again.');
+        host.capture();const draft=host.draft,id=host.sectorId,signature=JSON.stringify(draft),payload=parseDocumentDrop(event,globalThis);
+        const doc=requireProject(payload.uuid?await requireDocument(payload.uuid,'Item',globalThis):null,game.system?.id||'mutant-year-zero');
+        if(host.referenceClosed||host.draft!==draft||host.sectorId!==id||!host.rendered||JSON.stringify(draft)!==signature)throw new Error('Sector selection or edits changed. Nothing was added; drop again.');
         draft.settlement.projects.push(assignProject(newSettlementEntry('projects'),doc,game.system?.id));host.markDirty();await host.render();
-      }finally{host.droppingProject=false;}
+        finish('completed');
+      }catch(error){finish('failed');throw error;}finally{host.droppingProject=false;}
     })());
   });
 }

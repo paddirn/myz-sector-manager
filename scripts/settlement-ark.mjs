@@ -1,3 +1,4 @@
+import {requireDocument,openDocument,currentReferenceNode} from './ui/documents.mjs';
 import {canonicalCoordinate,coordinateToBounds} from './zone/grid.mjs';
 import {sectorOnScene} from './sector-types.mjs';
 // Official MYZ 14.0.4: module/data-model.js MYZArkDataModel and Ark sheet tabs.
@@ -13,14 +14,14 @@ export function arkInformation(actor,env=globalThis){
 export async function hydrateArk(host,root=host.element,env=globalThis){
  const target=root.querySelector('[data-ark-information]');if(!target)return;
  const uuid=host.data.settlement.arkUuid,request=target.arkRequest=(target.arkRequest||0)+1;
- const current=()=>host.data.settlement.arkUuid===uuid&&target.arkRequest===request;
+ const current=()=>host.data.settlement.arkUuid===uuid&&target.arkRequest===request&&currentReferenceNode(host,target);
  const population=root.querySelector('[data-ark-population]'),coordinates=root.querySelector('[data-ark-coordinates]'),placement=root.querySelector('[data-ark-placement-warning]');
  const unavailable=()=>{if(population)population.value='Unavailable';if(coordinates)coordinates.value='Unavailable';if(placement)placement.textContent='Ark coordinate unavailable; existing sector placement retained.';};
  if(!uuid){target.textContent='Drop an Ark Actor above or paste its UUID. The linked sheet remains the source of truth.';return;}
  try{
-  const actor=requireArk(await env.fromUuid(uuid),env);if(!current())return;
+  const actor=requireArk(await requireDocument(uuid,'Actor',env),env);if(!current())return;
   if(population)population.value=String(actor.system?.population??'');if(coordinates)coordinates.value=String(actor.system?.coordinates??'');if(placement)placement.textContent=arkCoordinateState(actor,host.data,host.arkPlacementContext).message;
-  target.replaceChildren();const open=env.document.createElement('button');open.type='button';open.textContent=`Open Ark Sheet: ${actor.name}`;open.addEventListener('click',()=>actor.sheet.render(true));target.append(open);
+  target.replaceChildren();const open=env.document.createElement('button');open.type='button';open.textContent=`Open Ark Sheet: ${actor.name}`;open.addEventListener('click',()=>{void requireDocument(uuid,'Actor',env).then(doc=>{if(current())return doc.sheet.render(true);}).catch(()=>env.ui.notifications.error('Ark reference is missing or inaccessible.'));});target.append(open);
   const dl=env.document.createElement('dl');dl.style.whiteSpace='pre-wrap';dl.style.overflowWrap='anywhere';
   for(const [label,value] of arkInformation(actor,env)){const dt=env.document.createElement('dt'),dd=env.document.createElement('dd');dt.textContent=label;dd.textContent=new env.DOMParser().parseFromString(String(value??''),'text/html').body.textContent;dl.append(dt,dd);}target.append(dl);
  }catch(error){if(current()){unavailable();target.textContent=`Linked Ark unavailable (${uuid}): ${error.message} Saved reference and Settlement data are retained.`;}}
@@ -53,7 +54,7 @@ export function synchronizeArkProjects(settlement,actor){
 export async function synchronizeArkDraft(host,env=globalThis){
  const draft=host.draft;if(!draft?.settlement)return false;
  const uuid=draft.settlement.arkUuid;let actor;
- try{if(uuid)actor=requireArk(await env.fromUuid(uuid),env);}catch{/* retain missing snapshots */}
+ try{if(uuid)actor=requireArk(await requireDocument(uuid,'Actor',env),env);}catch{/* retain missing snapshots */}
  if(host.draft!==draft||draft.settlement.arkUuid!==uuid)return false;
  const result=synchronizeArkProjects(draft.settlement,actor);
  if(result.changed){draft.settlement.projects=result.projects;host.markDirty();}

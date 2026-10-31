@@ -1,3 +1,4 @@
+import {requireDocument} from '../ui/documents.mjs';
 import {WanderingTokens} from '../wandering/service.mjs';
 import {registerWandering} from '../wandering/ui.mjs';
 import {registerTravelSettings} from '../travel/settings.mjs';
@@ -117,7 +118,7 @@ export class ZoneRuntime {
   async attachPortrait(button,id){
     const track=this.store.config.groups.find(group=>group.id===id);
     if(!track)return;
-    const sources=await portraitCandidates(track,this.store.scene,uuid=>this.env.fromUuid(uuid));
+    const sources=await portraitCandidates(track,this.store.scene,uuid=>requireDocument(uuid,'Actor',this.env).catch(()=>null));
     if(!button.isConnected||!this.store.isGM)return;
     const image=this.env.document.createElement('img');image.alt='';image.width=36;image.height=36;
     const next=()=>{

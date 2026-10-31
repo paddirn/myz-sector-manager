@@ -1,3 +1,6 @@
+import {beginDrop,dropTarget} from './ui/drop.mjs';
+import {requireDocument,openDocument,currentReferenceNode,parseDocumentDrop} from './ui/documents.mjs';
+import {documentLink,referenceState} from './ui/reference.mjs';
 import {bulkControls} from './ui/actions.mjs';
 import {stepResourceValue} from './settlement-trading.mjs';
 import {buyShopItem} from './shop-purchases.mjs';
@@ -46,14 +49,13 @@ function selectEntry(host,id,{reveal=true}={}){
 export async function hydrateShop(host,root){
   const draft=host.draft,state=shopState(host),generation=host.shopRenderGeneration=(host.shopRenderGeneration||0)+1;
   await Promise.all(entries(host.data.settlement.shop).map(async({group,entry})=>{
-    const target=root.querySelector(`[data-shop-entry="${entry.id}"]`);if(!target)return;const uuid=entry.uuid,current=()=>host.draft===draft&&entry.uuid===uuid&&host.shopRenderGeneration===generation;
+    const target=root.querySelector(`[data-shop-entry="${entry.id}"]`);if(!target)return;const uuid=entry.uuid,current=()=>host.draft===draft&&entry.uuid===uuid&&host.shopRenderGeneration===generation&&currentReferenceNode(host,target);
     try{
       const {doc,fields:sourceFields}=await resolveShopItem(uuid);const fields=shopDisplayFields(group,entry,doc,sourceFields);if(!current())return;state.names.set(entry.id,doc.name);state.documents.set(entry.id,doc);
-      const link=document.createElement('a');link.className='content-link';link.dataset.uuid=doc.uuid;link.textContent=doc.name;link.tabIndex=0;link.setAttribute('role','link');
-      const open=event=>{event.preventDefault();event.stopPropagation();selectEntry(host,entry.id,{reveal:false});Promise.resolve().then(()=>doc._onClickDocumentLink(event)).catch(error=>ui.notifications.error(`Shop Item: ${error.message}`));};link.addEventListener('click',open);link.addEventListener('keydown',event=>{if(event.key==='Enter')open(event);});target.querySelector('[data-shop-link] a').replaceWith(link);if(groupType(group)==='vehicles'&&doc.documentName==='Item'){const warning=document.createElement('small');warning.textContent=`Legacy Item reference retained. Replace with a Vehicle Actor. Saved Passengers: ${entry.passengers??'—'}; Travel Type: ${entry.travelType??'—'}.`;target.querySelector('[data-shop-link]').append(warning);}
+      const link=documentLink(doc,{env:globalThis,current,onOpen:async event=>{selectEntry(host,entry.id,{reveal:false});const latest=await requireDocument(uuid,'Item|Actor',globalThis);if(current())await openDocument(latest,event,globalThis);}});target.querySelector('[data-shop-link] a').replaceWith(link);if(groupType(group)==='vehicles'&&doc.documentName==='Item'){const warning=document.createElement('small');warning.textContent=`Legacy Item reference retained. Replace with a Vehicle Actor. Saved Passengers: ${entry.passengers??'—'}; Travel Type: ${entry.travelType??'—'}.`;target.querySelector('[data-shop-link]').append(warning);}
       for(const cell of target.querySelectorAll('[data-shop-field]')){const key=cell.dataset.shopField;if(key==='link')continue;cell.textContent=String(fields[key]??'');if(key==='requirement')cell.title=String(fields[key]??'');}
 
-    }catch(error){if(current()){state.names.set(entry.id,'Missing Item');state.documents.delete(entry.id);const link=document.createElement('a');link.textContent='Missing Item';link.title=`${uuid}: ${error.message}. Reference retained; select it to replace or remove.`;link.setAttribute('aria-disabled','true');target.querySelector('[data-shop-link] a')?.replaceWith(link);target.classList.add('sm-reference-missing');}}
+    }catch(error){if(current()){state.names.set(entry.id,'Missing Item');state.documents.delete(entry.id);for(const cell of target.querySelectorAll('[data-shop-field]'))if(cell.dataset.shopField!=='link'){cell.textContent='—';cell.removeAttribute('title');}const link=document.createElement('a');link.textContent='Missing Item';link.title='Reference missing, inaccessible or invalid. Reference retained; select it to replace or remove.';referenceState(link,error.state||'unavailable',{uuid,types:'Item|Actor'});link.setAttribute('aria-disabled','true');target.querySelector('[data-shop-link] a')?.replaceWith(link);target.classList.add('sm-reference-missing');}}
   }));refreshShopToolbar(host,root);
 }
 export function bindShop(host){
@@ -91,17 +93,18 @@ export function bindShop(host){
   const accepts=event=>!event.target.closest('input,textarea,select,button,a');
   content.addEventListener('dragover',event=>{if(accepts(event)){event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy';}});
   content.addEventListener('drop',event=>{if(!accepts(event))return;event.preventDefault();event.stopPropagation();host.handledShopDrops??=new WeakSet();if(host.handledShopDrops.has(event))return;host.handledShopDrops.add(event);void report((async()=>{
-    if(!game.user.isGM||host.droppingShop)return;host.droppingShop=true;
+    if(!game.user.isGM||host.droppingShop)return;host.droppingShop=true;const finish=beginDrop(host,dropTarget(event,host));
     try{
       rememberViewport(host);host.capture();const draft=host.draft,id=host.sectorId,signature=JSON.stringify(draft),journal=host.journal,saved=journal?.getFlag('myz-sector-manager','sector');if(!saved||saved.initialSavePending)throw new Error('Save this Settlement before dropping Shop Items.');
       const baseline=JSON.stringify(saved.settlement?.shop??null),wasDirty=host.dirty;
-      let payload;try{payload=foundry.applications.ux.TextEditor.implementation.getDragEventData(event);}catch{throw new Error('Invalid drag data. Drop a Foundry Item document.');}
+      let payload;try{payload=parseDocumentDrop(event,globalThis);}catch{throw new Error('Invalid drag data. Drop a Foundry Item document.');}
       const doc=await resolveShopDrop(payload);
-      if(host.draft!==draft||host.sectorId!==id||!host.rendered||JSON.stringify(draft)!==signature)throw new Error('Sector selection or edits changed. Nothing was added; drop again.');
+      if(host.referenceClosed||host.draft!==draft||host.sectorId!==id||!host.rendered||JSON.stringify(draft)!==signature)throw new Error('Sector selection or edits changed. Nothing was added; drop again.');
       const target=state.replace?.groupId||event.target.closest('[data-shop-group]')?.dataset.shopGroup||state.selectedGroup,result=putShopItem(draft.settlement.shop,doc,target,{replaceId:state.replace?.entryId});state.replace=null;state.selectedGroup=result.group.id;state.selectedEntryId=result.entry.id;state.collapsed.delete(result.group.id);
-      if(result.duplicate){state.revealSelected=true;ui.notifications.info('This Item is already in that group; selected its existing reference.');await host.render();return;}
+      if(result.duplicate){state.revealSelected=true;ui.notifications.info('This Item is already in that group; selected its existing reference.');await host.render();finish('completed');return;}
       host.markDirty();const after=JSON.stringify(draft);try{await host.persistShop(journal,baseline);}catch(error){throw new Error(`Could not save Shop inventory: ${error.message}. The draft remains available; retry Save Sector.`);}if(host.draft===draft&&host.sectorId===id){if(JSON.stringify(draft)===after)host.dirty=wasDirty;await host.render();}
-    }finally{host.droppingShop=false;}
+      finish('completed');
+    }catch(error){finish('failed');throw error;}finally{host.droppingShop=false;}
   })());});
 }
 

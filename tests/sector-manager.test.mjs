@@ -1,3 +1,9 @@
+import {bindDropFeedback,beginDrop,dropTarget} from '../scripts/ui/drop.mjs';
+import {hydrateFactions} from '../scripts/settlement-factions-ui.mjs';
+import {hydrateShop} from '../scripts/settlement-shop-ui.mjs';
+import {requireDocument,resolveDocument,parseDocumentDrop,openDocument,currentReferenceNode} from '../scripts/ui/documents.mjs';
+import {referenceField,referenceState,documentLink,promptReference,bindReferenceUpdates,unbindReferenceUpdates} from '../scripts/ui/reference.mjs';
+import {imagePreview,pickImage} from '../scripts/ui/images.mjs';
 import {gearEntry,eventEntry,contentEmpty} from '../scripts/ui/content.mjs';
 import {collectionActions,bulkControls,entryLabel,confirmEntryRemoval,unsavedChangesGuard} from '../scripts/ui/actions.mjs';
 import {sameRecord,acknowledgePaths,saveStatus} from '../scripts/ui/save-state.mjs';
@@ -43,7 +49,7 @@ function fixture(){
   const documents=new Map();
   class ApplicationV2 {async render(){return this;} async close(){this.closed=true;this.rendered=false;return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};this.travel={};}summary(){return '';}settingsActions(){return '';}setSelection(){}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({gearEntry,eventEntry,contentEmpty,collectionActions,bulkControls,entryLabel,confirmEntryRemoval,unsavedChangesGuard,sameRecord,acknowledgePaths,saveStatus,ScrollKeeper,InhabitantPortraits,avatarMarkup,portraitFields,entryCard,updateEntryCollapse,bindEntryCollapse,unbindEntryCollapse,selectOptions,CampaignLogService:class {state=emptyLog();subscribe(){}},activeSession,logButton,openCampaignLog,PartySkillService,openPartySkillRequest,PlayerShopService,createPlayerShopClass,hydrateArk,requireArk,synchronizeArkDraft,settingsMenu:(host,runtime)=>renderSettingsMenu(host,runtime,context),bindSettingsMenu,refreshSettingsMenu,importSector,exportSector,sortEditorEntries,inhabitantCollection,hydrateInhabitants,bindInhabitantDrops,dropInhabitant,linkInhabitant,SETTLEMENT_COLLECTIONS,SETTLEMENT_ACCENT,settlementAccent,normalizeSettlement,newSettlementEntry,requireProject,assignProject,renderSettlement,hydrateSettlement,bindSettlement,renderProject,console,macroRunOnce,safeImageSource,imagePath,journalImageSource,isSpecial,isSettlement,isAuthored,sectorOnScene,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone,randomID:()=>crypto.randomUUID()},applications:{api:{ApplicationV2,DialogV2:{confirm:async()=>true,wait:async()=> 'discard'}},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){},on(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({bindDropFeedback,beginDrop,dropTarget,hydrateFactions,hydrateShop,pickImage,requireDocument,resolveDocument,parseDocumentDrop,openDocument,currentReferenceNode,referenceField,referenceState,documentLink,promptReference,bindReferenceUpdates,unbindReferenceUpdates,imagePreview,gearEntry,eventEntry,contentEmpty,collectionActions,bulkControls,entryLabel,confirmEntryRemoval,unsavedChangesGuard,sameRecord,acknowledgePaths,saveStatus,ScrollKeeper,InhabitantPortraits,avatarMarkup,portraitFields,entryCard,updateEntryCollapse,bindEntryCollapse,unbindEntryCollapse,selectOptions,CampaignLogService:class {state=emptyLog();subscribe(){}},activeSession,logButton,openCampaignLog,PartySkillService,openPartySkillRequest,PlayerShopService,createPlayerShopClass,hydrateArk,requireArk,synchronizeArkDraft,settingsMenu:(host,runtime)=>renderSettingsMenu(host,runtime,context),bindSettingsMenu,refreshSettingsMenu,importSector,exportSector,sortEditorEntries,inhabitantCollection,hydrateInhabitants,bindInhabitantDrops,dropInhabitant,linkInhabitant,SETTLEMENT_COLLECTIONS,SETTLEMENT_ACCENT,settlementAccent,normalizeSettlement,newSettlementEntry,requireProject,assignProject,renderSettlement,hydrateSettlement,bindSettlement,renderProject,console,macroRunOnce,safeImageSource,imagePath,journalImageSource,isSpecial,isSettlement,isAuthored,sectorOnScene,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone,randomID:()=>crypto.randomUUID()},applications:{api:{ApplicationV2,DialogV2:{confirm:async()=>true,wait:async()=> 'discard'}},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){},on(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -162,20 +168,17 @@ test('deleting by stable UI identity forgets its state without shifting remainin
 
 function referenceZone(uuid){
   const listeners={};
-  const link={setAttribute(){},addEventListener:(name,fn)=>listeners[name]=fn,click:()=>listeners.click({preventDefault(){},stopPropagation(){}})};
-  const target={classList:{add(){},remove(){}},textContent:'',innerHTML:'',querySelector:()=>link};
+  const link={dataset:{},append(){},setAttribute(){},addEventListener:(name,fn)=>listeners[name]=fn,click:()=>listeners.click({preventDefault(){},stopPropagation(){}})};
+  const target={dataset:{},setAttribute(){},replaceChildren(node){this.innerHTML=node?'<a class="content-link"></a>':'';},classList:{add(){},remove(){},toggle(){}},textContent:'',innerHTML:'',querySelector:()=>link};
   const input={value:uuid}, clear={disabled:false};
-  const zone={querySelector:selector=>selector==='input'?input:selector==='[data-reference-link]'?target:clear};
+  const zone={dataset:{type:''},querySelector:selector=>selector==='input'?input:selector==='[data-reference-link]'?target:clear};
   return {zone,target,input,clear,listeners,link};
 }
 
-test('legacy UUIDs enrich into native links with keyboard support and no separate open button',async()=>{
-  const {app,context,documents}=fixture();const {zone,target,listeners}=referenceZone('Item.one');let opened=0;
+test('legacy UUIDs render safe native-style links with keyboard support',async()=>{
+  const {app,context,documents}=fixture();const {zone,target,listeners,link}=referenceZone('Item.one');context.document.createElement=tag=>tag==='a'?link:{setAttribute(){}};context.document.createTextNode=text=>text;let opened=0;
   documents.set('Item.one',{_onClickDocumentLink:async()=>opened++});
-  context.foundry.applications.ux.TextEditor.implementation.enrichHTML=async(text,options)=>{
-    assert.equal(text,'@UUID[Item.one]');assert.equal(options.documents,true);assert.equal(options.rolls,false);
-    return '<a class="content-link">Artifact</a>';
-  };
+  context.foundry.applications.ux.TextEditor.implementation.enrichHTML=()=>assert.fail('Reference links must use safe DOM construction');
   await app.renderReference(zone);assert.match(target.innerHTML,/content-link/);
   await listeners.keydown({key:'Enter',preventDefault(){},stopPropagation(){}});
   await new Promise(resolve=>setImmediate(resolve));assert.equal(opened,1);
@@ -188,12 +191,12 @@ test('missing or malformed references retain their UUID and can be cleared safel
   const missing=referenceZone('Item.missing');await app.renderReference(missing.zone);
   assert.match(missing.target.textContent,/Missing reference/);assert.equal(missing.input.value,'Item.missing');
   const malformed=referenceZone('Item.bad]@UUID[Actor.injected');await app.renderReference(malformed.zone);
-  assert.match(malformed.target.textContent,/Reference unavailable/);assert.equal(malformed.target.innerHTML,'');
+  assert.match(malformed.target.textContent,/Invalid reference/);assert.equal(malformed.target.innerHTML,'');
   app.capture=()=>{};await app.clearReference(missing.zone);assert.equal(missing.input.value,'');assert(missing.clear.disabled);
   assert.equal(missing.target.textContent,'Drop a document here');assert(app.dirty);
 });
 
-test('a slow enrichment cannot restore a reference after it was cleared',async()=>{
+test('a slow resolution cannot restore a reference after it was cleared',async()=>{
   const {app,context}=fixture();const {zone,input,target}=referenceZone('Item.slow');let resolve;
   context.fromUuid=()=>new Promise(done=>resolve=done);
   const pending=app.renderReference(zone);
@@ -483,8 +486,8 @@ test('Images previews remain visible while metadata uses optional details and pa
 });
 
 test('a permission failure preserves an image page reference and shows an unavailable preview',async()=>{
-  const {app,context}=fixture(),ref=referenceZone('Compendium.myz.book.JournalEntry.a.JournalEntryPage.p');ref.input.name='special.images.0.uuid';const preview={textContent:'',replaceChildren(){this.textContent='';}};ref.zone.closest=()=>({querySelector:()=>preview});context.fromUuid=async()=>{throw new Error('Permission denied');};
-  await app.renderReference(ref.zone);assert.match(preview.textContent,/unavailable: Permission denied/);assert.equal(ref.input.value,'Compendium.myz.book.JournalEntry.a.JournalEntryPage.p');assert.match(ref.target.textContent,/Reference unavailable/);
+  const {app,context}=fixture(),ref=referenceZone('Compendium.myz.book.JournalEntry.a.JournalEntryPage.p');ref.input.name='special.images.0.uuid';const preview={dataset:{},textContent:'',replaceChildren(){this.textContent='';}};ref.zone.closest=()=>({querySelector:()=>preview});context.fromUuid=async()=>{throw new Error('Permission denied');};
+  await app.renderReference(ref.zone);assert.match(preview.textContent,/unavailable/);assert.equal(ref.input.value,'Compendium.myz.book.JournalEntry.a.JournalEntryPage.p');assert.match(ref.target.textContent,/Reference unavailable/);
 });
 
 test('Special Overview places the complete Overlay Image control after GM Notes without changing its path',()=>{
@@ -629,4 +632,9 @@ test('Phase 4B Gear adapters share fields while preserving quantities, extras, u
 });
 test('Phase 4B Event adapters preserve distinct reference/status/relationship fields and common layout',()=>{
  for(const type of ['special','settlement']){const {app}=phase3Fixture(type);app.tab='Events';const key=type==='special'?'special':'settlement';app.draft[key].events=[{id:'event',title:'Authored',details:'Body',uuid:'JournalEntry.page',status:'Dormant <custom>',trigger:'At dusk',outcomes:'Storm',related:'Mara / Council',notes:'Private',unknown:'keep'}];const before=JSON.stringify(app.draft),html=app.build();assert.equal(JSON.stringify(app.draft),before);assert.match(html,/sm-event-entry/);assert.match(html,/>Event Title</);assert.match(html,/>Description</);assert.match(html,/\.details" rows="5"/);assert.match(html,/Add Event/);if(type==='special'){assert.match(html,/name="special.events.0.uuid"/);assert.doesNotMatch(html,/name="special.events.0.(status|trigger|outcomes|related|notes)"/);}else{for(const field of ['status','trigger','outcomes','related','notes'])assert(html.includes(`name="settlement.events.0.${field}"`));assert.match(html,/value="Dormant &lt;custom&gt;" selected/);assert.doesNotMatch(html,/name="settlement.events.0.uuid"/);}}
+});
+
+test('Phase 4A clearing a reference while an assignment resolves invalidates the stale mutation',async()=>{
+ const {app,context}=fixture(),{zone,input}=referenceZone('Item.original');zone.dataset.type='Item';app.draft={loot:[{title:'Keep',uuid:'Item.original',type:'artifact'}]};app.referenceEntry=()=>app.draft.loot[0];app.capture=()=>{app.draft.loot[0].uuid=input.value;};app.renderReference=async()=>{};let finish;context.fromUuid=()=>new Promise(r=>finish=r);
+ const assigning=app.dropReference({preventDefault(){},stopPropagation(){},payload:{uuid:'Item.slow'}},zone);await app.clearReference(zone);finish({uuid:'Item.slow',documentName:'Item',type:'weapon',name:'Slow'});await assigning;assert.equal(input.value,'');assert.equal(app.draft.loot[0].uuid,'');assert.equal(app.draft.loot[0].title,'Keep');
 });

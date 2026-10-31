@@ -1,3 +1,4 @@
+import {requireDocument,checkDocument} from './ui/documents.mjs';
 const id=()=>globalThis.foundry?.utils?.randomID?.()||globalThis.crypto.randomUUID();
 const legacyFields={details:'Description',description:'Description',leader:'Leader',goals:'Goals',resources:'Resources',disposition:'Relationship to Party',relationship:'Relationship to Party',allies:'Allies',rivals:'Rivals',tensions:'Current Tensions',notes:'GM Notes'};
 export function normalizeFaction(raw){
@@ -26,6 +27,6 @@ export function addFactionMember(faction,actor){
 export async function resolveFactionActor(payload,env=globalThis){
  if(!payload||typeof payload!=='object'||(payload.type&&payload.type!=='Actor')||(!payload.uuid&&payload.type!=='Actor'))throw new Error('Drop a Foundry Actor from the directory or a Compendium.');
  const ActorClass=env.CONFIG?.Actor?.documentClass||env.Actor?.implementation||env.Actor;
- const actor=ActorClass?.fromDropData?await ActorClass.fromDropData(payload):payload.uuid?await env.fromUuid(payload.uuid):null;
- if(actor?.documentName!=='Actor'||!actor.uuid)throw new Error('The Actor is missing, inaccessible or invalid.');return actor;
+ const actor=ActorClass?.fromDropData?await ActorClass.fromDropData(payload):payload.uuid?await requireDocument(payload.uuid,'Actor',env):null;
+ if(actor?.documentName!=='Actor'||!actor.uuid)throw new Error('The Actor is missing, inaccessible or invalid.');return checkDocument(actor,'Actor',env);
 }

@@ -1,3 +1,9 @@
+import {bindDropFeedback,beginDrop,dropTarget} from './ui/drop.mjs';
+import {hydrateFactions} from './settlement-factions-ui.mjs';
+import {hydrateShop} from './settlement-shop-ui.mjs';
+import {requireDocument,resolveDocument,parseDocumentDrop,openDocument,currentReferenceNode} from './ui/documents.mjs';
+import {referenceField,referenceState,documentLink,promptReference,bindReferenceUpdates,unbindReferenceUpdates} from './ui/reference.mjs';
+import {imagePreview,pickImage} from './ui/images.mjs';
 import {gearEntry,eventEntry,contentEmpty} from './ui/content.mjs';
 import {collectionActions,entryLabel,confirmEntryRemoval,unsavedChangesGuard} from './ui/actions.mjs';
 import {sameRecord,acknowledgePaths,saveStatus} from './ui/save-state.mjs';
@@ -97,11 +103,7 @@ const attr = escapeHTML;
 const field = (label,name,value='',type='text') => `<label class="sm-field"><span>${escapeHTML(label)}</span><input name="${attr(name)}" type="${type}" value="${attr(value)}" ${type==='number'?'min="0" step="1"':''}></label>`;
 const area = (label,name,value='',rows=5) => `<label class="sm-field"><span>${escapeHTML(label)}</span><textarea name="${attr(name)}" rows="${rows}">${escapeHTML(value)}</textarea></label>`;
 const select = (label,name,value,opts) => `<label class="sm-field"><span>${escapeHTML(label)}</span><select name="${attr(name)}">${selectOptions(value,opts)}</select></label>`;
-const reference = (key,i,uuid='',name=`${key}.${i}.uuid`) => `<div class="sm-reference" data-reference data-type="${REFERENCES[key]||''}">
-  <input type="hidden" name="${attr(name)}" value="${attr(uuid)}">
-  <span class="sm-reference-label">Reference${REFERENCES[key]?` · Drop ${REFERENCES[key].replaceAll('|',' or ').replaceAll('JournalEntryPage','Journal Entry Page').replaceAll('JournalEntry','Journal Entry')}`:' · Drop a document'}</span>
-  <div class="sm-reference-row"><span data-reference-link role="status">${uuid?'Loading reference…':'Drop a document here'}</span><button type="button" data-reference-clear title="Remove reference" aria-label="Remove reference" ${uuid?'':'disabled'}><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
-</div>`;
+const reference = (key,i,uuid='',name=`${key}.${i}.uuid`) => referenceField({name,uuid,types:REFERENCES[key]||''});
 const outstandingSupplies = data => Object.keys(SUPPLIES).some(key=>Number(data.supplies?.[key]?.quantity)>0&&!data.supplies[key].collected);
 const supplies = (data,collapsed) => `<section class="sm-consumables"><button type="button" class="sm-consumables-header" data-consumables-toggle aria-expanded="${!collapsed}" aria-controls="sm-consumables-body"><span data-consumables-chevron aria-hidden="true">${collapsed?'▶':'▼'}</span> Consumables</button><div id="sm-consumables-body" ${collapsed?'hidden':''}><div class="sm-consumable-columns">${[['cleanGrub','rotGrub','cleanWater','rotWater'],['bullets','booze','components']].map(keys=>`<table class="sm-supplies"><thead><tr><th>Resource</th><th>Quantity</th><th>Collected</th></tr></thead><tbody>${keys.map(key=>{const label=SUPPLIES[key],value=data.supplies?.[key]??{quantity:0,collected:false};return `<tr data-supply="${key}" class="${Number(value.quantity)>0&&!value.collected?'is-available':''}"><th scope="row">${label}</th><td><input aria-label="${label} quantity" name="supplies.${key}.quantity" type="number" min="0" step="any" value="${attr(value.quantity)}"></td><td><input aria-label="${label} collected" name="supplies.${key}.collected" type="checkbox" ${value.collected?'checked':''}></td></tr>`;}).join('')}</tbody></table>`).join('')}</div><p>Collected marks the recorded quantity; it does not transfer resources or subtract them.</p></div></section>`;
 
@@ -132,8 +134,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     if(isSettlement(this.data))await synchronizeArkDraft(this);
     const root=document.createElement('div');
     root.className='sm-root';
-    root.innerHTML=this.build();root.dataset.scrollScope=JSON.stringify([this.sectorId,this.tab]);this.portraits.prepare(root);if(isSettlement(this.data)&&this.tab==='Projects')root.querySelector('.sm-content')?.classList.add('sm-projects-grid');
-    await Promise.all(Array.from(root.querySelectorAll('[data-reference]'),zone=>this.renderReference(zone)));
+    this.referenceClosed=false;this.referenceRoot=root;root.innerHTML=this.build();root.dataset.scrollScope=JSON.stringify([this.sectorId,this.tab]);this.portraits.prepare(root);if(isSettlement(this.data)&&this.tab==='Projects')root.querySelector('.sm-content')?.classList.add('sm-projects-grid');
+    this.referenceHydration=Promise.all(Array.from(root.querySelectorAll('[data-reference]'),zone=>this.renderReference(zone))).catch(()=>{});
     if(isSettlement(this.data))await hydrateSettlement(this,root);
     hydrateInhabitants(this,root,globalThis);sortEditorEntries(this,root);
     return root;
@@ -285,6 +287,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-faction-member{margin:0;width:110px;text-align:center;overflow-wrap:anywhere}
       .myz-sector-manager .sm-faction-member a{display:flex;flex-direction:column;align-items:center;gap:4px;white-space:normal;background:none;border:0}
       .myz-sector-manager .sm-faction-member img,.myz-sector-manager [data-member-image]{display:flex;align-items:center;justify-content:center;width:100px;height:100px;object-fit:contain;border:1px solid #888}
+      .myz-sector-manager [data-member-image]:has(img){border:0}
       .myz-sector-manager .sm-faction-member button{width:auto;font-size:.85em}
       .myz-sector-manager .sm-faction-info{margin-top:14px;padding-top:10px;border-top:1px solid #888}
       .myz-sector-manager .sm-entry-head{display:flex;align-items:center;gap:8px;padding:8px;cursor:pointer}
@@ -301,6 +304,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
       .myz-sector-manager .sm-entry-controls button{width:auto;white-space:normal;height:auto}
       .myz-sector-manager .sm-reference{grid-column:1/-1;min-width:0;border:1px dashed #888;padding:8px;margin-bottom:12px}
       .myz-sector-manager .sm-reference-label{display:block;margin-bottom:6px;font-weight:bold}
+      .myz-sector-manager [data-reference-state="inaccessible"],.myz-sector-manager [data-reference-state="invalid"]{border-inline-start:3px solid #ac6b20;padding-inline-start:5px}
+      .myz-sector-manager [data-drop-state="valid"]{outline:2px solid #34834c;outline-offset:-2px}.myz-sector-manager [data-drop-state="invalid"],.myz-sector-manager [data-drop-state="failed"]{outline:2px dashed #b45228;outline-offset:-2px}.myz-sector-manager [data-drop-state="candidate"],.myz-sector-manager [data-drop-state="pending"]{outline:2px dotted #9563c9;outline-offset:-2px}.myz-sector-manager [data-drop-state="completed"]{outline:1px solid #34834c;outline-offset:-1px}
       .myz-sector-manager .sm-reference-row{display:flex;align-items:center;gap:6px}
       .myz-sector-manager [data-reference-link]{flex:1;min-width:0;overflow-wrap:anywhere}
       .myz-sector-manager .sm-reference .content-link{white-space:normal;overflow-wrap:anywhere}
@@ -367,13 +372,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   overlayImageControl(){
     return `<section class="sm-field sm-overlay-image-control"><span>Overlay Image</span><button type="button" data-overlay-image-pick aria-label="Choose Overlay Image"><span class="sm-image-preview" data-overlay-preview>Choose an image</span></button><button type="button" data-overlay-image-clear>Clear Overlay Image</button><small>Choose a file using Foundry's FilePicker. Save Sector to keep the selection.</small></section>`;
   }
-  showImage(target,src,alt,missing='Image is missing or could not be loaded.'){
-    if(!target)return;target.replaceChildren();
-    if(!src){target.textContent=missing;return;}
-    const image=document.createElement('img');image.alt=alt;image.loading='lazy';image.decoding='async';
-    image.addEventListener('error',()=>{if(image.parentNode===target)target.textContent=missing;},{once:true});
-    image.src=src;target.append(image);
-  }
+  showImage(target,src,alt,missing){return imagePreview(target,src,alt,missing,{env:globalThis,current:()=>currentReferenceNode(this,target)});}
   refreshOverlayImage(){
     const target=this.element?.querySelector('[data-overlay-preview]');if(!target)return;
     this.showImage(target,imagePath(this.data.special?.overlayImage),'Overlay Image',this.data.special?.overlayImage?'Overlay image is missing or unavailable.':'Choose an image');
@@ -382,12 +381,8 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
   async pickOverlayImage(){
     try{
       if(!game.user.isGM||!isSpecial(this.data))return;
-      const draft=this.draft,id=this.sectorId,Picker=foundry.applications.apps.FilePicker.implementation;
-      const picker=new Picker({type:'image',current:draft.special.overlayImage,callback:path=>{
-        if(this.draft!==draft||this.sectorId!==id||this.rendered===false||!isSpecial(draft))return;
-        const selected=imagePath(path);if(!selected){ui.notifications.warn('Choose a supported image file path.');return;}
-        this.capture();draft.special.overlayImage=selected;this.markDirty();this.refreshOverlayImage();zone.overlay?.setDraft?.(id,draft);
-      }});await picker.render(true);
+      const draft=this.draft,id=this.sectorId;
+      await pickImage({path:draft.special.overlayImage,current:()=>this.draft===draft&&this.sectorId===id&&this.rendered!==false&&isSpecial(draft),onSelect:selected=>{this.capture();draft.special.overlayImage=selected;this.markDirty();this.refreshOverlayImage();zone.overlay?.setDraft?.(id,draft);}},globalThis);
     }catch(error){ui.notifications.error(`Unable to choose overlay image: ${error.message}`);}
   }
   imagesEntries(){
@@ -434,23 +429,24 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     if(this.droppingEntry)return;
     const journal=this.journal,saved=journal?.getFlag(MOD,KEY);
     if(!journal?.id||journal.isTemporary||saved?.initialSavePending||!isSpecial(saved)){ui.notifications.warn('Save this Special sector before dropping documents to create entries.');return;}
-    this.droppingEntry=true;
+    this.droppingEntry=true;const finish=beginDrop(this,dropTarget(event,this));
     try{
       this.capture();const draft=this.draft,id=this.sectorId,signature=JSON.stringify(draft),wasDirty=this.dirty,baseline=this.specialContext?.journal===journal?this.specialContext.baselines[key]:JSON.stringify(sectorCollection(saved,key));
-      const payload=foundry.applications.ux.TextEditor.implementation.getDragEventData(event);
+      const payload=parseDocumentDrop(event,globalThis);
       if(!payload.uuid)throw new Error('Drop a Foundry document with a UUID.');
-      const doc=await fromUuid(payload.uuid),expected=REFERENCES[key];
+      const expected=REFERENCES[key],doc=await requireDocument(payload.uuid,expected,globalThis);
       if(doc?.documentName!==expected)throw new Error(`This tab requires ${expected==='JournalEntryPage'?'an Image-type Journal page':`an ${expected}`} document.`);
       const src=key==='special.images'?journalImageSource(doc):null;
       if(key==='special.images'&&!src)throw new Error('An Image-type Journal page with an available image source is required.');
-      if(this.draft!==draft||this.sectorId!==id||this.rendered===false||JSON.stringify(draft)!==signature)throw new Error('Sector selection or edits changed. Nothing was added; drop again.');
+      if(this.referenceClosed||this.draft!==draft||this.sectorId!==id||this.rendered===false||JSON.stringify(draft)!==signature)throw new Error('Sector selection or edits changed. Nothing was added; drop again.');
       const item={title:doc.name,referenceTitle:doc.name,uuid:doc.uuid,details:''};
       if(key==='special.gear')Object.assign(item,{type:itemLootType(doc)||'scrap',typeSource:'reference',quantity:1});
       if(src)item.imageSrc=src;
       sectorCollection(draft,key).push(item);this.entryState(key);this.markDirty();
       const after=JSON.stringify(draft);await this.persistSpecialCollection(key,journal,baseline);
       if(this.draft===draft&&this.sectorId===id){if(JSON.stringify(draft)===after)this.dirty=wasDirty;await this.render();}
-    }catch(error){ui.notifications.warn(`Could not add entry: ${error.message}`);}
+      finish('completed');
+    }catch(error){finish('failed');ui.notifications.warn(`Could not add entry: ${error.message}`);}
     finally{this.droppingEntry=false;}
   }
   persistSpecialCollection(key,journal,baseline){
@@ -524,10 +520,12 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     this.refreshOverlayImage();this.situationResize?.disconnect();if(globalThis.ResizeObserver){let width=0;this.situationResize=new ResizeObserver(entries=>{const next=entries[0]?.contentRect.width;if(next!==width){width=next;this.sizeSituation();}});this.situationResize.observe(el);}
     el.querySelectorAll('[data-image-metadata]').forEach(details=>details.addEventListener('toggle',()=>{const state=this.entryState('special.images');if(details.open)state.collapsed.delete(details.dataset.imageMetadata);else state.collapsed.add(details.dataset.imageMetadata);}));
     el.querySelector('[data-consumables-toggle]')?.addEventListener('click',()=>{const state=this.consumablesState();state.collapsed=!state.collapsed;this.refreshConsumables();});
+    bindReferenceUpdates(this,globalThis);bindDropFeedback(this,globalThis);
     el.querySelectorAll('[data-reference]').forEach(zone=>{
       zone.addEventListener('dragover',event=>{event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy';});
-      const referenceInput=zone.querySelector('input');zone.assignedUuid=referenceInput.value;referenceInput.addEventListener('change',()=>{const changed=referenceInput.value!==zone.assignedUuid;this.capture();this.markDirty();void this.renderReference(zone,{detectType:changed});});
+      const referenceInput=zone.querySelector('input');zone.assignedUuid=referenceInput.value;referenceInput.addEventListener('change',()=>{zone.dropAssignment=(zone.dropAssignment||0)+1;const changed=referenceInput.value!==zone.assignedUuid;this.capture();this.markDirty();void this.renderReference(zone,{detectType:changed});});
       zone.addEventListener('drop',event=>this.dropReference(event,zone));
+      zone.querySelector('[data-reference-attach]')?.addEventListener('click',async()=>{const draft=this.draft,button=zone.querySelector('[data-reference-attach]');try{const uuid=await promptReference(referenceInput.value,zone.dataset.type,globalThis);if(uuid&&this.draft===draft&&currentReferenceNode(this,zone)&&zone.isConnected)await this.dropReference({preventDefault(){},stopPropagation(){}},zone,{uuid});}catch{ui.notifications.error('Reference attachment could not be completed.');}finally{if(button.isConnected)button.focus({preventScroll:true});}});
       zone.querySelector('[data-reference-clear]').addEventListener('click',()=>this.clearReference(zone));
     });
     // Delay pointer selection briefly so rerender cannot destroy the double-click target.
@@ -776,36 +774,20 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     this.autosaveWrite=write;this.lootWrite=write;return this.trackSave(write,'Gear & Artifacts entries');
   }
   async renderReference(zone,{detectType=false}={}){
-    const input=zone.querySelector('input'), target=zone.querySelector('[data-reference-link]');
-    const uuid=input.value,draft=this.draft,entry=this.referenceEntry(zone),revision=entry?this.lootTypeRevisions.get(entry)||0:0;zone.assignedUuid=uuid;
-    const request=zone.referenceRequest=(zone.referenceRequest||0)+1;
-    const current=()=>zone.referenceRequest===request && input.value===uuid && this.draft===draft;
+    const input=zone.querySelector('input'),target=zone.querySelector('[data-reference-link]'),uuid=input.value,draft=this.draft,entry=this.referenceEntry(zone),revision=entry?this.lootTypeRevisions.get(entry)||0:0;
+    zone.assignedUuid=uuid;const request=zone.referenceRequest=(zone.referenceRequest||0)+1;
+    const current=()=>zone.referenceRequest===request&&input.value===uuid&&this.draft===draft&&currentReferenceNode(this,zone);
     zone.querySelector('[data-reference-clear]').disabled=!uuid;
-    target.classList.remove('sm-reference-missing');this.renderInhabitantAvatar(zone,null);if(input.name?.startsWith('special.images.'))this.renderJournalImage(zone,null,'Assign an Image-type Journal page.');
-    if(!uuid){target.textContent='Drop a document here';return;}
-    target.textContent='Loading reference…';
-    try{
-      // Never interpolate untrusted legacy strings into inline-link syntax.
-      if(!/^[A-Za-z0-9_.-]+$/.test(uuid))throw new Error('Invalid document UUID');
-      const doc=await fromUuid(uuid);
-      if(!current())return;
-      if(!doc){this.renderJournalImage(zone,null,'Journal page is missing or unavailable.');target.textContent=`Missing reference (${uuid})`;target.classList.add('sm-reference-missing');return;}
-      this.renderJournalImage(zone,doc);this.renderInhabitantAvatar(zone,doc);
-      if(detectType&&(!entry||(this.lootTypeRevisions.get(entry)||0)===revision))this.assignLootType(zone,doc,true);this.assignSpecialTitle(zone,doc,detectType);
-      const html=await foundry.applications.ux.TextEditor.implementation.enrichHTML(`@UUID[${uuid}]`,{documents:true,links:false,rolls:false,embeds:false,custom:false});
-      if(!current())return;
-      target.innerHTML=html;
-      const link=target.querySelector('a.content-link');
-      if(!link)throw new Error('Document link could not be rendered');
-      link.tabIndex=0;
-      link.setAttribute('role','link');
-      // Route through the native document-link hook explicitly, so these links
-      // also work inside this custom ApplicationV2 and are not handled twice.
-      link.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();this.openReference(zone,event);});
-      link.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();event.stopPropagation();link.click();}});
-    }catch(err){
-      if(current()){this.renderJournalImage(zone,null,`Image page is unavailable: ${err.message}`);target.textContent=`Reference unavailable (${uuid}): ${err.message}`;target.classList.add('sm-reference-missing');}
-    }
+    zone.dataset.referenceState=uuid?'resolving':'empty';referenceState(target,uuid?'resolving':'empty');this.renderInhabitantAvatar(zone,null);
+    if(input.name?.startsWith('special.images.'))this.renderJournalImage(zone,null,'Assign an Image-type Journal page.');
+    if(!uuid)return;
+    const result=await resolveDocument(uuid,zone.dataset.type,globalThis);if(!current())return;if(result.state==='valid')try{this.validateDropPreview(zone,result.doc);}catch{result.state='invalid';result.doc=null;}
+    zone.referenceUnavailable=result.state!=='valid';zone.dataset.referenceState=result.state;
+    referenceState(target,result.state,{uuid,types:zone.dataset.type});
+    if(result.state!=='valid'){this.portraits.unavailable(uuid);this.renderInhabitantAvatar(zone,null);this.renderJournalImage(zone,null,'Journal page is missing or unavailable.');return;}
+    const doc=result.doc;this.renderJournalImage(zone,doc);this.renderInhabitantAvatar(zone,doc);
+    if(detectType&&(!entry||(this.lootTypeRevisions.get(entry)||0)===revision))this.assignLootType(zone,doc,true);this.assignSpecialTitle(zone,doc,detectType);
+    target.replaceChildren(documentLink(doc,{env:globalThis,current,onOpen:event=>this.openReference(zone,event)}));
   }
 
   clearReferenceWarning(zone){
@@ -814,6 +796,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     zone.closest?.('.sm-entry-body')?.querySelector('[data-reference-warning]')?.remove();
   }
   clearReference(zone){
+    zone.dropAssignment=(zone.dropAssignment||0)+1;
     zone.querySelector('input').value='';
     this.capture();this.clearReferenceWarning(zone);this.markDirty();
     const rendering=this.renderReference(zone);if(zone.querySelector('input').name==='settlement.arkUuid')void this.render();
@@ -821,38 +804,48 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     return rendering;
   }
 
-  async dropReference(event,zone){
+  validateDropPreview(node,doc){
+    const name=node.matches?.('[data-reference]')?node.querySelector('input').name:'';
+    if(name.startsWith('settlement.projects.')||!name&&this.tab==='Projects')requireProject(doc,game.system?.id||'mutant-year-zero');
+    if(name==='settlement.arkUuid')requireArk(doc);
+    if(name.startsWith('special.images.')||!name&&this.tab==='Images')if(!journalImageSource(doc))throw new Error('An Image-type Journal page is required.');
+    if(this.tab==='Shop'&&doc.documentName==='Actor'&&doc.type!=='vehicle')throw new Error('Vehicle Actor required.');
+  }
+  async dropReference(event,zone,payloadOverride){
     event.preventDefault();event.stopPropagation();
-    if(isSettlement(this.data)&&!game.user.isGM)return;
-    const draft=this.draft,input=zone.querySelector('input'),entry=this.referenceEntry(zone),revision=entry?this.lootTypeRevisions.get(entry)||0:0;
+    if(!game.user.isGM)return;
+    const finish=beginDrop(this,zone);
+    const draft=this.draft,input=zone.querySelector('input'),originalUuid=input.value,assignment=zone.dropAssignment=(zone.dropAssignment||0)+1,entry=this.referenceEntry(zone),revision=entry?this.lootTypeRevisions.get(entry)||0:0;
     try{
-      const payload=foundry.applications.ux.TextEditor.implementation.getDragEventData(event);
-      if(!payload.uuid){ui.notifications.warn('Drop a document from Foundry.');return;}
-      const doc=await fromUuid(payload.uuid);
-      if(this.draft!==draft || !this.element.contains(zone))return;
+      const payload=payloadOverride||parseDocumentDrop(event,globalThis);
+      if(!payload.uuid){finish('failed');ui.notifications.warn('Drop a document from Foundry.');return;}
+      const doc=await requireDocument(payload.uuid,zone.dataset.type,globalThis);
+      if(this.referenceClosed||this.draft!==draft||zone.dropAssignment!==assignment||input.value!==originalUuid||!this.element.contains(zone))return;
       if(!doc)throw new Error('Reference could not be found.');
       if(zone.dataset.type && !zone.dataset.type.split('|').includes(doc.documentName)){ui.notifications.warn(`This entry expects a ${zone.dataset.type.replaceAll('|',' or ').replaceAll('JournalEntryPage','Journal Entry Page').replaceAll('JournalEntry','Journal Entry')}.`);return;}
       if(input.name?.startsWith('settlement.projects.'))requireProject(doc,game.system?.id||'mutant-year-zero');
       if(input.name==='settlement.arkUuid')requireArk(doc);
       if(input.name?.startsWith('special.images.')&&!journalImageSource(doc))throw new Error('An Image-type Journal page with an available image source is required.');
-      if(inhabitantCollection(this.data,this.tab)&&doc.documentName==='Actor'&&!await linkInhabitant(this,zone,doc,globalThis))return;
+      if(inhabitantCollection(this.data,this.tab)&&doc.documentName==='Actor'&&!await linkInhabitant(this,zone,doc,globalThis,()=>zone.dropAssignment===assignment&&input.value===originalUuid&&!this.referenceClosed)){finish('completed');return;}
       const changed=zone.querySelector('input').value!==doc.uuid;
       if(input.name?.startsWith('settlement.projects.')&&entry)Object.assign(entry,assignProject(entry,doc,game.system?.id));zone.querySelector('input').value=doc.uuid;
       this.capture();if(input.name?.endsWith('.macroUuid')){const effect=this.draft.effects[Number(input.name.split('.')[1])];effect.triggerId||=foundry.utils.randomID();}if(!entry||(this.lootTypeRevisions.get(entry)||0)===revision)this.assignLootType(zone,doc,changed);this.assignSpecialTitle(zone,doc,changed);this.clearReferenceWarning(zone);this.markDirty();
       await this.renderReference(zone);if(input.name==='settlement.arkUuid')await this.render();
       if(input.name?.startsWith('settlement.projects.')){const target=zone.closest('[data-entry]').querySelector('[data-project-view]');await renderProject(this,target,entry);const title=zone.closest('[data-entry]').querySelector('[data-entry-title]');title.textContent=entry.referenceName;}
-    }catch(err){ui.notifications.error(`Unable to attach reference: ${err.message}`);}
+    finish('completed');
+    }catch(err){finish('failed');ui.notifications.error(`Unable to attach reference: ${err.message}`);}
   }
 
+  async refreshReferenceSections(doc,name){
+    try{if(!this.rendered||this.referenceClosed)return;
+      if(this.tab==='Factions'&&this.data.settlement?.factions.some(f=>f.members.some(m=>m.uuid===doc.uuid)))await hydrateFactions(this,this.element,globalThis);
+      if(this.tab==='Shop'&&this.data.settlement?.shop.groups.some(g=>g.entries.some(e=>e.uuid===doc.uuid)))await hydrateShop(this,this.element);
+      if(this.tab==='Projects'&&name==='deleteItem')for(const target of this.element.querySelectorAll('[data-project-view]')){const entry=this.data.settlement.projects[Number(target.dataset.projectView)];if(entry.uuid===doc.uuid)await renderProject(this,target,entry);}
+    }catch{ui.notifications.error('Reference display could not be refreshed. Reopen to retry.');}
+  }
   async openReference(zone,event){
-    try{
-      const uuid=zone.querySelector('input').value.trim();
-      if(!uuid)return;
-      const doc=await fromUuid(uuid);
-      if(!doc)throw new Error('Reference could not be found.');
-      if(doc.documentName==='Macro'){await doc.sheet.render(true);return;}
-      await doc._onClickDocumentLink(event);
-    }catch(err){ui.notifications.error(`Unable to open reference: ${err.message}`);}
+    if(!game.user.isGM)return;
+    try{const uuid=zone.querySelector('input').value.trim();if(!uuid)return;const doc=await requireDocument(uuid,zone.dataset?.type||'',globalThis);if(zone.querySelector('input').value.trim()===uuid&&currentReferenceNode(this,zone))await openDocument(doc,event,globalThis);}catch{ui.notifications.error('Unable to open reference: document could not be found or is inaccessible/invalid.');}
   }
   async randomizeSector(){
     if(!game.user.isGM||isAuthored(this.data)||this.changingType||this.randomizing)return;
@@ -878,7 +871,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     finally{this.randomizing=false;}
   }
   async close(options={}){if(this.closing||this.navigating)return this;this.closing=true;try{if(!await this.confirmLose())return this;return await super.close(options);}finally{this.closing=false;}}
-  async _onClose(options){this.scrollKeeper.capture(this.element?.querySelector?.('.sm-root'));this.scrollKeeper.disconnect();this.portraits.stop();unbindEntryCollapse(this.element);clearTimeout(this.sidebarClick);await Promise.allSettled([this.stuntWrite,this.lootWrite,this.specialWrite,this.inhabitantWrite,this.shopWrite]);this.situationResize?.disconnect();zone.overlay?.clearDraft?.();return super._onClose(options);}
+  async _onClose(options){this.referenceClosed=true;this.referenceRoot=null;unbindReferenceUpdates(this,globalThis);this.dropFeedbackCleanup?.();this.scrollKeeper.capture(this.element?.querySelector?.('.sm-root'));this.scrollKeeper.disconnect();this.portraits.stop();unbindEntryCollapse(this.element);clearTimeout(this.sidebarClick);await Promise.allSettled([this.stuntWrite,this.lootWrite,this.specialWrite,this.inhabitantWrite,this.shopWrite]);this.situationResize?.disconnect();zone.overlay?.clearDraft?.();return super._onClose(options);}
   persistStunts(){
     const journal=this.journal,states=normalizePathStunts(foundry.utils.deepClone(this.draft.pathStunts));
     const write=(this.autosaveWrite||Promise.resolve()).catch(()=>{}).then(async()=>{
