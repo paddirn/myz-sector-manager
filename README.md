@@ -673,3 +673,9 @@ See [Phase 0/1 compatibility, extension points, and manual checks](https://githu
 Normal, Special and Settlement Inhabitants now share compact header avatars and larger previews. Linked Actor portraits take precedence over the editable **Saved Portrait (fallback)**, followed by a shared silhouette. Use **Choose Portrait** or type an image path, then **Save Sector**. Actor image updates refresh portraits without changing saved narrative snapshots or Actor documents.
 
 Sector Manager preserves sidebar and editor/nested-panel scroll positions during ordinary rerenders, including saving and reference hydration. Positions are local to the current window; nothing is added to sector records. See [Phase 2 architecture, safeguards and manual Foundry checks](docs/ui-phase2.md). The focused browser check is `node tests/ui-phase2-browser.cjs` (requires the same Playwright/Chromium setup as the other browser checks).
+
+### Shared entry actions and unsaved-change protection (0.1.51)
+
+Collection headers now use context-specific Add controls and shared Expand All / Collapse All buttons. Entry removal identifies the record and offers **Remove** or **Cancel**, defaulting to Cancel. Removal retains its existing Save Sector requirement; linked Ark Projects remain protected.
+
+Closing or leaving a dirty Normal, Special or Settlement sector offers **Save Changes**, **Discard Changes**, or **Cancel**. A failed save keeps the draft open. Discard cannot undo completed collection autosaves or native Ark writes. Footer messages distinguish whole-sector saving from collection-only saves, and detected remote edits block a full save for review. See [Phase 3 audit, architecture, persistence boundaries and manual checks](docs/ui-phase3.md). Run `node tests/ui-phase3-browser.cjs` for the focused interactive dialog checks using the existing browser-test setup.

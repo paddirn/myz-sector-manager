@@ -33,5 +33,5 @@ export async function writeArkProjectStatus(settlement,entry,status,env=globalTh
  const item=Array.from(actor.items||[]).find(i=>i.uuid===source.projectUuid&&i.type==='project');
  if(!item||item.parent?.uuid!==actor.uuid||!item.id)throw new Error('The linked Ark Project is missing; no other Project was changed.');
  const completed=status==='Completed';if(item.system.completed===completed)return;
- await actor.updateEmbeddedDocuments('Item',[{_id:item.id,'system.completed':completed}]);
+ await actor.updateEmbeddedDocuments('Item',[{_id:item.id,'system.completed':completed}]);return true;
 }

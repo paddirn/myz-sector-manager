@@ -1,3 +1,5 @@
+import {collectionActions,bulkControls,entryLabel,confirmEntryRemoval,unsavedChangesGuard} from '../scripts/ui/actions.mjs';
+import {sameRecord,acknowledgePaths,saveStatus} from '../scripts/ui/save-state.mjs';
 import {ScrollKeeper} from '../scripts/ui/scroll.mjs';
 import {InhabitantPortraits,avatarMarkup,portraitFields,portraitSources} from '../scripts/ui/inhabitant-portraits.mjs';
 import {entryCard,updateEntryCollapse,bindEntryCollapse,unbindEntryCollapse} from '../scripts/ui/entry.mjs';
@@ -38,9 +40,9 @@ const source=readFileSync(new URL('../scripts/sector-manager.mjs',import.meta.ur
 function fixture(){
   const notices=[];
   const documents=new Map();
-  class ApplicationV2 {async render(){return this;} }
+  class ApplicationV2 {async render(){return this;} async close(){this.closed=true;this.rendered=false;return this;} }
   class ZoneRuntime {constructor(){this.store={sectorRecords:()=>[]};this.travel={};}summary(){return '';}settingsActions(){return '';}setSelection(){}bindSummary(){}api(){return {};}register(){}start(){}}
-  const context=vm.createContext({ScrollKeeper,InhabitantPortraits,avatarMarkup,portraitFields,entryCard,updateEntryCollapse,bindEntryCollapse,unbindEntryCollapse,selectOptions,CampaignLogService:class {state=emptyLog();subscribe(){}},activeSession,logButton,openCampaignLog,PartySkillService,openPartySkillRequest,PlayerShopService,createPlayerShopClass,hydrateArk,requireArk,synchronizeArkDraft,settingsMenu:(host,runtime)=>renderSettingsMenu(host,runtime,context),bindSettingsMenu,refreshSettingsMenu,importSector,exportSector,sortEditorEntries,inhabitantCollection,hydrateInhabitants,bindInhabitantDrops,dropInhabitant,linkInhabitant,SETTLEMENT_COLLECTIONS,SETTLEMENT_ACCENT,settlementAccent,normalizeSettlement,newSettlementEntry,requireProject,assignProject,renderSettlement,hydrateSettlement,bindSettlement,renderProject,console,macroRunOnce,safeImageSource,imagePath,journalImageSource,isSpecial,isSettlement,isAuthored,sectorOnScene,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone,randomID:()=>crypto.randomUUID()},applications:{api:{ApplicationV2},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){},on(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
+  const context=vm.createContext({collectionActions,bulkControls,entryLabel,confirmEntryRemoval,unsavedChangesGuard,sameRecord,acknowledgePaths,saveStatus,ScrollKeeper,InhabitantPortraits,avatarMarkup,portraitFields,entryCard,updateEntryCollapse,bindEntryCollapse,unbindEntryCollapse,selectOptions,CampaignLogService:class {state=emptyLog();subscribe(){}},activeSession,logButton,openCampaignLog,PartySkillService,openPartySkillRequest,PlayerShopService,createPlayerShopClass,hydrateArk,requireArk,synchronizeArkDraft,settingsMenu:(host,runtime)=>renderSettingsMenu(host,runtime,context),bindSettingsMenu,refreshSettingsMenu,importSector,exportSector,sortEditorEntries,inhabitantCollection,hydrateInhabitants,bindInhabitantDrops,dropInhabitant,linkInhabitant,SETTLEMENT_COLLECTIONS,SETTLEMENT_ACCENT,settlementAccent,normalizeSettlement,newSettlementEntry,requireProject,assignProject,renderSettlement,hydrateSettlement,bindSettlement,renderProject,console,macroRunOnce,safeImageSource,imagePath,journalImageSource,isSpecial,isSettlement,isAuthored,sectorOnScene,sectorTabs,sectorCollection,specialQuantity,normalizeSpecialGear,normalizeSectorType,sectorTitle,tabLabel,document:{activeElement:null},generateEntry,normalizeEncounter,ENCOUNTER_STATUSES,ENCOUNTER_TYPES,normalizePathStunts,normalizeThreatLevel,sectorThreatLevel,threatDescriptor,meaningfulText,cleanThreatRecord,threatDeletion,LOOT_TYPES,normalizeLoot,lootTitle,itemLootType,lootQuantity,lootCollected,canonicalCoordinate,sectorIndicators,iconMarkup,travelOptions,travelTimes,formatDuration,sectorTravelOptions,storedTravel,LINKED_STUNTS,sectorNaming,sectorName,ensureJournalFolders,JournalOrganization,ZoneRuntime,tabHasContent,CONSUMABLES,generateSector,saveGeneratedSector,RANDOMIZATION_METHODS,DEFAULT_GENERATION_OPTIONS,foundry:{utils:{deepClone:structuredClone,randomID:()=>crypto.randomUUID()},applications:{api:{ApplicationV2,DialogV2:{confirm:async()=>true,wait:async()=> 'discard'}},ux:{TextEditor:{implementation:{getDragEventData:e=>e.payload}}}}},Hooks:{once(){},on(){}},game:{journal:[],user:{isGM:true}},ui:{notifications:{warn:x=>notices.push(x),error:x=>notices.push(x)}},fromUuid:async uuid=>documents.get(uuid)});
   vm.runInContext(source+'\nglobalThis.Manager=SectorManager; globalThis.normalizeSector=normalize;globalThis.dialogOptions=randomizeDialogOptions;',context);
   const app=new context.Manager();app.element={querySelector:()=>null,querySelectorAll:()=>[],contains:()=>true};
   return {context,app,notices,documents};
@@ -559,3 +561,63 @@ test('Phase 0: render branches retain independent portraits, Journal encounters,
  }
 });
 test('custom dropdown options survive unrelated capture/save and permit an explicit supported replacement',async()=>{const {app,context}=fixture();let stored={version:1,code:'A1',status:'Mapped <custom> & "quoted"',notes:'Original',effects:[{title:'Storm',status:'Waiting',category:'Ion Storm'}]};const custom=stored.status,j={id:'custom-options',name:'Custom sector',getFlag:()=>stored,update:async update=>{stored=structuredClone(update['flags.myz-sector-manager.sector']);}};context.game.journal.get=()=>j;context.ui.notifications.info=()=>{};app.sectorId=j.id;app.draft=app.loadDraft(stored,j);app.tab='Overview';assert.match(app.build(),/Mapped &lt;custom&gt; &amp; &quot;quoted&quot;.*Legacy\/custom value/);const fields=[{name:'status',value:custom,type:'select-one'},{name:'notes',value:'Unrelated change',type:'textarea'}];app.element.querySelectorAll=selector=>selector==='.sm-content [name]'?fields:[];await app.action('save');assert.equal(stored.status,custom);assert.equal(stored.notes,'Unrelated change');assert.equal(stored.effects[0].category,'Ion Storm');fields[0].value='Explored';await app.action('save');assert.equal(stored.status,'Explored');});
+
+function phase3Fixture(type='normal'){
+ const f=fixture();let stored=f.context.normalizeSector({version:1,sectorType:type,code:'A1',nameOverride:true,customName:'Guard Sector',notes:'Saved notes',locations:[],loot:[],effects:[],history:[],encounters:[{id:'z',title:'Zebra'},{id:'a',title:'Alpha'}]});
+ const j={id:'phase3-'+type,name:'Guard Sector',getFlag:()=>stored,async update(update){if(update['flags.myz-sector-manager.sector'])stored=structuredClone(update['flags.myz-sector-manager.sector']);},async setFlag(m,k,value){stored=structuredClone(value);}};
+ f.context.game.journal.get=id=>id===j.id?j:{id,name:'Next',getFlag:()=>f.context.normalizeSector({version:1,code:'B2'})};f.app.sectorId=j.id;f.app.draft=f.app.loadDraft(stored,j);f.app.capture=()=>{};f.app.rendered=true;
+ return {...f,j,getStored:()=>stored,remote:value=>{stored=structuredClone(value);}};
+}
+for(const type of ['normal','special','settlement']){
+ test(`Phase 3 ${type}: dirty close Cancel/Discard and clean close share one guard`,async()=>{
+  const {app,context}=phase3Fixture(type);let prompts=0,choice='cancel';context.foundry.applications.api.DialogV2.wait=async options=>{prompts++;assert.equal(options.window.title,'Unsaved Changes');assert.equal(options.buttons.find(b=>b.default).action,'cancel');return choice;};
+  app.markDirty();app.draft.notes='Draft';await app.close();assert.equal(app.closed,undefined);assert.equal(app.draft.notes,'Draft');assert.equal(app.dirty,true);
+  choice='discard';await app.close();assert.equal(app.closed,true);assert.equal(prompts,2);
+  app.closed=false;app.dirty=false;await app.close();assert.equal(app.closed,true);assert.equal(prompts,2);
+ });
+ test(`Phase 3 ${type}: save-and-continue waits for persistence and failed saves retain draft`,async()=>{
+  const f=phase3Fixture(type),{app,context,j}=f;context.foundry.applications.api.DialogV2.wait=async()=> 'save';app.draft.notes='Save me';app.markDirty();
+  const update=j.update.bind(j);j.update=async()=>{throw Error('Write denied');};await app.navigate('next');assert.equal(app.sectorId,j.id);assert.equal(app.draft.notes,'Save me');assert(app.dirty);assert.match(app.saveNote,/Write denied/);
+  j.update=update;await app.navigate('next');assert.equal(app.sectorId,'next');assert.equal(f.getStored().notes,'Save me');assert.equal(app.dirty,false);
+ });
+}
+test('Phase 3 repeated navigation/close while prompting cannot create duplicate actions',async()=>{
+ const {app,context,j}=phase3Fixture();app.markDirty();let finish,prompts=0;context.foundry.applications.api.DialogV2.wait=()=>{prompts++;return new Promise(r=>finish=r);};
+ const first=app.navigate('next');await new Promise(r=>setImmediate(r));await app.navigate('other');await app.close();assert.equal(prompts,1);assert.equal(app.sectorId,j.id);finish('cancel');await first;assert.equal(app.sectorId,j.id);assert.equal(app.closed,undefined);
+});
+test('Phase 3 save status and optimistic conflict checks retain remote edits and acknowledge only own collection paths',async()=>{
+ const f=phase3Fixture(),{app,j}=f;app.draft.notes='Local notes';app.markDirty();const changed=structuredClone(f.getStored());changed.notes='Remote notes';f.remote(changed);
+ assert.equal(await app.action('save'),false);assert.equal(f.getStored().notes,'Remote notes');assert.equal(app.draft.notes,'Local notes');assert.match(app.saveNote,/another session/);
+ app.draft.loot=[];await app.persistLoot();assert.match(app.saveNote,/Gear & Artifacts entries saved automatically/);assert.equal(await app.action('save'),false);assert.equal(f.getStored().notes,'Remote notes');
+ app.draft=app.loadDraft(f.getStored(),j);app.draft.notes='Merged notes';app.markDirty();app.draft.loot.push({title:'New loot',quantity:1});await app.persistLoot();assert.equal(await app.action('save'),true);assert.equal(f.getStored().notes,'Merged notes');assert.equal(f.getStored().loot.length,1);
+});
+test('Phase 3 edits made during a pending save remain dirty and prevent guard navigation',async()=>{
+ const {app,context,j}=phase3Fixture();app.markDirty();context.foundry.applications.api.DialogV2.wait=async()=> 'save';let finish;const update=j.update.bind(j);j.update=async data=>{await new Promise(r=>finish=r);await update(data);};
+ const moving=app.navigate('next');await new Promise(r=>setImmediate(r));app.draft.notes='Newer typing';app.markDirty();finish();await moving;assert.equal(app.sectorId,j.id);assert.equal(app.draft.notes,'Newer typing');assert(app.dirty);
+});
+test('Phase 3 confirmed/cancelled removals use stable identity across every ordinary collection',async()=>{
+ for(const [type,keys] of [['normal',['locations','encounters','loot','effects','history']],['special',['special.locations','special.inhabitants','special.gear','special.events','special.images','history']],['settlement',Object.values(SETTLEMENT_COLLECTIONS).filter(k=>k!=='settlement.shop.groups')]]){
+  for(const key of keys){const {app,context}=phase3Fixture(type);app.tab=key==='encounters'?'Encounters':key.endsWith('projects')?'Projects':'Inhabitants';let array=sectorCollection(app.draft,key);array.splice(0,array.length,{id:'z',title:'Zebra'},{id:'a',title:'Alpha'});const state=app.entryState(key);assert.equal(state.entries.length,2,key);const id=state.entries[0].id;let accept=false,options;context.foundry.applications.api.DialogV2.confirm=async value=>{options=value;return accept;};
+   await app.removeEntry(key,id);assert.equal(array.length,2,key);assert.equal(options.defaultYes,false);assert.match(options.content,/Zebra/);assert.equal(options.yes.label,'Remove');assert.equal(options.no.label,'Cancel');accept=true;await app.removeEntry(key,id);assert.deepEqual(array.map(e=>e.id),['a']);assert(app.dirty);
+  }
+ }
+});
+test('Phase 3 protected Ark Projects never prompt or remove; pending removals reject stale drafts',async()=>{
+ const {app,context}=phase3Fixture('settlement');app.draft.settlement.projects=[{id:'linked',title:'Ark',arkSource:{arkUuid:'Actor.ark'}}];let calls=0;context.foundry.applications.api.DialogV2.confirm=async()=>{calls++;return true;};await app.removeEntry('settlement.projects',app.entryState('settlement.projects').entries[0].id);assert.equal(calls,0);assert.equal(app.draft.settlement.projects.length,1);
+ app.draft.settlement.inhabitants=[{id:'member',title:'Member'}];let finish;context.foundry.applications.api.DialogV2.confirm=()=>new Promise(r=>finish=r);const removing=app.removeEntry('settlement.inhabitants',app.entryState('settlement.inhabitants').entries[0].id);app.draft=structuredClone(app.draft);finish(true);await removing;assert.equal(app.draft.settlement.inhabitants.length,1);
+});
+
+test('Phase 3 full saves share the existing queue with collection writes started during saving',async()=>{
+ const f=phase3Fixture(),{app,j}=f;app.draft.loot=[{id:'loot',title:'Keep',quantity:1,collected:false}];await app.action('save');app.draft.notes='Full save notes';app.markDirty();
+ let release,started=false;const update=j.update.bind(j);j.update=async data=>{started=true;await new Promise(r=>release=r);return update(data);};
+ const saving=app.action('save');await new Promise(r=>setImmediate(r));assert(started);app.draft.loot[0].collected=true;app.markDirty();const collecting=app.persistLoot();release();await saving;await collecting;assert.equal(f.getStored().loot[0].collected,true);assert.equal(f.getStored().notes,'Full save notes');assert(app.dirty);
+});
+
+test('Phase 3 shared Add controls retain every creation route, draft boundaries and unique identities',async()=>{
+ for(const [type,keys] of [['normal',['locations','encounters','loot','effects','history']],['special',['special.locations','special.inhabitants','special.gear','special.events','special.images','history']],['settlement',Object.values(SETTLEMENT_COLLECTIONS).filter(k=>k!=='settlement.shop.groups')]]){
+  for(const key of keys){const f=phase3Fixture(type),{app,context}=f;const saved=JSON.stringify(f.getStored()),before=sectorCollection(app.draft,key).length,calls=[];context.generateEntry=async(kind,draft,options)=>{calls.push({kind,event:options.event});return {title:'Generated '+kind};};
+   await app.addContextEntry(key);await app.addContextEntry(key,{event:key==='history'});const state=app.entryState(key);assert.equal(state.entries.length,before+2,key);assert.equal(new Set(state.entries.map(e=>e.id)).size,state.entries.length);assert.equal(JSON.stringify(f.getStored()),saved,'Add remains draft-only');assert(app.dirty);if(type==='settlement'||key.startsWith('special.'))assert.equal(calls.length,0);else{assert.equal(calls.length,2);assert.equal(calls[1].event,key==='history');}
+   if(key==='encounters'||key.endsWith('inhabitants')||type==='settlement'){const ids=sectorCollection(app.draft,key).slice(-2).map(e=>e.id);assert(ids.every(Boolean));assert.notEqual(ids[0],ids[1]);}
+  }
+ }
+});
