@@ -1,3 +1,4 @@
+import {CampaignCombatTracker} from './combat-service.mjs';
 import {MODULE} from '../zone/store.mjs';
 import {locateToken} from '../zone/grid.mjs';
 import {ensureJournalFolders} from '../journal-organization.mjs';
@@ -6,7 +7,7 @@ export const LOG_SETTING='campaignLogJournalId',LOG_FLAG='campaignLog',COMMAND_F
 // Commands are private embedded Journal pages, never public sockets/User flags.
 // Every GM submits an independent page; only activeGM reduces commands into state.
 export class CampaignLogService {
- constructor(zone,env=globalThis){this.zone=zone;this.env=env;this.listeners=new Set();this.queue=Promise.resolve();this.hooks=[];this.pendingMovement=new Set();}
+ constructor(zone,env=globalThis){this.zone=zone;this.env=env;this.listeners=new Set();this.queue=Promise.resolve();this.hooks=[];this.pendingMovement=new Set();this.combats=new CampaignCombatTracker(this);}
  get isGM(){return Boolean(this.env.game.user?.isGM);}
  get authoritative(){return this.isGM&&this.env.game.users.activeGM?.id===this.env.game.user.id;}
  get document(){const id=this.isGM&&this.env.game.settings.get(MODULE,LOG_SETTING);return id?this.env.game.journal.get(id):null;}
@@ -139,6 +140,7 @@ export class CampaignLogService {
 
  start(){
  if(!this.isGM||this.hooks.length)return;
+ this.combats.start();
  const on=(name,fn)=>this.hooks.push([name,this.env.Hooks.on(name,fn)]);
  let authority=this.env.game.users.activeGM?.id,wasGM=this.isGM;
  const recover=()=>{queueMicrotask(()=>{const next=this.env.game.users.activeGM?.id;if(next===authority&&wasGM===this.isGM)return;authority=next;wasGM=this.isGM;this.emit();if(this.isGM)void this.drain().catch(()=>{});});};
@@ -152,6 +154,6 @@ export class CampaignLogService {
  this.timer=setInterval(()=>{if(!this.isGM)return;this.emit('tick');if(this.authoritative&&this.document){try{const s=activeSession(this.state);if(s&&Date.parse(s.expiresAt)<=Date.now())void this.enqueue(()=>this.expire()).catch(()=>{});}catch(error){if(!this.invalidReported){this.invalidReported=true;this.report(error);}}}},1000);this.timer.unref?.();
  void this.drain().catch(()=>{});
  }
- stop(){clearInterval(this.timer);for(const [name,id] of this.hooks)this.env.Hooks.off(name,id);this.hooks=[];}
+ stop(){this.combats.stop();clearInterval(this.timer);for(const [name,id] of this.hooks)this.env.Hooks.off(name,id);this.hooks=[];}
  export(){if(!this.isGM)throw Error('GM access only.');return exportLog(this.state,this.env.game.world);}
 }
