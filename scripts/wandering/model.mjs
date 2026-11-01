@@ -18,7 +18,7 @@ export function playerControlled(token,env){
 }
 export function canModify(token,env){return env.game.user.isGM&&Boolean(token?.parent)&&typeof token.update==='function'&&(typeof token.canUserModify==='function'?token.canUserModify(env.game.user,'update'):token.isOwner===true);}
 export function baseEligible(token,store,env,busy=new Set()){
- return store.scene?.tokens.get(token.id)===token&&token.parent?.id===store.scene?.id&&token.getFlag?.(MODULE,FLAG)===true&&canModify(token,env)&&!playerControlled(token,env)&&!store.config.groups.some(group=>group.sceneId===token.parent.id&&group.tokenId===token.id)&&!busy.has(token.uuid||token.id)&&!['pending','paused','moving','planned'].includes(token.movement?.state);
+ return !store.patrolTokens?.has(`${token.parent?.id}.${token.id}`)&&store.scene?.tokens.get(token.id)===token&&token.parent?.id===store.scene?.id&&token.getFlag?.(MODULE,FLAG)===true&&canModify(token,env)&&!playerControlled(token,env)&&!store.config.groups.some(group=>group.sceneId===token.parent.id&&group.tokenId===token.id)&&!busy.has(token.uuid||token.id)&&!['pending','paused','moving','planned'].includes(token.movement?.state);
 }
 export function destinations(token,store,{allowSpecial=false}={}){
  const scene=store.scene,grid=store.config.grid;if(!scene||!grid)return [];

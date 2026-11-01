@@ -731,3 +731,13 @@ Participants groups, individual counts and repeated-name quantities. The header
 shows local time once; encounter names, locations and UUIDs stay out of the new
 body. Tracking identities and visit links remain intact. Existing notes and GM
 edits are not rewritten. See the [formatting details and verification notes](docs/campaign-combat.md#concise-presentation-update-0157).
+
+### Zone Patrols / Trade Routes (0.1.58)
+
+Use Settings → **Patrols / Trade Routes** to map-pick a Loop or Back and Forth path,
+assign an existing GM-controlled token and set minutes per transition (default 60).
+Routes retain partial progress and advance only when Foundry world time advances;
+Party tracking itself does not advance time. Pause/Resume excludes paused time.
+Definitions and paths are GM-private; player visibility uses standard native
+Foundry token hiding, with its normal client-data limitations. See [setup,
+clock/recovery policies, safeguards and manual checks](docs/patrol-routes.md).
