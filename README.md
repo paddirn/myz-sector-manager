@@ -761,3 +761,13 @@ Assigned tokens retain their Wandering settings while patrol ownership suppresse
 wandering, even when paused. Unassign/delete the route to release that ownership.
 
 See [scheduling, collision policies and the manual v14 checklist](docs/patrol-schedules.md).
+
+### Patrol collision filters and private chat (0.1.61)
+
+Each route now has **Stop for Token Dispositions** checkboxes: Neutral, Friendly,
+Secret and Hostile. New and older routes default to **Hostile only**, regardless
+of the patrol token's disposition. Uncheck all four to disable disposition stops.
+Collision reports are persistent **GM-only chat whispers**, combining all matching
+tokens in that sector. Start acknowledges the stop and lets the patrol continue.
+
+See [collision configuration, privacy and manual checks](docs/patrol-collision-filters.md).
