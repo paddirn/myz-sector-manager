@@ -1,3 +1,6 @@
+import {PatrolRoutes} from '../patrols/service.mjs';
+import {PatrolOverlay} from '../patrols/overlay.mjs';
+import {openPatrols} from '../patrols/ui.mjs';
 import {requireDocument} from '../ui/documents.mjs';
 import {WanderingTokens} from '../wandering/service.mjs';
 import {registerWandering} from '../wandering/ui.mjs';
@@ -15,14 +18,14 @@ import {registerOverlayShortcut,warnShortcutConflict} from './shortcut.mjs';
 
 export class ZoneRuntime {
   constructor({onChange=()=>{},openSector=async()=>{},createSector=async()=>{},onDestination=null}={},env=globalThis){
-    this.env=env;this.store=new ZoneStore(env);this.travel=new TravelEvents(this.store,env);this.wandering=new WanderingTokens(this.store,env);this.triggers=new SectorEntryTriggers(this.store,env,{onDestination,beforeMacros:context=>this.travel.onEntry(context).catch(()=>{}),afterTravel:context=>this.wandering.onEntry(context)});this.overlay=new ZoneOverlay(this.store,env);this.overlay.onSelect=code=>this.selectCoordinate(code);this.calibrator=new ZoneCalibration(this.store,this.overlay,env);
+    this.env=env;this.store=new ZoneStore(env);this.travel=new TravelEvents(this.store,env);this.wandering=new WanderingTokens(this.store,env);this.triggers=new SectorEntryTriggers(this.store,env,{onDestination,beforeMacros:context=>this.travel.onEntry(context).catch(()=>{}),afterTravel:context=>this.wandering.onEntry(context)});this.patrols=new PatrolRoutes(this.store,env);this.patrolOverlay=new PatrolOverlay(this.patrols,env);this.overlay=new ZoneOverlay(this.store,env);this.overlay.onSelect=code=>this.selectCoordinate(code);this.calibrator=new ZoneCalibration(this.store,this.overlay,env);
     this.onChange=onChange;this.openSector=openSector;this.createSector=createSector;this.hooks=[];this.suspended=false;this.pending=false;
   }
   register(){this.store.register();registerTravelSettings(this,this.env);registerWandering(this,this.env);this.env.Hooks.once('setup',()=>registerOverlayShortcut(this));}
   schedule(){
     if(this.pending)return;
     this.pending=true;
-    queueMicrotask(()=>{this.pending=false;if(!this.suspended)this.overlay.draw();this.onChange();});
+    queueMicrotask(()=>{this.pending=false;if(!this.suspended){this.overlay.draw();this.patrolOverlay.draw();}this.onChange();});
   }
   start(){
     if(!this.store.isGM||this.hooks.length)return;
@@ -31,11 +34,11 @@ export class ZoneRuntime {
     const on=(name,fn)=>this.hooks.push([name,Hooks.on(name,fn)]);
     const refresh=()=>{void this.store.refreshTracking().catch(()=>{});};
     this.unsubscribe=this.store.subscribe(()=>this.schedule());
-    this.store.reload();this.triggers.prime();
+    this.store.reload();this.triggers.prime();this.patrols.start();this.unsubscribePatrols=this.patrols.subscribe(()=>{if(!this.suspended)this.patrolOverlay.draw();});
     on('canvasPan',()=>this.schedule());
     on('canvasReady',()=>{this.suspended=false;this.store.emit();refresh();});
-    on('canvasTearDown',()=>{if(this.calibrator.active)this.calibrator.cancel();this.suspended=true;this.overlay.stop();});
-    on('updateToken',(token,changes,options={})=>{if(!options.myzWandering)void this.triggers.updated(token,changes); void this.store.tokenChanged(token,changes).catch(()=>{});if(changes.flags?.[MODULE]?.pendingTravelEntries)void this.travel.recoverPendingMoves().catch(()=>{});});
+    on('canvasTearDown',()=>{if(this.calibrator.active)this.calibrator.cancel();this.suspended=true;this.patrolOverlay.destroy();this.overlay.stop();});
+    on('updateToken',(token,changes,options={})=>{if(!options.myzWandering&&!options.myzPatrol)void this.triggers.updated(token,changes); void this.store.tokenChanged(token,changes).catch(()=>{});if(changes.flags?.[MODULE]?.pendingTravelEntries)void this.travel.recoverPendingMoves().catch(()=>{});});
     on('moveToken',token=>{void this.triggers.updated(token,{x:token.x,y:token.y});});
     on('stopToken',token=>{void this.triggers.stopped(token);});
     for(const event of ['deleteToken','createToken','moveToken','stopToken','pauseToken'])on(event,token=>{void this.store.tokenChanged(token).catch(()=>{});});
@@ -47,7 +50,7 @@ export class ZoneRuntime {
     on('updateUser',()=>{if(!this.store.isGM){void this.travel.activeDialog?.close();this.calibrator.cancel();this.overlay.stop();this.dialog?.close();}else{refresh();if(this.store.authoritative)void this.travel.recoverPendingMoves().catch(()=>{});}});
     this.schedule();refresh();void this.travel.recoverPendingMoves().catch(()=>{});
   }
-  stop(){for(const [name,id] of this.hooks)this.env.Hooks.off(name,id);this.hooks=[];this.suspended=true;this.unsubscribe?.();this.calibrator.cancel();this.overlay.stop();}
+  stop(){this.suspended=true;this.patrols.stop();this.unsubscribePatrols?.();this.patrolOverlay.destroy();void this.patrolWindow?.close();for(const [name,id] of this.hooks)this.env.Hooks.off(name,id);this.hooks=[];this.suspended=true;this.unsubscribe?.();this.calibrator.cancel();this.overlay.stop();}
   async configure(){
     if(!this.store.isGM)return;
     if(this.dialog?.rendered){this.dialog.bringToFront();return;}
@@ -85,7 +88,7 @@ export class ZoneRuntime {
   }
   settingsActions(){
     const scene=this.store.scene,config=this.store.config;
-    return `<div class="zm-actions"><button type="button" data-zone-config>Configure / Tracking</button><button type="button" data-zone-view ${scene?'':'disabled'}>View Zone</button><button type="button" data-zone-select ${this.store.live&&config.grid?'':'disabled'}>Select on map</button><button type="button" data-zone-overlay aria-pressed="${Boolean(config.overlay.enabled)}" ${scene&&config.grid?'':'disabled'}>${config.overlay.enabled?'Hide':'Show'} overlay</button><button type="button" data-zone-wander>Wander Now</button><button type="button" data-zone-wander-settings>Wandering Tokens</button><button type="button" data-zone-wander-enable>Enable Wandering for Selected Tokens</button><button type="button" data-zone-wander-disable>Disable Wandering for Selected Tokens</button></div>`;
+    return `<div class="zm-actions"><button type="button" data-zone-config>Configure / Tracking</button><button type="button" data-zone-view ${scene?'':'disabled'}>View Zone</button><button type="button" data-zone-select ${this.store.live&&config.grid?'':'disabled'}>Select on map</button><button type="button" data-zone-overlay aria-pressed="${Boolean(config.overlay.enabled)}" ${scene&&config.grid?'':'disabled'}>${config.overlay.enabled?'Hide':'Show'} overlay</button><button type="button" data-zone-patrols>Patrols / Trade Routes</button><button type="button" data-zone-wander>Wander Now</button><button type="button" data-zone-wander-settings>Wandering Tokens</button><button type="button" data-zone-wander-enable>Enable Wandering for Selected Tokens</button><button type="button" data-zone-wander-disable>Disable Wandering for Selected Tokens</button></div>`;
   }
   setSelection(code){
     const canonical=canonicalCoordinate(code),sceneId=this.store.config.sceneId;
@@ -96,6 +99,7 @@ export class ZoneRuntime {
   bindSummary(container){
     if(!container||!this.store.isGM)return;
     const run=handler=>async()=>{try{await handler();}catch(error){this.env.ui.notifications.error(`Zone Map: ${error.message}`);}};
+    container.querySelector('[data-zone-patrols]')?.addEventListener('click',run(()=>openPatrols(this,this.env)));
     container.querySelector('[data-zone-wander]')?.addEventListener('click',run(()=>this.wandering.manual()));
     container.querySelector('[data-zone-wander-settings]')?.addEventListener('click',run(()=>new this.WanderingSettings().render(true)));
     container.querySelector('[data-zone-wander-enable]')?.addEventListener('click',run(()=>this.wandering.bulk(true)));
@@ -176,6 +180,7 @@ export class ZoneRuntime {
   api(){
     return {
       configure:()=>this.configure(),
+      patrols:()=>openPatrols(this,this.env),
       positionToSector:point=>this.store.isGM&&this.store.scene?positionToCoordinate(point,this.store.config.grid):null,
       sectorBounds:coordinate=>this.store.isGM&&this.store.scene&&this.store.config.grid?coordinateToBounds(coordinate,this.store.config.grid):null,
       tracking:()=>this.store.isGM?structuredClone(this.store.trackingRows()):[]

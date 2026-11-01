@@ -2,7 +2,7 @@
   "id": "myz-sector-manager",
   "title": "MYZ Sector Manager (Prototype)",
   "description": "GM-only Journal-backed sector records for Mutant: Year Zero, Foundry VTT v14.",
-  "version": "0.1.57",
+  "version": "0.1.58",
   "compatibility": {
     "minimum": "14",
     "verified": "14"
@@ -79,6 +79,10 @@
     "scripts/zone/calibration.mjs",
     "scripts/zone/presentation.mjs",
     "scripts/zone/shortcut.mjs",
+    "scripts/patrols/model.mjs",
+    "scripts/patrols/service.mjs",
+    "scripts/patrols/overlay.mjs",
+    "scripts/patrols/ui.mjs",
     "scripts/zone/runtime.mjs",
     "scripts/sector-content.mjs",
     "scripts/sector-fields.mjs",
@@ -92,7 +96,7 @@
   ],
   "url": "https://github.com/paddirn/myz-sector-manager",
   "manifest": "https://github.com/paddirn/myz-sector-manager/releases/latest/download/module.json",
-  "download": "https://github.com/paddirn/myz-sector-manager/releases/download/v0.1.57/myz-sector-manager-v0.1.57.zip",
+  "download": "https://github.com/paddirn/myz-sector-manager/releases/download/v0.1.58/myz-sector-manager-v0.1.58.zip",
   "styles": [
     "styles/interface.css"
   ]
