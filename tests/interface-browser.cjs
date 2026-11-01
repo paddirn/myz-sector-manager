@@ -27,7 +27,7 @@ const path=require('node:path');
     await page.setContent(`<style>
       *{box-sizing:border-box}body{margin:0;font:14px Arial}
       .application{z-index:10;display:flex;flex-direction:column;position:absolute;left:20px;top:20px;width:1100px;height:480px;border:1px solid #888;background:#fff}
-      .window-header{height:32px;flex-shrink:0}.window-content{flex:1;overflow:auto;padding:8px}
+      .window-header{height:32px;flex-shrink:0;display:flex;align-items:center;gap:4px}.window-header h2{font-size:14px;margin:0 auto 0 8px}.header-control{width:28px;height:28px;border:0;background:none}.header-control:hover{background:#ddd}.application.minimized>.window-content{display:none}.window-content{flex:1;overflow:auto;padding:8px}
       button{cursor:pointer}textarea{font:inherit}input,select{height:28px}input[type=checkbox]{height:16px}
     </style>`);
     await page.addStyleTag({content:readFileSync(path.join(root,'styles/interface.css'),'utf8')});
@@ -36,12 +36,16 @@ const path=require('node:path');
       globalThis.nativeClicks=[];
       class ApplicationV2 {
         constructor(options={}){this.options=options;this.rendered=false;}
+        _getFrameButtons(){return [{action:'toggleControls',icon:'fa-solid fa-ellipsis-vertical',label:'Window Controls',onClick:()=>{this.controlsToggled=(this.controlsToggled||0)+1;}},{action:'close',icon:'fa-solid fa-xmark',label:'Close',onClick:()=>this.close()}];}
+        async minimize(){this.nativeMinimizeCalls=(this.nativeMinimizeCalls||0)+1;if(this.minimized)return;this.savedFrameStyle=this.element.style.cssText;this.element.classList.add('minimized');this.element.querySelector('.window-content').hidden=true;this.element.style.height='32px';this.minimized=true;}
+        async maximize(){this.nativeMaximizeCalls=(this.nativeMaximizeCalls||0)+1;this.element.style.cssText=this.savedFrameStyle;this.element.classList.remove('minimized');this.element.querySelector('.window-content').hidden=false;this.minimized=false;}
         async _onRender(){}
         async _onClose(){}
         async render(){
           if(!this.element){
             this.element=document.createElement('div');this.element.className='application '+this.constructor.DEFAULT_OPTIONS.classes.join(' ');this.element.id=this.constructor.DEFAULT_OPTIONS.id;this.element.style.width=this.constructor.DEFAULT_OPTIONS.position.width+'px';this.element.style.height=this.constructor.DEFAULT_OPTIONS.position.height+'px';
-            this.element.innerHTML='<header class="window-header">Test ApplicationV2 frame</header><section class="window-content"></section>';
+            this.element.innerHTML='<header class="window-header"><h2 class="window-title">Test ApplicationV2 frame</h2></header><section class="window-content"></section>';
+            const header=this.element.querySelector('.window-header');for(const control of this._getFrameButtons({})){const button=document.createElement('button');button.type='button';button.className='header-control '+control.icon;button.dataset.action=control.action;button.setAttribute('aria-label',control.label);button.title=control.label;button.addEventListener('click',()=>control.onClick?.());header.append(button);}this.window={header,controls:header.querySelector('[data-action="toggleControls"]')};header.querySelector('.window-title').addEventListener('dblclick',()=>{if(this.constructor.DEFAULT_OPTIONS.window?.minimizable!==false)void(this.minimized?this.maximize():this.minimize());});
             document.body.append(this.element);
           }
           this._replaceHTML(await this._renderHTML(),this.element.querySelector('.window-content'));
@@ -99,6 +103,7 @@ const path=require('node:path');
     await page.addScriptTag({type:'module',url:origin+'/scripts/sector-manager.mjs'});
     await page.evaluate(async()=>{for(const callback of initCallbacks)callback();const {REFERENCE_DEFINITIONS}=await import('/scripts/document-references.mjs');await game.settings.set('myz-sector-manager','documentReferences',{formatVersion:1,references:Object.fromEntries(REFERENCE_DEFINITIONS.filter(def=>def.legacyUuid).map(def=>[def.key,{mode:'custom',uuid:def.legacyUuid}])),migration:{version:1,outcomes:[]}});await game.settings.set('myz-sector-manager','travelEventsConfiguration',{enabled:false});await ready();globalThis.manager=await game.myzSectorManager.open('sector1');manager.element.style.width='1100px';manager.element.style.height='480px';});
 
+    if(process.env.MYZ_WINDOW_ONLY){await require('./main-window-browser.cjs')(page,assert);return;}
     if(process.env.MYZ_PATROL_ONLY){await require('./patrol-browser.cjs')(page,assert);return;}
     if(process.env.MYZ_PHASE5_ONLY){await require('./ui-phase5-browser.cjs')(page,assert);return;}
     if(process.env.MYZ_PHASE4C_ONLY){await require('./ui-phase4c-browser.cjs')(page,assert);return;}

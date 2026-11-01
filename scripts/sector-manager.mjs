@@ -1,3 +1,4 @@
+import {mainFrameButtons,positionMainMinimize} from './ui/main-window.mjs';
 import {collectionEmpty} from './ui/presentation.mjs';
 import {bindDropFeedback,beginDrop,dropTarget} from './ui/drop.mjs';
 import {hydrateFactions} from './settlement-factions-ui.mjs';
@@ -123,7 +124,8 @@ const randomizeDialogContent = content => `<style>
 </style><div class="sm-randomize-content">${content}</div>`;
 
 class SectorManager extends foundry.applications.api.ApplicationV2 {
-  static DEFAULT_OPTIONS = {id:'myz-sector-manager-app', window:{title:'MYZ Sector Manager',resizable:true}, position:{width:920,height:730}, classes:['myz-sector-manager']};
+  static DEFAULT_OPTIONS = {id:'myz-sector-manager-app', window:{title:'MYZ Sector Manager',resizable:true,minimizable:true}, position:{width:920,height:730}, classes:['myz-sector-manager']};
+  _getFrameButtons(options){return mainFrameButtons(this,super._getFrameButtons?.(options)||[]);}
   constructor(options={}) {super(options); this.sectorId = options.sectorId ?? null; this.tab='Overview'; this.draft=null; this.dirty=false; this.filter=''; this.busy=false;this.lootTypeRevisions=new WeakMap();this.scrollKeeper=new ScrollKeeper(globalThis);this.portraits=new InhabitantPortraits(this,globalThis);}
   get arkPlacementContext(){return {grid:zone.store.config?.grid,sceneId:zone.store.config?.sceneId,journals:game.journal,journalId:this.sectorId};}
   get journals(){return game.journal.filter(j=>j.getFlag(MOD,KEY)?.version===1&&sectorOnScene(j.getFlag(MOD,KEY),zone.store.config?.sceneId)).sort((a,b)=>{const ac=a.getFlag(MOD,KEY)?.code?.trim()||'', bc=b.getFlag(MOD,KEY)?.code?.trim()||''; return (ac&&bc?ac.localeCompare(bc,undefined,{numeric:true,sensitivity:'base'}):ac?-1:bc?1:0)||a.name.localeCompare(b.name,undefined,{numeric:true,sensitivity:'base'});});}
@@ -508,7 +510,7 @@ class SectorManager extends foundry.applications.api.ApplicationV2 {
     const key=this.collectionKey();if(!key?.startsWith('special.'))return;
     for(const {id,item} of this.entryState(key).entries){const title=this.element.querySelector(`[data-entry="${id}"] [data-entry-title]`);if(title)title.textContent=key==='special.gear'?lootTitle(item,this.element.querySelector(`[data-entry="${id}"]`)?.dataset?.contentTitleFallback||'Untitled Entry'):item.title||this.element.querySelector(`[data-entry="${id}"]`)?.dataset?.contentTitleFallback||'Untitled Entry';}
   }
-  async _onRender(context,options){await super._onRender(context,options);const el=this.element;
+  async _onRender(context,options){await super._onRender(context,options);positionMainMinimize(this);const el=this.element;
     this.sceneScope=zone.store.config?.sceneId;
     el.style.setProperty('--sm-settlement-accent',settlementAccent(game.settings.get(MOD,'settlementAccent')));
     el.querySelector('[data-reset-all-triggers]')?.addEventListener('click',()=>this.resetMacroTriggers());
