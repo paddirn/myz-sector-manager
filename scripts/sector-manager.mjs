@@ -1,4 +1,4 @@
-import {mainFrameButtons,positionMainMinimize} from './ui/main-window.mjs';
+import {mainFrameButtons,positionMainMinimize,toggleMainMinimize} from './ui/main-window.mjs';
 import {collectionEmpty} from './ui/presentation.mjs';
 import {bindDropFeedback,beginDrop,dropTarget} from './ui/drop.mjs';
 import {hydrateFactions} from './settlement-factions-ui.mjs';
@@ -124,7 +124,10 @@ const randomizeDialogContent = content => `<style>
 </style><div class="sm-randomize-content">${content}</div>`;
 
 class SectorManager extends foundry.applications.api.ApplicationV2 {
-  static DEFAULT_OPTIONS = {id:'myz-sector-manager-app', window:{title:'MYZ Sector Manager',resizable:true,minimizable:true}, position:{width:920,height:730}, classes:['myz-sector-manager']};
+  static DEFAULT_OPTIONS = {id:'myz-sector-manager-app', window:{title:'MYZ Sector Manager',resizable:true,minimizable:true}, actions:{myzMinimize:function(){return toggleMainMinimize(this);}}, position:{width:920,height:730}, classes:['myz-sector-manager']};
+  render(...args){if(this.minimized||this.mainMinimizing){this.mainDeferredRender=args;return Promise.resolve(this);}return super.render(...args);}
+  async minimize(){this.mainMinimizing=true;this.scrollKeeper.capture(this.element?.querySelector('.sm-root'));try{await super.minimize();}finally{this.mainMinimizing=false;positionMainMinimize(this);}}
+  async maximize(){const wasMinimized=this.minimized;await super.maximize();positionMainMinimize(this);if(!wasMinimized||this.minimized)return;const root=this.element?.querySelector('.sm-root');if(root)this.scrollKeeper.restore(root);const args=this.mainDeferredRender;this.mainDeferredRender=null;if(args)await this.render(...args);}
   _getFrameButtons(options){return mainFrameButtons(this,super._getFrameButtons?.(options)||[]);}
   constructor(options={}) {super(options); this.sectorId = options.sectorId ?? null; this.tab='Overview'; this.draft=null; this.dirty=false; this.filter=''; this.busy=false;this.lootTypeRevisions=new WeakMap();this.scrollKeeper=new ScrollKeeper(globalThis);this.portraits=new InhabitantPortraits(this,globalThis);}
   get arkPlacementContext(){return {grid:zone.store.config?.grid,sceneId:zone.store.config?.sceneId,journals:game.journal,journalId:this.sectorId};}
