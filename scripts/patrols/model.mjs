@@ -1,3 +1,4 @@
+import {validateSchedule} from './schedule.mjs';
 import {canonicalCoordinate,sectorDistance,coordinateToBounds,validateGrid} from '../zone/grid.mjs';
 export const PATROL_FLAG='patrolRoutes';
 export const emptyRoutes=()=>({version:1,revision:0,routes:[]});
@@ -29,11 +30,13 @@ export function validateRoutes(state){
   if(typeof r.id!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(r.id)||ids.has(r.id))throw Error('Invalid or duplicate route ID.');ids.add(r.id);
   if(typeof r.name!=='string'||!r.name.trim()||r.name.length>200||typeof r.sceneId!=='string'||!r.sceneId||typeof r.gridKey!=='string'||!['loop','pingpong'].includes(r.pattern)||typeof r.running!=='boolean'||typeof r.visibleToPlayers!=='boolean'||typeof r.issue!=='string')throw Error('Invalid route name, configuration or status.');
   if(!Array.isArray(r.waypoints)||r.waypoints.length<2||r.waypoints.length>1000||r.waypoints.some(c=>!canonicalCoordinate(c)||canonicalCoordinate(c)!==c)||!Number.isInteger(r.index)||r.index<0||r.index>=r.waypoints.length||![1,-1].includes(r.direction))throw Error('Invalid route waypoints or current position.');
+  validateSchedule(r.schedule);validateScheduleState(r.scheduleState,r);
+  if(r.encounter&&(typeof r.encounter.sector!=='string'||!Array.isArray(r.encounter.tokenIds)||r.encounter.tokenIds.some(id=>typeof id!=='string')))throw Error('Invalid patrol encounter acknowledgment.');
   const period=periodMilliseconds(r.minutesPerSector);
   if(!Number.isSafeInteger(r.progressMs)||r.progressMs<0||r.progressMs>=period||r.lastTimeMs!==null&&!Number.isSafeInteger(r.lastTimeMs))throw Error('Invalid saved route progress or time baseline.');
   if(!Array.isArray(r.assignments)||r.assignments.length>1)throw Error('This version supports one token assignment per route.');
   for(const a of r.assignments){if(a?.sceneId!==r.sceneId||typeof a.tokenId!=='string'||!a.tokenId||tokens.has(tokenKey(a)))throw Error('Assign each Scene token to only one route.');tokens.add(tokenKey(a));}
-  if(r.pending){const p=r.pending;if(p.routeBefore!==undefined||p.routeAfter!==undefined)for(const checkpoint of [p.routeBefore,p.routeAfter])if(!checkpoint||!Number.isInteger(checkpoint.index)||checkpoint.index<0||checkpoint.index>=r.waypoints.length||![1,-1].includes(checkpoint.direction)||!Number.isSafeInteger(checkpoint.progressMs)||checkpoint.progressMs<0||checkpoint.progressMs>=period||checkpoint.lastTimeMs!==null&&!Number.isSafeInteger(checkpoint.lastTimeMs))throw Error('Invalid route movement checkpoint.');if(r.assignments.length!==1||p.sceneId!==r.sceneId||p.tokenId!==r.assignments[0].tokenId||![p.x,p.y,p.before?.x,p.before?.y].every(Number.isFinite)||typeof p.hidden!=='boolean'||typeof p.before?.hidden!=='boolean')throw Error('Invalid pending route movement.');}
+  if(r.pending){const p=r.pending;if(p.transition!==undefined&&typeof p.transition!=='boolean')throw Error('Invalid pending patrol transition.');if(p.routeBefore!==undefined||p.routeAfter!==undefined)for(const checkpoint of [p.routeBefore,p.routeAfter])if(!checkpoint||!Number.isInteger(checkpoint.index)||checkpoint.index<0||checkpoint.index>=r.waypoints.length||![1,-1].includes(checkpoint.direction)||!Number.isSafeInteger(checkpoint.progressMs)||checkpoint.progressMs<0||checkpoint.progressMs>=period||checkpoint.lastTimeMs!==null&&!Number.isSafeInteger(checkpoint.lastTimeMs))throw Error('Invalid route movement checkpoint.');if(p.routeBefore)for(const checkpoint of [p.routeBefore,p.routeAfter])validateScheduleState(checkpoint.scheduleState,r);if(r.assignments.length!==1||p.sceneId!==r.sceneId||p.tokenId!==r.assignments[0].tokenId||![p.x,p.y,p.before?.x,p.before?.y].every(Number.isFinite)||typeof p.hidden!=='boolean'||typeof p.before?.hidden!=='boolean')throw Error('Invalid pending route movement.');}
  }
  return state;
 }
@@ -56,3 +59,5 @@ export function repositionRoute(route,code,now){
  if(r.pattern==='pingpong'){if(r.index===0)r.direction=1;else if(r.index===r.waypoints.length-1)r.direction=-1;}
  r.progressMs=0;r.lastTimeMs=now===null?r.lastTimeMs:Math.max(r.lastTimeMs??now,now);r.issue='';return r;
 }
+
+function validateScheduleState(st,r){if(st!==undefined&&(!st||!Number.isInteger(st.homeIndex)||st.homeIndex<0||st.homeIndex>=r.waypoints.length||![1,-1].includes(st.homeDirection)||st.remainingSteps!==null&&(!Number.isInteger(st.remainingSteps)||st.remainingSteps<0||st.remainingSteps>2*r.waypoints.length)||st.nextDepartureMs!==null&&!Number.isSafeInteger(st.nextDepartureMs)))throw Error('Invalid saved patrol scheduling state.');}

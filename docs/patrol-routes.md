@@ -1,4 +1,6 @@
-# Zone Patrols / Trade Routes (0.1.58)
+# Zone Patrols / Trade Routes
+
+Current scheduling and collision behavior: [0.1.60 guide](patrol-schedules.md).
 
 ## Architecture and integration decisions
 
@@ -13,7 +15,7 @@ Routes therefore observe Foundry's authoritative `game.time.worldTime` via
 `updateWorldTime`; they never advance time or count Party movement events.
 If a calendar/travel tool advances that same clock, it drives routes normally.
 Otherwise the GM advances Foundry world time explicitly. No wall-clock timer,
-competing calendar, economy, inventory, encounter, combat, loot, Campaign Log or
+competing calendar, economy, inventory, random encounter, combat, loot, Campaign Log or
 sector-exploration automation is added.
 
 Waypoint validation reuses the existing coordinate conversion and Zone distance
@@ -28,7 +30,7 @@ No pathfinding or invented intermediate sectors are used.
    **Patrols / Trade Routes**. A GM Script Macro may also call:
    `await game.myzSectorManager.zone.patrols()`.
 2. Choose **Create Route**, name it, choose **Back and Forth** or **Loop**, and set
-   **Minutes per sector** (default **60**). This is the route's configured movement
+   **min/sector** (default **60**). This is the route's configured movement
    rate, not a terrain/vehicle rule.
 3. Choose **Pick Waypoints on Map**, then click each adjacent sector in order.
    Picking is deliberately armed: ordinary selection resumes after **Stop Picking**
@@ -41,17 +43,17 @@ No pathfinding or invented intermediate sectors are used.
    paths use subdued lines. Repeated nonconsecutive sectors display their waypoint
    ordinals together. Route graphics never receive pointer events.
 5. Choose an existing Zone token and a **Starting / current waypoint**. Assignment
-   is optional while authoring; Resume requires a valid token. Only GM-controlled,
+   is optional while authoring; Start requires a valid token. Only GM-controlled,
    non-player-owned tokens are eligible. Party/Expedition and Ark tokens are
    protected. Each token can belong to only one route, including paused routes.
 6. Set **Visible to Players**, then **Save Route**. Saving explicitly centers the
    assigned token on the chosen waypoint and applies native visibility. It leaves
-   the route paused. Review the result and click **Resume**.
+   the route paused. Review the result and click **Start**.
 7. Advance the authoritative clock. At 60 minutes/sector, 20+20+20 minutes completes
    one transition. A 150-minute advance completes two and keeps 30 minutes. Partial
    progress leaves the token centered in its current sector. Large jumps compute
-   the final position directly, with no intermediate token animations.
-8. **Pause** preserves the waypoint, direction and partial progress. **Resume**
+   the final safe position directly after checking intermediate waypoints for hostile occupancy, with no intermediate token animations.
+8. **Pause** preserves the waypoint, direction and partial progress. **Start**
    establishes a fresh baseline and does not catch up paused time. **Show Path**
    views the configured Zone locally and centers on the route; it does not activate
    the Scene for players.
@@ -85,7 +87,7 @@ normal world-time hook.
 ## Editing, manual movement and deletion
 
 Opening an existing route for editing pauses it immediately. Cancel/close discards
-the draft but **leaves it paused**; Resume is explicit. Editing one route does not
+the draft but **leaves it paused**; Start is explicit. Editing one route does not
 require stopping other routes. Per-route stale-state checks reject concurrent
 changes to that route while allowing other routes' clock progress.
 
@@ -104,7 +106,7 @@ and establishes a new clock baseline. Pingpong endpoints face inward. Dragging
 inside the same sector retains progress and returns the token to the sector
 center. Repeated sectors keep separate route positions; manual synchronization is
 deterministic. An off-route drag pauses automation and leaves the token where the
-GM placed it. Return it to a waypoint and Resume, or edit the route. Token updates
+GM placed it. Return it to a waypoint and Start, or edit the route. Token updates
 must finish before resuming; a pending/paused native movement pauses the route.
 Visibility follows the route setting, so edit the route to change its visibility.
 
@@ -132,7 +134,7 @@ that was already processed.
 
 Zero world time is valid. Missing/nonfinite/unrepresentable world time pauses
 running routes with a useful status; no real-time fallback is used. Restore the
-clock and Resume. Reload/reconnect processes elapsed game time for routes that
+clock and Start. Reload/reconnect processes elapsed game time for routes that
 were saved running; saved paused routes do not catch up. Changing the viewed Scene
 never changes a route's Scene or coordinate system. Native tokens can update on
 the configured Scene even when the GM views another Scene.
@@ -226,7 +228,7 @@ Use a backup official MYZ world.
 2. Open Patrols / Trade Routes, name a route, map-pick adjacent waypoints including
    a diagonal, inspect their numbers/arrows, reorder/remove a point and Cancel.
 3. Save a valid route at 60 minutes/sector with a chosen start and assignment.
-   Confirm the token is centered, the definition is paused, and Resume works.
+   Confirm the token is centered, the definition is paused, and Start works.
 4. Advance **Foundry world time** one hour and verify one transition. If using a
    tool that advances time on Party travel, move the Party and confirm exactly
    one transition through the same clock event. Without that tool, Party movement
@@ -234,7 +236,7 @@ Use a backup official MYZ world.
 5. Advance 30 minutes twice, then 150 minutes; inspect exact saved partial progress
    and final position. Test long jumps/many cycles, two-point routes, repeated
    sectors, valid Loop wrap and Back and Forth endpoints without duplicated stops.
-6. Pause with partial progress, advance many hours and Resume. Confirm no paused-time
+6. Pause with partial progress, advance many hours and Start. Confirm no paused-time
    catch-up; rewind the clock and confirm no reverse movement or interval replay.
 7. Reload/reconnect while partially complete. Check the saved baseline and position
    on the configured Scene, including while viewing another Scene.
