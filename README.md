@@ -791,3 +791,13 @@ chance uses the existing standard denominator; Special/Settlement and initially
 unsaved records remain excluded. GM Testing can select the expedition's **Current
 blank sector** without requiring a Normal sector record. Toggle blank checks off
 to retain the previous saved-Normal-only behavior.
+
+### Encounter references and main-window minimize (0.1.63)
+
+Travel Event **Open Encounter Reference** now opens Actor/Journal sheets directly;
+page references open the parent Journal at the stored page, with a safe parent
+fallback. Full world/compendium UUIDs and existing permissions are preserved.
+The main Sector Manager adds a **Minimize** minus button immediately left of its
+three-dot title-bar menu. It uses native Foundry minimization; double-click the
+minimized title bar to restore your unsaved work and previous window placement.
+Secondary windows are unchanged. See [implementation and live checks](docs/reference-and-minimize.md).

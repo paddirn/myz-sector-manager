@@ -1,3 +1,5 @@
+import {validUuid} from '../ui/documents.mjs';
+import {openEncounterReference} from './reference.mjs';
 import {escapeHTML as esc} from './model.mjs';
 export function travelReportHTML(event){
  const detection=event.detection,weather=event.weatherChange,encounter=event.encounter;
@@ -6,7 +8,7 @@ export function travelReportHTML(event){
 export async function showTravelReport(event,service,env=globalThis){
  if(!service.store.authoritative||(!event.weatherChange&&!event.encounter))return false;
  let dialog;
- const reference=event.encounter?.uuid?'<button type="button" data-travel-reference>Open Encounter Reference</button>':'';
+ const reference=event.encounter?`<button type="button" data-travel-reference ${validUuid(event.encounter.uuid)?'':'disabled title="No valid encounter reference is stored"'}>Open Encounter Reference</button>`:'';
  try{
   await env.foundry.applications.api.DialogV2.wait({
    window:{title:`${event.test?'TEST — ':''}Zone Travel Event — ${event.code}`,resizable:true},position:{width:500},
@@ -14,11 +16,7 @@ export async function showTravelReport(event,service,env=globalThis){
    buttons:[{action:'close',label:'Close',default:true,callback:()=>true}],
    render:(_event,instance)=>{
     dialog=instance;service.activeDialog=instance;
-    instance.element?.querySelector('[data-travel-reference]')?.addEventListener('click',async()=>{
-     if(!service.store.isGM)return;
-     try{const document=await env.fromUuid(event.encounter.uuid);if(!['Actor','JournalEntry','JournalEntryPage'].includes(document?.documentName))throw new Error('Encounter reference unavailable.');await document._onClickDocumentLink(new Event('click'));}
-     catch(error){env.ui.notifications.warn(error.message);}
-    });
+    instance.element?.querySelector('[data-travel-reference]')?.addEventListener('click',click=>{click.preventDefault();click.stopPropagation();void openEncounterReference(event.encounter.uuid,service,env);});
    },close:()=>true,rejectClose:false
   });
   // DialogV2.wait resolves for both Close and the window X (which may return null).
