@@ -741,3 +741,11 @@ Party tracking itself does not advance time. Pause/Resume excludes paused time.
 Definitions and paths are GM-private; player visibility uses standard native
 Foundry token hiding, with its normal client-data limitations. See [setup,
 clock/recovery policies, safeguards and manual checks](docs/patrol-routes.md).
+
+### Patrol native movement verification fix (0.1.59)
+
+Patrols now await v14 movement completion and verify persisted Scene token data,
+using integer top-left coordinates rather than animated/fractional values. Failed
+moves pause without advancing the public waypoint or consuming partial progress;
+Resume reconciles the saved intent without moving an already-arrived token twice.
+See [root-cause investigation, diagnostics and manual checks](docs/patrol-movement-fix.md).
