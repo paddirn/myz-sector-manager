@@ -38,8 +38,8 @@ export class ZoneRuntime {
     on('canvasPan',()=>this.schedule());
     on('canvasReady',()=>{this.suspended=false;this.store.emit();refresh();});
     on('canvasTearDown',()=>{if(this.calibrator.active)this.calibrator.cancel();this.suspended=true;this.patrolOverlay.destroy();this.overlay.stop();});
-    on('updateToken',(token,changes,options={})=>{if(!options.myzWandering&&!options.myzPatrol)void this.triggers.updated(token,changes); void this.store.tokenChanged(token,changes).catch(()=>{});if(changes.flags?.[MODULE]?.pendingTravelEntries)void this.travel.recoverPendingMoves().catch(()=>{});});
-    on('moveToken',token=>{void this.triggers.updated(token,{x:token.x,y:token.y});});
+    on('updateToken',(token,changes,options={})=>{void this.triggers.updated(token,changes,options); void this.store.tokenChanged(token,changes).catch(()=>{});if(changes.flags?.[MODULE]?.pendingTravelEntries)void this.travel.recoverPendingMoves().catch(()=>{});});
+    on('moveToken',(token,movement,options={})=>{void this.triggers.updated(token,{x:token.x,y:token.y},options);});
     on('stopToken',token=>{void this.triggers.stopped(token);});
     for(const event of ['deleteToken','createToken','moveToken','stopToken','pauseToken'])on(event,token=>{void this.store.tokenChanged(token).catch(()=>{});});
     for(const event of ['updateScene','deleteScene'])on(event,scene=>{if(scene.id===this.store.config.sceneId){this.store.emit();refresh();}});
