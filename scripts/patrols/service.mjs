@@ -1,24 +1,27 @@
+import {dispositionFilter} from './dispositions.mjs';
+import {collisionDetails,postCollision} from './collision-report.mjs';
 import {validateSchedule,worldClock,validateClockSchedule,advanceScheduled,resetDeparture,nextDeparture} from './schedule.mjs';
-import {sourceSector,hostileTokens,firstHostileStep,encounterRecord,sameEncounter} from './hostility.mjs';
+import {sourceSector,matchingTokens,firstCollisionStep,encounterRecord,sameEncounter} from './hostility.mjs';
 import {tokenSource,tokenPosition,matchesPosition,routeProgress,restoreProgress,resultSummary} from './movement.mjs';
 import {MODULE} from '../zone/store.mjs';
 import {coordinateToBounds,positionToCoordinate,tokenCenter,sceneCellSize} from '../zone/grid.mjs';
 import {canModify,playerControlled} from '../wandering/model.mjs';
 import {PATROL_FLAG,emptyRoutes,validateRoutes,validateGeometry,periodMilliseconds,clockMilliseconds,repositionRoute,tokenKey,gridKey} from './model.mjs';
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const authorityError=message=>Object.assign(new Error(message),{code:'MYZ_PATROL_AUTHORITY_CHANGED'});
 export class PatrolRoutes {
  constructor(store,env=globalThis){this.store=store;this.env=env;this.hooks=[];this.listeners=new Set();this.busy=new Set();this.wanderingMoves=new Set();}
  get authoritative(){return this.store.authoritative;}
  get now(){return clockMilliseconds(this.env.game.time?.worldTime);}
- read(){if(!this.store.isGM)throw Error('GM access only.');return validateRoutes(structuredClone(this.store.document?.getFlag(MODULE,PATROL_FLAG)||emptyRoutes()));}
+ read(){if(!this.store.isGM)throw Error('GM access only.');const state=validateRoutes(structuredClone(this.store.document?.getFlag(MODULE,PATROL_FLAG)||emptyRoutes()));for(const r of state.routes)r.stopDispositions=dispositionFilter(r.stopDispositions);return state;}
  subscribe(fn){this.listeners.add(fn);return ()=>this.listeners.delete(fn);}
  emit(){if(!this.store.isGM)this.store.patrolTokens=new Set();else try{this.store.patrolTokens=new Set(this.read().routes.flatMap(r=>r.assignments.map(tokenKey)));}catch{this.store.patrolTokens=new Set();}for(const fn of this.listeners)fn();}
  report(error){this.env.console?.error('MYZ Patrol Routes',error.patrolDiagnostic||{},error);if(this.store.isGM&&this.lastError!==error.message){this.lastError=error.message;this.env.ui.notifications.warn(`Patrols / Trade Routes: ${error.message}`);}}
- enqueue(task){return this.store.enqueue(async()=>{if(!this.authoritative)throw Error('Only the active GM can edit or advance patrol routes.');return task();});}
- async write(state){validateRoutes(state);if(!this.authoritative)throw Error('Active GM changed. Check route state before retrying.');if(state.revision>=Number.MAX_SAFE_INTEGER)throw Error('Route revision limit reached.');state.revision++;const doc=await this.store.ensureDocument();const users=Array.from(this.env.game.users.values?.()||this.env.game.users||[]);if(Number(doc.ownership?.default||0)>0||users.some(u=>!u.isGM&&(Number(doc.ownership?.[u.id]||0)>0||doc.testUserPermission?.(u,'LIMITED')===true)))throw Error('Configuration Journal must be GM-private before storing routes.');if(!this.authoritative)throw Error('Active GM changed.');await doc.setFlag(MODULE,PATROL_FLAG,state);this.emit();return state;}
+ enqueue(task){return this.store.enqueue(async()=>{if(!this.authoritative)throw authorityError('Only the active GM can edit or advance patrol routes.');return task();});}
+ async write(state){validateRoutes(state);if(!this.authoritative)throw authorityError('Active GM changed. Check route state before retrying.');if(state.revision>=Number.MAX_SAFE_INTEGER)throw Error('Route revision limit reached.');state.revision++;const doc=await this.store.ensureDocument();const users=Array.from(this.env.game.users.values?.()||this.env.game.users||[]);if(Number(doc.ownership?.default||0)>0||users.some(u=>!u.isGM&&(Number(doc.ownership?.[u.id]||0)>0||doc.testUserPermission?.(u,'LIMITED')===true)))throw Error('Configuration Journal must be GM-private before storing routes.');if(!this.authoritative)throw authorityError('Active GM changed.');await doc.setFlag(MODULE,PATROL_FLAG,state);this.emit();return state;}
  start(){
   if(!this.store.isGM||this.hooks.length)return;
-  const run=task=>{void Promise.resolve().then(task).catch(error=>this.report(error));};
+  const run=task=>{void Promise.resolve().then(task).catch(error=>{if(error.code!=='MYZ_PATROL_AUTHORITY_CHANGED'&&this.authoritative)this.report(error);else this.env.console?.error('MYZ Patrol Routes (authority changed)',error);});};
   const on=(name,fn)=>this.hooks.push([name,this.env.Hooks.on(name,fn)]);
   on('updateWorldTime',seconds=>{if(this.authoritative)run(()=>this.tick(clockMilliseconds(seconds)));});
   on('updateToken',(token,changes,options={})=>{if(this.authoritative&&['x','y','disposition'].some(k=>Object.hasOwn(changes,k))&&!['pending','paused','moving','planned'].includes(token.movement?.state))run(()=>this.collisions(token));if(options.myzWandering){this.wanderingMoves.add(`${token.parent?.id}.${token.id}`);if(this.authoritative&&this.store.patrolTokens?.has(`${token.parent?.id}.${token.id}`))run(()=>this.wanderingConflict(token));return;}if(options.myzPatrol||this.busy.has(tokenKey({sceneId:token.parent?.id,tokenId:token.id})))return;if(['x','y','width','height','hidden'].some(k=>Object.hasOwn(changes,k))&&this.authoritative&&!['pending','paused','moving','planned'].includes(token.movement?.state))run(()=>this.manual(token));});
@@ -85,7 +88,7 @@ export class PatrolRoutes {
     // Source already matches after a prior update/uncertain acknowledgement: never move twice.
     if(p.routeAfter)restoreProgress(r,p.routeAfter);
     delete r.pending;r.issue='';
-    if(p.transition){delete r.encounter;const hostiles=hostileTokens(scene.tokens.get(p.tokenId),scene,this.store.config.grid,r.waypoints[r.index],this.env);if(hostiles.length){this.stopEncounter(r,hostiles);notifications.push({route:structuredClone(r),names:hostiles.map(t=>t.name||t.id)});}}
+    if(p.transition){delete r.encounter;const matches=matchingTokens(r,scene.tokens.get(p.tokenId),scene,this.store.config.grid,r.waypoints[r.index],this.env);if(matches.length){this.stopEncounter(r,matches);notifications.push({route:structuredClone(r),tokens:collisionDetails(matches,this.env)});}}
     changed=true;
    }catch(cause){
     const error=cause instanceof Error?cause:new Error(cause?.message||String(cause));
@@ -96,7 +99,7 @@ export class PatrolRoutes {
    }
   }
   if(changed)await this.write(state);
-  for(const n of notifications)this.notifyEncounter(n.route,n.names);
+  for(const n of notifications)await this.notifyEncounter(n.route,n.tokens);
  }
  tick(now=this.now){return this.enqueue(async()=>{
   // Durable intents are replayed before accepting more elapsed time.
@@ -110,13 +113,13 @@ export class PatrolRoutes {
     const code=sourceSector(token,scene,this.store.config.grid);
     let transitions=0n;
     if(code!==r.waypoints[r.index]){r=repositionRoute(r,code,now);resetDeparture(r,now,worldClock(this.env.game.time,now));delete r.encounter;}
-    else{const result=advanceScheduled(r,now,worldClock(this.env.game.time,now),firstHostileStep(r,token,scene,this.store.config.grid,this.env));r=result.route;transitions=result.steps;}
-    if(r.running){this.plan(r,token,scene,before);if(r.pending)r.pending.transition=transitions>0n;else if(transitions>0n){delete r.encounter;const hostiles=hostileTokens(token,scene,this.store.config.grid,r.waypoints[r.index],this.env);if(hostiles.length){this.stopEncounter(r,hostiles);notifications.push({route:r,names:hostiles.map(t=>t.name||t.id)});}}}
+    else{const result=advanceScheduled(r,now,worldClock(this.env.game.time,now),firstCollisionStep(r,token,scene,this.store.config.grid,this.env));r=result.route;transitions=result.steps;}
+    if(r.running){this.plan(r,token,scene,before);if(r.pending)r.pending.transition=transitions>0n;else if(transitions>0n){delete r.encounter;const matches=matchingTokens(r,token,scene,this.store.config.grid,r.waypoints[r.index],this.env);if(matches.length){this.stopEncounter(r,matches);notifications.push({route:r,tokens:collisionDetails(matches,this.env)});}}}
    }catch(error){r={...before,running:false,issue:error.message};}
    state.routes[i]=r;changed=changed||!same(before,r);
   }
   if(changed)await this.write(state);
-  for(const n of notifications)this.notifyEncounter(n.route,n.names);
+  for(const n of notifications)await this.notifyEncounter(n.route,n.tokens);
   if(state.routes.some(r=>r.pending&&r.running))await this.settle();
   return this.read();
  });}
@@ -124,7 +127,7 @@ export class PatrolRoutes {
   if(draft.sceneId&&draft.sceneId!==this.store.config.sceneId||draft.gridKey&&draft.gridKey!==gridKey(this.store.config))throw Error('Zone Scene/grid changed while editing. Reopen and review the route.');
   const state=this.read(),old=state.routes.find(r=>r.id===draft.id),now=this.now;if(old?!same(old,expected):expected!==null)throw Error('This route changed while editing. Reopen the editor; nothing was saved.');
   const schedule=validateSchedule(draft.schedule??old?.schedule);validateClockSchedule(schedule,worldClock(this.env.game.time,now??0));
-  let r={schedule,...(old?.scheduleState?{scheduleState:structuredClone(old.scheduleState)}:{}),id:old?.id||draft.id||this.env.foundry.utils.randomID(),name:String(draft.name||'').trim(),sceneId:this.store.config.sceneId,gridKey:gridKey(this.store.config),waypoints:[...draft.waypoints],pattern:draft.pattern,minutesPerSector:Number(draft.minutesPerSector),assignments:structuredClone(draft.assignments||[]),index:old?.index??0,direction:old?.direction??1,progressMs:old?.progressMs??0,lastTimeMs:old?.lastTimeMs??now,running:false,visibleToPlayers:draft.visibleToPlayers,issue:''};
+  let r={stopDispositions:dispositionFilter(draft.stopDispositions===undefined?old?.stopDispositions:draft.stopDispositions),schedule,...(old?.scheduleState?{scheduleState:structuredClone(old.scheduleState)}:{}),id:old?.id||draft.id||this.env.foundry.utils.randomID(),name:String(draft.name||'').trim(),sceneId:this.store.config.sceneId,gridKey:gridKey(this.store.config),waypoints:[...draft.waypoints],pattern:draft.pattern,minutesPerSector:Number(draft.minutesPerSector),assignments:structuredClone(draft.assignments||[]),index:old?.index??0,direction:old?.direction??1,progressMs:old?.progressMs??0,lastTimeMs:old?.lastTimeMs??now,running:false,visibleToPlayers:draft.visibleToPlayers,issue:''};
   validateGeometry(r,this.store.config.grid);periodMilliseconds(r.minutesPerSector);
   const priorCode=old?.waypoints[old.index],geometryChanged=!old||!same(old.waypoints,r.waypoints)||old.pattern!==r.pattern||old.gridKey!==r.gridKey;
   const positionChanged=geometryChanged||Number.isInteger(draft.startIndex)&&draft.startIndex!==old?.index;
@@ -143,7 +146,7 @@ export class PatrolRoutes {
   await this.settle();const s=this.read();let r=s.routes.find(r=>r.id===id);if(!r)throw Error('Route no longer exists.');if(r.pending)throw Error(r.issue||'Resolve pending movement before starting.');const now=this.now;if(now===null)throw Error('Game clock unavailable. No real-world clock fallback is used.');
   const {token,scene}=this.context(r),code=sourceSector(token,scene,this.store.config.grid);
   if(code!==r.waypoints[r.index]){Object.assign(r,repositionRoute(r,code,now));resetDeparture(r,now,worldClock(this.env.game.time,now));delete r.encounter;if(!r.waypoints.includes(code))throw Error('Place the token on a route waypoint before starting.');}
-  if(r.encounter){const present=hostileTokens(token,scene,this.store.config.grid,code,this.env).filter(t=>r.encounter.tokenIds.includes(t.id));if(present.length)r.encounter=encounterRecord(code,present);else delete r.encounter;}
+  if(r.encounter){const present=matchingTokens(r,token,scene,this.store.config.grid,code,this.env).filter(t=>r.encounter.tokenIds.includes(t.id));if(present.length)r.encounter=encounterRecord(code,present);else delete r.encounter;}
   r.running=true;r.issue='';r.lastTimeMs=Math.max(r.lastTimeMs??now,now);const clock=worldClock(this.env.game.time,r.lastTimeMs),schedule=validateSchedule(r.schedule);validateClockSchedule(schedule,clock);if(schedule.mode==='departure'){if(!r.scheduleState)resetDeparture(r,r.lastTimeMs,clock);else if(r.scheduleState.remainingSteps===null)r.scheduleState.nextDepartureMs=nextDeparture(r.lastTimeMs,schedule,clock);}this.plan(r,token,scene);await this.write(s);await this.settle();return this.read();
  });}
  remove(id){return this.enqueue(async()=>{const s=this.read();s.routes=s.routes.filter(r=>r.id!==id);await this.write(s);return this.read();});}
@@ -155,8 +158,8 @@ export class PatrolRoutes {
   try{const {scene}=this.context(r);if(r.waypoints.includes(code))this.plan(r,token,scene);}catch(error){r.running=false;r.issue=error.message;}
   s.routes[index]=r;if(JSON.stringify(r)!==before)await this.write(s);await this.settle();if(r.issue&&r.issue!==priorIssue)this.report(Error(r.issue));
  });}
- stopEncounter(route,tokens){route.running=false;route.encounter=encounterRecord(route.waypoints[route.index],tokens);route.issue=`Hostile token encountered in ${route.encounter.sector}. Review and Start to continue.`;}
- notifyEncounter(route,names){if(this.authoritative)this.env.ui.notifications.warn(`Patrol "${route.name}" encountered a hostile token in sector ${route.encounter.sector} and has stopped${names.length?`: ${names.join(', ')}`:'.'}`);}
+ stopEncounter(route,tokens){route.running=false;route.encounter=encounterRecord(route.waypoints[route.index],tokens);route.issue=`Token collision in ${route.encounter.sector}. Review and Start to continue.`;}
+ async notifyEncounter(route,tokens){if(!this.authoritative)return;try{await postCollision(route,tokens,this.env);}catch(error){this.report(error);}}
  collisions(token){if(!this.authoritative||token.parent?.id!==this.store.config.sceneId)return Promise.resolve();return this.enqueue(async()=>{
   const state=this.read(),notifications=[];let changed=false;
   for(const r of state.routes){if(!r.running||r.pending||this.busy.has(tokenKey(r.assignments[0]||{})))continue;
@@ -164,12 +167,12 @@ export class PatrolRoutes {
    const sector=sourceSector(patrol,patrol.parent,this.store.config.grid);if(sector!==r.waypoints[r.index])continue;
    // Only a moved participant can cause a collision, not unrelated updates elsewhere in the Scene.
    if(token.id!==patrol.id&&sourceSector(token,token.parent,this.store.config.grid)!==sector&&!r.encounter?.tokenIds.includes(token.id))continue;
-   const hostiles=hostileTokens(patrol,patrol.parent,this.store.config.grid,sector,this.env),record=encounterRecord(sector,hostiles);
-   const newcomers=hostiles.filter(t=>r.encounter?.sector!==sector||!r.encounter.tokenIds.includes(t.id));
-   if(newcomers.length){this.stopEncounter(r,hostiles);changed=true;notifications.push({route:r,names:hostiles.map(t=>t.name||t.id)});}
-   else if(r.encounter&&!sameEncounter(r.encounter,record)){if(hostiles.length)r.encounter=record;else delete r.encounter;changed=true;}
+   const matches=matchingTokens(r,patrol,patrol.parent,this.store.config.grid,sector,this.env),record=encounterRecord(sector,matches);
+   const newcomers=matches.filter(t=>r.encounter?.sector!==sector||!r.encounter.tokenIds.includes(t.id));
+   if(newcomers.length){this.stopEncounter(r,matches);changed=true;notifications.push({route:r,tokens:collisionDetails(matches,this.env)});}
+   else if(r.encounter&&!sameEncounter(r.encounter,record)){if(matches.length)r.encounter=record;else delete r.encounter;changed=true;}
   }
-  if(changed){await this.write(state);for(const n of notifications)this.notifyEncounter(n.route,n.names);}
+  if(changed){await this.write(state);for(const n of notifications)await this.notifyEncounter(n.route,n.tokens);}
  });}
  wanderingConflict(token){return this.enqueue(async()=>{const state=this.read(),r=state.routes.find(r=>r.assignments.some(a=>a.sceneId===token.parent?.id&&a.tokenId===token.id));if(!r)return;r.running=false;r.issue='Unexpected Random Wandering movement on a patrol-owned token. Return it to its waypoint before Start.';await this.write(state);});}
  missing(token){return this.enqueue(async()=>{const s=this.read();let changed=false;for(const r of s.routes)if(r.assignments.some(a=>a.sceneId===token.parent?.id&&a.tokenId===token.id)){r.running=false;r.issue='Assigned token was deleted. Assign a replacement token.';changed=true;}if(changed)await this.write(s);});}

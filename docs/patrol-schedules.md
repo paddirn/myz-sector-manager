@@ -1,5 +1,9 @@
 # Patrol scheduling, hostile stops and Wandering priority — 0.1.60
 
+**0.1.61 update:** The opposing-disposition rule and collision toasts described
+below have been replaced by [per-route filters and GM-only chat](patrol-collision-filters.md).
+Scheduling, movement recovery and Wandering ownership remain as documented here.
+
 ## What changed
 
 The existing patrol service, native token positioning, private Configuration

@@ -1,6 +1,6 @@
 # Zone Patrols / Trade Routes
 
-Current scheduling and collision behavior: [0.1.60 guide](patrol-schedules.md).
+Scheduling: [0.1.60 guide](patrol-schedules.md). Current collision filters and GM-only chat: [0.1.61 guide](patrol-collision-filters.md).
 
 ## Architecture and integration decisions
 

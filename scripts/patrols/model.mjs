@@ -1,3 +1,4 @@
+import {dispositionFilter} from './dispositions.mjs';
 import {validateSchedule} from './schedule.mjs';
 import {canonicalCoordinate,sectorDistance,coordinateToBounds,validateGrid} from '../zone/grid.mjs';
 export const PATROL_FLAG='patrolRoutes';
@@ -30,7 +31,7 @@ export function validateRoutes(state){
   if(typeof r.id!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(r.id)||ids.has(r.id))throw Error('Invalid or duplicate route ID.');ids.add(r.id);
   if(typeof r.name!=='string'||!r.name.trim()||r.name.length>200||typeof r.sceneId!=='string'||!r.sceneId||typeof r.gridKey!=='string'||!['loop','pingpong'].includes(r.pattern)||typeof r.running!=='boolean'||typeof r.visibleToPlayers!=='boolean'||typeof r.issue!=='string')throw Error('Invalid route name, configuration or status.');
   if(!Array.isArray(r.waypoints)||r.waypoints.length<2||r.waypoints.length>1000||r.waypoints.some(c=>!canonicalCoordinate(c)||canonicalCoordinate(c)!==c)||!Number.isInteger(r.index)||r.index<0||r.index>=r.waypoints.length||![1,-1].includes(r.direction))throw Error('Invalid route waypoints or current position.');
-  validateSchedule(r.schedule);validateScheduleState(r.scheduleState,r);
+  dispositionFilter(r.stopDispositions);validateSchedule(r.schedule);validateScheduleState(r.scheduleState,r);
   if(r.encounter&&(typeof r.encounter.sector!=='string'||!Array.isArray(r.encounter.tokenIds)||r.encounter.tokenIds.some(id=>typeof id!=='string')))throw Error('Invalid patrol encounter acknowledgment.');
   const period=periodMilliseconds(r.minutesPerSector);
   if(!Number.isSafeInteger(r.progressMs)||r.progressMs<0||r.progressMs>=period||r.lastTimeMs!==null&&!Number.isSafeInteger(r.lastTimeMs))throw Error('Invalid saved route progress or time baseline.');
