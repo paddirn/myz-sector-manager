@@ -1,3 +1,5 @@
+import {travelDebug} from './debug.mjs';
+import {inspectTravelSetup} from './diagnostics.mjs';
 import {isAuthored} from '../sector-types.mjs';
 import {resolveConfiguredDocument,referenceSelection,warnReferenceOnce} from '../document-references.mjs';
 import {rollThreat,rollTable,boundedRoll} from '../sector-randomizer.mjs';
@@ -11,9 +13,10 @@ export class TravelEvents {
  constructor(store,env=globalThis,{roll=null,report=null,encounter=null,detection=null}={}){this.store=store;this.env=env;this.queue=Promise.resolve();this.roll=roll||async function(sides){return Number((await new env.Roll(`1d${sides}`).evaluate()).total);};this.report=report||((event)=>showTravelReport(event,this,env));this.encounter=encounter||(()=>this.rollEncounter());this.detection=detection||((group,config)=>detectEncounter({roster:partyRoster(env),group,groups:this.store.config.groups,mode:config.stalkerMode,enabled:config.autoFindPath,env}));}
  get state(){const saved=this.store.document?.getFlag(MODULE,STATE_FLAG)||travelStateDefaults();if(saved.version!==1)throw new Error('Unsupported saved Travel Events state; original data retained.');const next={...travelStateDefaults(),...saved};if(!['history','processed','diagnostics'].every(key=>Array.isArray(next[key])))throw new Error('Invalid saved Travel Events state; no changes made.');return structuredClone(next);}
  assertAuthority(){if(!this.store.authoritative)throw new Error('Only the active GM may process Travel Events.');}
- enqueue(task){const next=this.queue.then(task);this.queue=next.catch(error=>{this.env.console?.error('MYZ Travel Events',error);if(this.store.isGM)this.env.ui?.notifications?.warn(`Travel Events: ${error.message}`);});return next;}
+ enqueue(task){const next=this.queue.then(task);this.queue=next.catch(error=>{travelDebug(this.env,'processing-failed',{message:error.message});this.env.console?.error('MYZ Travel Events',error);if(this.store.isGM)this.env.ui?.notifications?.warn(`Travel Events: ${error.message}`);});return next;}
  async saveState(state,config=travelConfiguration(this.env)){this.assertAuthority();const document=await this.store.ensureDocument();this.assertAuthority();await document.setFlag(MODULE,STATE_FLAG,pruneTravelState(state,config.historyLimit));}
- async chance(sides){this.assertAuthority();const result=await this.roll(sides);if(!Number.isSafeInteger(result)||result<1||result>sides)throw new Error(`Invalid private 1d${sides} result.`);return result===1;}
+ async inspect(context={}){const setup=await inspectTravelSetup(this.store,this.env,context);if(!this.store.isGM||!this.env.game.user.isGM)throw Error('GM access changed while inspecting Travel Events.');const state=this.state;return {...setup,processing:{reportOpen:Boolean(this.activeDialog),pendingReports:state.history.filter(e=>e.pending).length,incompleteChecks:state.processed.filter(e=>e.status==='processing').length,recentDiagnostics:state.diagnostics.slice(-5)}};}
+ async chance(sides,label='check'){this.assertAuthority();const result=await this.roll(sides);if(!Number.isSafeInteger(result)||result<1||result>sides)throw new Error(`Invalid private 1d${sides} result.`);travelDebug(this.env,'chance',{check:label,denominator:sides,result,success:result===1});return result===1;}
  async rollWeather(){
   this.assertAuthority();const key='travelEvents.weatherTable',table=await resolveConfiguredDocument(key,this.env);
   const draw=await rollTable(table,this.env,[],{assertAuthority:()=>this.assertAuthority(),configurationKey:key});
@@ -36,35 +39,44 @@ export class TravelEvents {
   else if(result.uuid&&result.documentType==='Actor'){try{const actor=await this.env.fromUuid(result.uuid);if(typeof actor?.system?.description==='string')details=[result.description,journalBodyText(actor.system.description,this.env)].filter((value,index,all)=>value&&all.indexOf(value)===index).join("\n\n")||details;}catch{}}
   return {title:result.name||result.documentTitle||result.text,details,uuid:result.uuid||'',documentType:result.documentType,category:selected.category,sources:result.sources};
  }
- diagnostic(state,error){const message=error?.message||String(error);state.diagnostics.push({timestamp:Date.now(),message,...(error?.stack?{stack:error.stack}:{})});if(error instanceof Error)this.env.console?.error('MYZ Travel Events',error);if(this.env.game.user.isGM)warnReferenceOnce(`Travel Events: ${message}`,this.env);}
+ diagnostic(state,error){travelDebug(this.env,'configuration-error',{message:error?.message||String(error)});const message=error?.message||String(error);state.diagnostics.push({timestamp:Date.now(),message,...(error?.stack?{stack:error.stack}:{})});if(error instanceof Error)this.env.console?.error('MYZ Travel Events',error);if(this.env.game.user.isGM)warnReferenceOnce(`Travel Events: ${message}`,this.env);}
  onEntry(context){return this.enqueue(()=>this.process(context));}
- async process({journal,token,group,entryId,coordinate=null,test=false,persist=!test,force=null,campaignVisit=null,entryAt=null}){
+ async process({journal,token,group,entryId,coordinate=null,test=false,persist=!test,force=null,campaignVisit=null,entryAt=null,fromCoordinate=null}){
   this.assertAuthority();const config=travelConfiguration(this.env),sector=journal?.getFlag(MODULE,'sector');
-  if(!sector||sector.version!==1||isAuthored(sector)||sector.initialSavePending||(!test&&(!config.enabled||!config.normalEntry)))return null;
-  if(coordinate&&canonicalCoordinate(sector.code)!==coordinate)return null;
+  const trace={entryId,tokenId:token?.id,sceneId:token?.parent?.id,from:fromCoordinate,to:coordinate||sector?.code,test};
+  const skip=reason=>{travelDebug(this.env,'check-skipped',{...trace,reason});return null;};
+  if(!sector||sector.version!==1)return skip('No saved version-1 sector record');
+  if(isAuthored(sector))return skip('Special/Settlement sectors are ineligible');
+  if(sector.initialSavePending)return skip('Sector initial save is pending');
+  if(!test&&!config.enabled)return skip('Automatic Travel Events disabled');
+  if(!test&&!config.normalEntry)return skip('Normal sector entry checks disabled');
+  if(coordinate&&canonicalCoordinate(sector.code)!==coordinate)return skip('Destination does not match sector record');
   if(!group||!this.store.config.groups.some(g=>g.id===group.id&&g.tokenId===token?.id&&g.sceneId===token.parent?.id))throw new Error('Select a registered expedition token.');
   const state=this.state,weatherBeforeTimestamp=state.weatherChangedAt||state.weather?.timestamp||null,weatherBeforeRevision=state.weatherRevision||0,id=entryId||this.env.foundry.utils.randomID();
-  if(persist&&state.processed.some(entry=>entry.id===id))return null;
+  if(persist&&state.processed.some(entry=>entry.id===id))return skip('Entry ID already processed or interrupted; no reroll');
+  travelDebug(this.env,'check-started',{...trace,weatherChance:config.weatherChance,encounterChance:config.reduceExplored&&exploredSector(sector)?config.exploredChance:config.encounterChance,showDialog:config.showDialog,recordHistory:config.recordHistory,force});
   if(state.history.filter(event=>event.pending).length>=1000)throw new Error('Pending travel report capacity reached; review pending events before more checks.');
   if(persist){state.processed.push({id,status:'processing',timestamp:Date.now(),sectorId:journal.id,tokenUuid:token.uuid||`${group.sceneId}.${token.id}`});await this.saveState(state,config);}
   const event={id,test,timestamp:Date.now(),entryAt,campaignVisit,sceneId:group.sceneId,tokenId:token.id,sectorId:journal.id,code:sector.code,sectorName:sectorName(sector,journal.name),terrain:sector.terrain||'',expeditionId:group.id,expeditionName:group.name||'Party',tokenUuid:token.uuid||`${group.sceneId}.${token.id}`,weatherChange:null,encounter:null,detection:null,errors:[]};
   try{
-   const weatherDue=force==='weather'||(!force&&(!state.weather||await this.chance(config.weatherChance)));
+   const weatherDue=force==='weather'||(!force&&(!state.weather||await this.chance(config.weatherChance,'weather')));
    if(weatherDue){try{const next=await this.rollWeather();const previous=state.weather;if(!previous||next.condition.trim().replace(/\s+/g,' ').toLowerCase()!==previous.condition.trim().replace(/\s+/g,' ').toLowerCase()){
-    state.weather={...next,previous:previous?.condition||null,timestamp:Date.now()};state.weatherChangedAt=state.weather.timestamp;state.weatherRevision=(state.weatherRevision||0)+1;if(previous)event.weatherChange={...state.weather};
+    state.weather={...next,previous:previous?.condition||null,timestamp:Date.now()};state.weatherChangedAt=state.weather.timestamp;state.weatherRevision=(state.weatherRevision||0)+1;if(previous)event.weatherChange={...state.weather};else travelDebug(this.env,'initial-weather',{...trace,report:false,reason:'Initial weather is established silently'});
    }}catch(error){event.errors.push(error.message);this.diagnostic(state,error);}}
   }catch(error){event.errors.push(error.message);this.diagnostic(state,error);}
   try{
    const denominator=config.reduceExplored&&exploredSector(sector)?config.exploredChance:config.encounterChance;
-   const encounterDue=force==='encounter'||(!force&&await this.chance(denominator));
+   const encounterDue=force==='encounter'||(!force&&await this.chance(denominator,'encounter'));
    if(encounterDue){try{this.assertAuthority();event.encounter=await this.encounter();this.assertAuthority();event.detection=await this.detection(group,config);}catch(error){event.errors.push(error.message);this.diagnostic(state,error);}}
   }catch(error){event.errors.push(error.message);this.diagnostic(state,error);}
   const meaningful=Boolean(event.weatherChange||event.encounter);
+  travelDebug(this.env,'event-selected',{...trace,meaningful,weatherChange:Boolean(event.weatherChange),encounter:Boolean(event.encounter),errors:event.errors.length});
   if(persist&&!this.store.authoritative){if(this.env.game.user.isGM&&this.store.document){const key=this.env.foundry.utils.randomID();await this.store.document.setFlag(MODULE,`pendingTravelReports.${key}`,{event:{...event,pending:meaningful},meaningful,weather:state.weather,weatherBeforeTimestamp,weatherChangedAt:state.weatherChangedAt,weatherBeforeRevision,weatherRevision:state.weatherRevision});}return {event,meaningful,weather:state.weather,pending:true};}
   if(persist){const progress=state.processed.find(entry=>entry.id===id);progress.status='completed';if(meaningful){event.pending=config.showDialog;if(config.recordHistory||event.pending)state.history.push(event);}await this.saveState(state,config);}
   if(persist&&!test&&meaningful&&this.store.authoritative)await this.logCampaignEvent(event);
   // Initial weather, unchanged weather, failed chances and configuration errors alone never open a report.
-  if(meaningful&&config.showDialog&&this.store.authoritative){const shown=await this.report(event);if(persist&&shown&&this.store.authoritative)await this.acknowledge(id,config);}
+  if(meaningful&&config.showDialog&&this.store.authoritative){travelDebug(this.env,'report-open',{...trace});const shown=await this.report(event);travelDebug(this.env,'report-delivered',{...trace,shown:Boolean(shown)});if(persist&&shown&&this.store.authoritative)await this.acknowledge(id,config);}
+  else travelDebug(this.env,'report-skipped',{...trace,reason:!meaningful?'No weather change or encounter':!config.showDialog?'GM-only dialogs disabled':'Active GM changed'});
   return {event,meaningful,weather:state.weather};
  }
  async logCampaignEvent(event){try{await this.onTriggered?.(event);}catch(error){this.env.ui.notifications.warn(`Campaign Log could not record Travel Event ${event.id}: ${error.message}`);}}

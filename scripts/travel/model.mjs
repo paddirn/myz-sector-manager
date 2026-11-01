@@ -1,10 +1,10 @@
 export const MODULE='myz-sector-manager',TRAVEL_SETTING='travelEventsConfiguration',ROSTER_SETTING='partyRoster',STATE_FLAG='travelEvents';
-export const travelDefaults=()=>({version:1,enabled:true,normalEntry:true,weatherChance:12,encounterChance:12,reduceExplored:true,exploredChance:20,autoFindPath:true,stalkerMode:'all',showDialog:true,recordHistory:true,historyLimit:200});
+export const travelDefaults=()=>({version:1,enabled:true,debug:false,normalEntry:true,weatherChance:12,encounterChance:12,reduceExplored:true,exploredChance:20,autoFindPath:true,stalkerMode:'all',showDialog:true,recordHistory:true,historyLimit:200});
 export const rosterDefaults=()=>({version:1,members:[]});
 export const travelStateDefaults=()=>({version:1,weather:null,weatherChangedAt:null,weatherRevision:0,history:[],processed:[],diagnostics:[]});
 export function validateTravelConfiguration(raw){
  const next={...travelDefaults(),...raw};if(next.version!==1)throw new Error('Unsupported Travel Events configuration.');
- for(const key of ['enabled','normalEntry','reduceExplored','autoFindPath','showDialog','recordHistory'])if(typeof next[key]!=='boolean')throw new Error(`${key} must be true or false.`);
+ for(const key of ['enabled','debug','normalEntry','reduceExplored','autoFindPath','showDialog','recordHistory'])if(typeof next[key]!=='boolean')throw new Error(`${key} must be true or false.`);
  for(const key of ['weatherChance','encounterChance','exploredChance'])if(!Number.isSafeInteger(next[key])||next[key]<1||next[key]>1000000)throw new Error(`${key} must be a whole 1-in-N denominator from 1 to 1000000.`);
  if(!['all','lead'].includes(next.stalkerMode))throw new Error('Choose all eligible Stalkers or lead Stalker only.');
  if(!Number.isSafeInteger(next.historyLimit)||next.historyLimit<10||next.historyLimit>1000)throw new Error('History retention must be 10–1000 delivered events.');return next;

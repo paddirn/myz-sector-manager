@@ -1,4 +1,7 @@
-# Automatic Zone Travel Events — v0.1.26
+# Automatic Zone Travel Events
+
+For current opt-in tracing and read-only setup checks, see the
+[0.1.62 diagnosis guide](travel-event-diagnosis.md). Core rules below are unchanged.
 
 ## Set up in a backup world
 

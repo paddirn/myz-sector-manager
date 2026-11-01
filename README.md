@@ -771,3 +771,15 @@ Collision reports are persistent **GM-only chat whispers**, combining all matchi
 tokens in that sector. Start acknowledges the stop and lets the patrol continue.
 
 See [collision configuration, privacy and manual checks](docs/patrol-collision-filters.md).
+
+### Travel Event troubleshooting (0.1.62)
+
+In **Travel Events**, enable **GM Debug Logging** and Save Configuration to trace
+completed Party entries, eligibility skips, chance rolls and private report delivery
+in the active GM's browser console. It is off by default and never logs to players.
+Under **GM Testing**, **Check Travel Setup (no rolls)** inspects saved settings,
+assignments, current sector records, table references and pending reports without
+changing anything. Existing **Test Encounter Roll** gives a deterministic, TEST
+report using configured tables without changing gameplay probabilities.
+
+See [the investigation and diagnostic steps](docs/travel-event-diagnosis.md).

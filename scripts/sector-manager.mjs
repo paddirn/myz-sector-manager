@@ -1007,7 +1007,7 @@ Hooks.once('ready',async()=>{
     openPendingPartySkillRolls:()=>partySkills.syncPlayer(),
     openPlayerShop:async journalUuid=>{try{const shop=new PlayerShop(journalUuid);await shop.refresh();return shop;}catch(error){ui.notifications.error(`Player Shop: ${error.message}`);throw error;}},
     zone:zone.api(),
-    travel:{weather:()=>game.user.isGM?zone.travel.state.weather:null,history:()=>game.user.isGM?zone.travel.state.history:[],configure:async()=>{if(game.user.isGM)return new zone.TravelClass().render(true);},roster:async()=>{if(game.user.isGM)return new zone.RosterClass().render(true);}},
+    travel:{diagnostics:context=>zone.travel.inspect(context),weather:()=>game.user.isGM?zone.travel.state.weather:null,history:()=>game.user.isGM?zone.travel.state.history:[],configure:async()=>{if(game.user.isGM)return new zone.TravelClass().render(true);},roster:async()=>{if(game.user.isGM)return new zone.RosterClass().render(true);}},
     migrateJournals:()=>organization.run(),
     open:async(id=null)=>{
       if(!game.user.isGM){ui.notifications.warn('GM access only.');return;}
