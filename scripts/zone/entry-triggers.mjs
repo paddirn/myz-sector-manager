@@ -42,9 +42,9 @@ export class SectorEntryTriggers {
    if(!this.store.authoritative||gridAtEntry!==JSON.stringify(this.store.config.grid)||!this.store.config.groups.some(group=>group.id===track.id&&group.sceneId===track.sceneId&&group.tokenId===token.id)){travelDebug(this.env,'check-skipped',{...trace,reason:'Active GM, grid or Party assignment changed while entry was queued'});return;}
    try{
     const normal=records.filter(journal=>{const sector=journal.getFlag(MODULE,'sector');return !isAuthored(sector)&&!sector?.initialSavePending;});
-    const context={...entryContext,journal:normal[0]||null,campaignVisit:await captured};
-    if(!normal.length)travelDebug(this.env,'check-skipped',{...trace,reason:records.length?'Destination has only Special/Settlement or initially unsaved sectors':'No existing saved Normal sector at destination'});
-    if(normal.length&&this.beforeMacros)await this.beforeMacros(context);
+    const context={...entryContext,journal:normal[0]||null,blank:records.length===0,campaignVisit:await captured};
+    if(!normal.length&&records.length)travelDebug(this.env,'check-skipped',{...trace,reason:records.length?'Destination has only Special/Settlement or initially unsaved sectors':'No existing saved Normal sector at destination'});
+    if((normal.length||context.blank)&&this.beforeMacros)await this.beforeMacros(context);
     if(this.afterTravel){try{await this.afterTravel(context);}catch(error){this.env.console?.error('MYZ sector-entry wandering',error);}}
     for(const journal of normal){this.executing.add(identity);await this.run(journal,identity,journal.getFlag(MODULE,'sector').effects||[],token);}
    }

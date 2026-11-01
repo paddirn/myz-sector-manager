@@ -17,7 +17,7 @@ export class MovementRecovery {
  completed(token,userId){
   const key=this.key(token),from=this.positions.get(key),to=snapshot(token);this.positions.set(key,to);this.pending.delete(key);
   if(!from||from.x===to.x&&from.y===to.y||this.env.game.users.activeGM||userId!==this.env.game.user.id||!token.isOwner||this.suppressed(token))return;
-  try{const config=travelConfiguration(this.env);if(!config.enabled||!config.normalEntry)return;}catch{return;}
+  try{const config=travelConfiguration(this.env);if(!config.enabled||(!config.normalEntry&&!config.blankEntry))return;}catch{return;}
   const entry={id:this.env.foundry.utils.randomID(),timestamp:Date.now(),from,to};
   const write=this.queue.then(async()=>{const state=structuredClone(token.getFlag(MODULE,'pendingTravelEntries')||{version:1,entries:[],overflow:0});if(state.entries.length>=50)state.overflow=(state.overflow||0)+1;else state.entries.push(entry);await token.setFlag(MODULE,'pendingTravelEntries',state);});
   this.queue=write.catch(error=>this.env.console?.warn('MYZ pending travel move could not be retained; native Token permissions were respected.',error));

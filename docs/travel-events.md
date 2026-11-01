@@ -1,7 +1,9 @@
 # Automatic Zone Travel Events
 
 For current opt-in tracing and read-only setup checks, see the
-[0.1.62 diagnosis guide](travel-event-diagnosis.md). Core rules below are unchanged.
+[0.1.62 diagnosis guide](travel-event-diagnosis.md). The 0.1.62 update explicitly adds blank-sector checks; saved-Normal probabilities
+and the other game rules below are retained. Earlier saved-Normal-only eligibility
+text describes the previous behavior.
 
 ## Set up in a backup world
 

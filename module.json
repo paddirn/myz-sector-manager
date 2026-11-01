@@ -63,6 +63,7 @@
     "scripts/travel/model.mjs",
     "scripts/travel/stalkers.mjs",
     "scripts/travel/report.mjs",
+    "scripts/travel/eligibility.mjs",
     "scripts/travel/diagnostics.mjs",
     "scripts/travel/service.mjs",
     "scripts/travel/recovery.mjs",

@@ -1,3 +1,4 @@
+import {isBlankDestination} from './eligibility.mjs';
 import {travelDebug} from './debug.mjs';
 import {inspectTravelSetup} from './diagnostics.mjs';
 import {isAuthored} from '../sector-types.mjs';
@@ -41,23 +42,27 @@ export class TravelEvents {
  }
  diagnostic(state,error){travelDebug(this.env,'configuration-error',{message:error?.message||String(error)});const message=error?.message||String(error);state.diagnostics.push({timestamp:Date.now(),message,...(error?.stack?{stack:error.stack}:{})});if(error instanceof Error)this.env.console?.error('MYZ Travel Events',error);if(this.env.game.user.isGM)warnReferenceOnce(`Travel Events: ${message}`,this.env);}
  onEntry(context){return this.enqueue(()=>this.process(context));}
- async process({journal,token,group,entryId,coordinate=null,test=false,persist=!test,force=null,campaignVisit=null,entryAt=null,fromCoordinate=null}){
-  this.assertAuthority();const config=travelConfiguration(this.env),sector=journal?.getFlag(MODULE,'sector');
-  const trace={entryId,tokenId:token?.id,sceneId:token?.parent?.id,from:fromCoordinate,to:coordinate||sector?.code,test};
+ async process({journal,token,group,entryId,coordinate=null,test=false,persist=!test,force=null,campaignVisit=null,entryAt=null,fromCoordinate=null,blank=false}){
+  this.assertAuthority();const config=travelConfiguration(this.env),requestedBlank=blank&&!journal,code=canonicalCoordinate(coordinate);
+  blank=Boolean(requestedBlank&&isBlankDestination(this.store,this.env,code));
+  if(blank)coordinate=code;
+  const sector=journal?.getFlag(MODULE,'sector')||(blank?{version:1,code,status:'Unexplored',terrain:''}:null);
+  const trace={entryId,tokenId:token?.id,sceneId:token?.parent?.id,from:fromCoordinate,to:coordinate||sector?.code,test,blank};
   const skip=reason=>{travelDebug(this.env,'check-skipped',{...trace,reason});return null;};
+  if(requestedBlank&&!blank)return skip('Destination is outside the Zone grid or already has a sector record; it is not blank');
   if(!sector||sector.version!==1)return skip('No saved version-1 sector record');
   if(isAuthored(sector))return skip('Special/Settlement sectors are ineligible');
   if(sector.initialSavePending)return skip('Sector initial save is pending');
   if(!test&&!config.enabled)return skip('Automatic Travel Events disabled');
-  if(!test&&!config.normalEntry)return skip('Normal sector entry checks disabled');
+  if(!test&&(blank?!config.blankEntry:!config.normalEntry))return skip(blank?'Blank sector entry checks disabled':'Normal sector entry checks disabled');
   if(coordinate&&canonicalCoordinate(sector.code)!==coordinate)return skip('Destination does not match sector record');
   if(!group||!this.store.config.groups.some(g=>g.id===group.id&&g.tokenId===token?.id&&g.sceneId===token.parent?.id))throw new Error('Select a registered expedition token.');
   const state=this.state,weatherBeforeTimestamp=state.weatherChangedAt||state.weather?.timestamp||null,weatherBeforeRevision=state.weatherRevision||0,id=entryId||this.env.foundry.utils.randomID();
   if(persist&&state.processed.some(entry=>entry.id===id))return skip('Entry ID already processed or interrupted; no reroll');
   travelDebug(this.env,'check-started',{...trace,weatherChance:config.weatherChance,encounterChance:config.reduceExplored&&exploredSector(sector)?config.exploredChance:config.encounterChance,showDialog:config.showDialog,recordHistory:config.recordHistory,force});
   if(state.history.filter(event=>event.pending).length>=1000)throw new Error('Pending travel report capacity reached; review pending events before more checks.');
-  if(persist){state.processed.push({id,status:'processing',timestamp:Date.now(),sectorId:journal.id,tokenUuid:token.uuid||`${group.sceneId}.${token.id}`});await this.saveState(state,config);}
-  const event={id,test,timestamp:Date.now(),entryAt,campaignVisit,sceneId:group.sceneId,tokenId:token.id,sectorId:journal.id,code:sector.code,sectorName:sectorName(sector,journal.name),terrain:sector.terrain||'',expeditionId:group.id,expeditionName:group.name||'Party',tokenUuid:token.uuid||`${group.sceneId}.${token.id}`,weatherChange:null,encounter:null,detection:null,errors:[]};
+  if(persist){state.processed.push({id,status:'processing',timestamp:Date.now(),sectorId:journal?.id||null,tokenUuid:token.uuid||`${group.sceneId}.${token.id}`});await this.saveState(state,config);}
+  const event={id,test,timestamp:Date.now(),entryAt,campaignVisit,sceneId:group.sceneId,tokenId:token.id,sectorId:journal?.id||null,code:sector.code,blank,sectorName:blank?'Unrecorded sector':sectorName(sector,journal.name),terrain:sector.terrain||'',expeditionId:group.id,expeditionName:group.name||'Party',tokenUuid:token.uuid||`${group.sceneId}.${token.id}`,weatherChange:null,encounter:null,detection:null,errors:[]};
   try{
    const weatherDue=force==='weather'||(!force&&(!state.weather||await this.chance(config.weatherChance,'weather')));
    if(weatherDue){try{const next=await this.rollWeather();const previous=state.weather;if(!previous||next.condition.trim().replace(/\s+/g,' ').toLowerCase()!==previous.condition.trim().replace(/\s+/g,' ').toLowerCase()){
@@ -108,7 +113,7 @@ export class TravelEvents {
     const valid=point=>point&&['x','y','width','height'].every(key=>Number.isFinite(point[key]))&&point.width>0&&point.height>0&&point.width<=100&&point.height<=100;
     if(typeof pending.id!=='string'||pending.id.length>200||!valid(pending.from)||!valid(pending.to))continue;
     const from=positionToCoordinate(tokenCenter(pending.from,this.store.scene),this.store.config.grid),to=positionToCoordinate(tokenCenter(pending.to,this.store.scene),this.store.config.grid);if(!from||!to||from===to)continue;
-    const journal=this.store.sectorRecords(to).find(doc=>!isAuthored(doc.getFlag(MODULE,'sector')));if(journal)await this.process({journal,token,group,entryId:pending.id,coordinate:to});
+    const records=this.store.sectorRecords(to),journal=records.find(doc=>!isAuthored(doc.getFlag(MODULE,'sector')));if(journal||!records.length)await this.process({journal,blank:!records.length,token,group,entryId:pending.id,coordinate:to,fromCoordinate:from});
    }
    if(this.store.authoritative){const latest=token.getFlag(MODULE,'pendingTravelEntries')||{entries:[]},ids=new Set(saved.entries.map(entry=>entry.id));await token.setFlag(MODULE,'pendingTravelEntries',{...latest,entries:(Array.isArray(latest.entries)?latest.entries:[]).filter(entry=>!ids.has(entry.id)),overflow:0});if(saved.overflow){const state=this.state;this.diagnostic(state,`${saved.overflow} additional offline movement updates exceeded the 50-entry recovery buffer for ${group.name}.`);await this.saveState(state);}}
   }

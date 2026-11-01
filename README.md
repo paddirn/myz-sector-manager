@@ -783,3 +783,11 @@ changing anything. Existing **Test Encounter Roll** gives a deterministic, TEST
 report using configured tables without changing gameplay probabilities.
 
 See [the investigation and diagnostic steps](docs/travel-event-diagnosis.md).
+
+
+Blank Zone squares now qualify for automatic Party Travel Events by default via
+**Trigger on Blank Zone Sector Entry**. No sector record is created. Their encounter
+chance uses the existing standard denominator; Special/Settlement and initially
+unsaved records remain excluded. GM Testing can select the expedition's **Current
+blank sector** without requiring a Normal sector record. Toggle blank checks off
+to retain the previous saved-Normal-only behavior.
