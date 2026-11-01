@@ -749,3 +749,15 @@ using integer top-left coordinates rather than animated/fractional values. Faile
 moves pause without advancing the public waypoint or consuming partial progress;
 Resume reconciles the saved intent without moving an already-arrived token twice.
 See [root-cause investigation, diagnostics and manual checks](docs/patrol-movement-fix.md).
+
+### Patrol schedules and hostile stops (0.1.60)
+
+Patrols now use **Start / Pause** controls. The compact editor offers **Always
+Active** (the existing default), **Operating hours**, and **Scheduled departure**
+with optional operating hours. Scheduling uses Foundry's world calendar and keeps
+partial progress overnight. Opposing Friendly/Hostile tokens stop a route at the
+first occupied waypoint, including intermediate sectors during large clock jumps.
+Assigned tokens retain their Wandering settings while patrol ownership suppresses
+wandering, even when paused. Unassign/delete the route to release that ownership.
+
+See [scheduling, collision policies and the manual v14 checklist](docs/patrol-schedules.md).
