@@ -1,5 +1,11 @@
 # Encounter reference opening and main-window minimize — 0.1.63
 
+**Minimize follow-up:** The original frame callback was not registered as an
+ApplicationV2 action. The corrected dispatcher, Restore button and lifecycle
+behavior are documented in [0.1.64 minimize fix](minimize-fix.md). The previous
+browser fixture invoked frame metadata callbacks directly and masked that defect.
+Encounter reference behavior below is unchanged.
+
 Implemented in the requested order: encounter references first, main window second.
 
 ## Encounter reference investigation and fix

@@ -801,3 +801,11 @@ The main Sector Manager adds a **Minimize** minus button immediately left of its
 three-dot title-bar menu. It uses native Foundry minimization; double-click the
 minimized title bar to restore your unsaved work and previous window placement.
 Secondary windows are unchanged. See [implementation and live checks](docs/reference-and-minimize.md).
+
+### Functional minimize/restore control (0.1.64)
+
+The main title-bar button now uses ApplicationV2's registered action dispatcher.
+Click **Minimize** to collapse the window, then **Restore** to reopen it; native
+title-bar double-click restoration also works. Ordinary rerenders are deferred
+while minimized and applied after restoration, preserving unsaved editor state.
+See [the root cause, regression coverage and live checklist](docs/minimize-fix.md).
