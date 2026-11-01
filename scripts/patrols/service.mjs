@@ -1,3 +1,4 @@
+import {tokenSource,tokenPosition,matchesPosition,routeProgress,resultSummary} from './movement.mjs';
 import {MODULE} from '../zone/store.mjs';
 import {coordinateToBounds,positionToCoordinate,tokenCenter,sceneCellSize} from '../zone/grid.mjs';
 import {canModify,playerControlled} from '../wandering/model.mjs';
@@ -10,7 +11,7 @@ export class PatrolRoutes {
  read(){if(!this.store.isGM)throw Error('GM access only.');return validateRoutes(structuredClone(this.store.document?.getFlag(MODULE,PATROL_FLAG)||emptyRoutes()));}
  subscribe(fn){this.listeners.add(fn);return ()=>this.listeners.delete(fn);}
  emit(){if(!this.store.isGM)this.store.patrolTokens=new Set();else try{this.store.patrolTokens=new Set(this.read().routes.flatMap(r=>r.assignments.map(tokenKey)));}catch{this.store.patrolTokens=new Set();}for(const fn of this.listeners)fn();}
- report(error){this.env.console?.error('MYZ Patrol Routes',error);if(this.store.isGM&&this.lastError!==error.message){this.lastError=error.message;this.env.ui.notifications.warn(`Patrols / Trade Routes: ${error.message}`);}}
+ report(error){this.env.console?.error('MYZ Patrol Routes',error.patrolDiagnostic||{},error);if(this.store.isGM&&this.lastError!==error.message){this.lastError=error.message;this.env.ui.notifications.warn(`Patrols / Trade Routes: ${error.message}`);}}
  enqueue(task){return this.store.enqueue(async()=>{if(!this.authoritative)throw Error('Only the active GM can edit or advance patrol routes.');return task();});}
  async write(state){validateRoutes(state);if(!this.authoritative)throw Error('Active GM changed. Check route state before retrying.');if(state.revision>=Number.MAX_SAFE_INTEGER)throw Error('Route revision limit reached.');state.revision++;const doc=await this.store.ensureDocument();const users=Array.from(this.env.game.users.values?.()||this.env.game.users||[]);if(Number(doc.ownership?.default||0)>0||users.some(u=>!u.isGM&&(Number(doc.ownership?.[u.id]||0)>0||doc.testUserPermission?.(u,'LIMITED')===true)))throw Error('Configuration Journal must be GM-private before storing routes.');if(!this.authoritative)throw Error('Active GM changed.');await doc.setFlag(MODULE,PATROL_FLAG,state);this.emit();return state;}
  start(){
@@ -30,30 +31,65 @@ export class PatrolRoutes {
   if(route.sceneId!==this.store.config.sceneId||route.gridKey!==gridKey(this.store.config))throw Error('Zone Scene/grid changed. Edit the route against the current grid before resuming.');
   validateGeometry(route,this.store.config.grid);
   const scene=this.env.game.scenes.get(route.sceneId);if(!scene)throw Error('Route Scene is unavailable.');
-  const a=route.assignments[0],token=a&&scene.tokens.get(a.tokenId);if(!token)throw Error('Assigned token is missing. Assign a replacement token.');
+  const a=route.assignments[0],token=a&&scene.tokens.get(a.tokenId);if(!token)throw Error('Assigned token is missing. Assign a replacement token.');if(token.parent?.id!==scene.id||token.id!==a.tokenId)throw Error('Assignment does not match the Scene TokenDocument.');
   if(!canModify(token,this.env)||playerControlled(token,this.env))throw Error('Use a GM-controlled, non-player-owned token that the active GM can update.');
   if(this.store.config.groups.some(g=>g.sceneId===scene.id&&g.tokenId===token.id)||this.store.config.ark?.sceneId===scene.id&&this.store.config.ark?.tokenId===token.id)throw Error('Party/Expedition and Ark tokens cannot be assigned to routes.');
   return {scene,token};
  }
  target(route,token,scene){
-  const b=coordinateToBounds(route.waypoints[route.index],this.store.config.grid),size=sceneCellSize(scene),width=token.width*size.width,height=token.height*size.height;
+  const b=coordinateToBounds(route.waypoints[route.index],this.store.config.grid),size=sceneCellSize(scene),source=tokenSource(token),width=source.width*size.width,height=source.height*size.height;
   if(!b||![width,height].every(n=>Number.isFinite(n)&&n>0)||width>b.width||height>b.height)throw Error('Token must fit inside a Zone sector.');
-  const x=b.x+(b.width-width)/2,y=b.y+(b.height-height)/2,rect=scene.dimensions?.sceneRect||{x:0,y:0,width:scene.width,height:scene.height};
+  const x=Math.round(b.x+(b.width-width)/2),y=Math.round(b.y+(b.height-height)/2),rect=scene.dimensions?.sceneRect||{x:0,y:0,width:scene.width,height:scene.height};
   if(![rect.x,rect.y,rect.width,rect.height].every(Number.isFinite)||x<rect.x||y<rect.y||x+width>rect.x+rect.width||y+height>rect.y+rect.height)throw Error('Destination token bounds are outside the Scene.');
   return {x,y,hidden:!route.visibleToPlayers};
  }
- plan(route,token,scene){const target=this.target(route,token,scene);if(['x','y','hidden'].some(k=>token[k]!==target[k]))route.pending={sceneId:scene.id,tokenId:token.id,...target,before:{x:token.x,y:token.y,hidden:Boolean(token.hidden)}};}
+ plan(route,token,scene,beforeRoute=route){
+  const target=this.target(route,token,scene),before=tokenPosition(token);
+  if(!matchesPosition(before,target)){
+   route.pending={sceneId:scene.id,tokenId:token.id,...target,before,routeBefore:routeProgress(beforeRoute),routeAfter:routeProgress(route)};
+   // Claim the intent durably; publish travel progress only after verified movement.
+   Object.assign(route,route.pending.routeBefore);
+  }
+ }
  async settle(){
   const state=this.read();let changed=false;
   for(const r of state.routes){if(!r.pending)continue;
-   const p=r.pending;try{
-    const {scene,token}=this.context(r),target=this.target(r,token,scene);
-    if(!same(target,{x:p.x,y:p.y,hidden:p.hidden}))throw Error('Pending movement no longer matches the grid/token. Edit the route.');
-    const atTarget=['x','y','hidden'].every(k=>token[k]===p[k]),atBefore=['x','y','hidden'].every(k=>token[k]===p.before[k]);
+   const p=r.pending,expected={x:Math.round(p.x),y:Math.round(p.y),hidden:p.hidden};
+   const diagnostic={routeId:r.id,routeName:r.name,tokenId:p.tokenId,sceneId:p.sceneId,startingSector:r.waypoints[p.routeBefore?.index??r.index],destinationSector:r.waypoints[p.routeAfter?.index??r.index],expected,actual:null,prepared:null,api:null,result:null,outcome:'validation',userId:this.env.game.user.id,activeGMId:this.env.game.users.activeGM?.id,legacyIntent:!p.routeAfter};
+   try{
+    const {scene,token}=this.context(r),target=this.target({...r,index:p.routeAfter?.index??r.index},token,scene);
+    const source=tokenSource(token);diagnostic.startingSector=positionToCoordinate(tokenCenter({x:p.before.x,y:p.before.y,width:source.width,height:source.height},scene),this.store.config.grid);
+    const inspect=()=>{const current=scene.tokens.get(p.tokenId);diagnostic.actual=tokenPosition(current);diagnostic.prepared=current?{x:current.x,y:current.y,hidden:current.hidden}:null;return current;};
+    inspect();
+    if(!same(target,expected))throw Error('Pending movement no longer matches the grid/token. Edit the route.');
+    const atTarget=matchesPosition(diagnostic.actual,expected),atBefore=matchesPosition(diagnostic.actual,{x:Math.round(p.before.x),y:Math.round(p.before.y),hidden:p.before.hidden});
     if(!atTarget&&!atBefore){Object.assign(r,repositionRoute(r,positionToCoordinate(tokenCenter(token,scene),this.store.config.grid),this.now));r.running=false;r.issue='Token changed during pending movement. Review its waypoint and Resume.';delete r.pending;changed=true;continue;}
-    if(!atTarget){if(!this.authoritative)return;this.busy.add(tokenKey(p));try{await token.update({x:p.x,y:p.y,hidden:p.hidden},{animate:false,myzPatrol:true});if(!['x','y','hidden'].every(k=>token[k]===p[k]))throw Error('Token update was not applied. Resolve the veto and Resume.');}finally{this.busy.delete(tokenKey(p));}}
-    delete r.pending;changed=true;
-   }catch(error){r.running=false;r.issue=`Movement pending: ${error.message}`;changed=true;this.report(error);}
+    if(!atTarget){
+     if(!this.authoritative)return;this.busy.add(tokenKey(p));
+     try{
+      const moving=diagnostic.actual.x!==expected.x||diagnostic.actual.y!==expected.y;
+      diagnostic.api=moving&&typeof token.move==='function'?'TokenDocument.move':'TokenDocument.update';
+      diagnostic.outcome='exception';
+      const result=diagnostic.api==='TokenDocument.move'
+       ?await token.move(expected,{animate:false,pan:false,autoRotate:false,showRuler:false,myzPatrol:true})
+       :await token.update(expected,{animate:false,pan:false,myzPatrol:true});
+      diagnostic.result=resultSummary(result);inspect();
+      if(!matchesPosition(diagnostic.actual,expected)){
+       diagnostic.outcome=result===false||result==null?'rejected':'verification';
+       throw Error(diagnostic.outcome==='rejected'?'Token movement was rejected or stopped. See the GM console and Resume after correcting it.':'Token movement failed source-position verification. See the GM console before resuming.');
+      }
+     }finally{this.busy.delete(tokenKey(p));}
+    }
+    // Source already matches after a prior update/uncertain acknowledgement: never move twice.
+    if(p.routeAfter)Object.assign(r,p.routeAfter);
+    delete r.pending;r.issue='';changed=true;
+   }catch(cause){
+    const error=cause instanceof Error?cause:new Error(cause?.message||String(cause));
+    if(p.routeBefore)Object.assign(r,p.routeBefore);
+    const token=this.env.game.scenes.get(p.sceneId)?.tokens.get(p.tokenId);
+    diagnostic.actual=tokenPosition(token);diagnostic.prepared=token?{x:token.x,y:token.y,hidden:token.hidden}:null;
+    error.patrolDiagnostic=diagnostic;r.running=false;r.issue=`Movement pending: ${error.message}`;changed=true;this.report(error);
+   }
   }
   if(changed)await this.write(state);
  }
@@ -69,7 +105,7 @@ export class PatrolRoutes {
     const code=positionToCoordinate(tokenCenter(token,scene),this.store.config.grid);
     if(code!==r.waypoints[r.index])r=repositionRoute(r,code,now);
     else r=advanceRoute(r,now);
-    if(r.running)this.plan(r,token,scene);
+    if(r.running)this.plan(r,token,scene,before);
    }catch(error){r={...before,running:false,issue:error.message};}
    state.routes[i]=r;changed=changed||!same(before,r);
   }

@@ -154,9 +154,11 @@ The assignment array permits future multiple assignments without changing how a
 route owns speed/position. Optional `pending` movement contains only a target and
 observed native token baseline. It is private, not a token flag or public socket.
 
-Before moving a token, the service commits position, partial progress, timestamp
-and a durable movement intent together. It then updates only native `x`, `y` and
-`hidden`, with animation disabled, and acknowledges the intent. On recovery:
+Before moving a token, the service durably saves an intent with the before/after
+waypoint, progress and timestamp checkpoints. Public progress remains at the
+before checkpoint until movement is verified. It then moves only native `x`, `y`
+and `hidden`, with animation disabled, verifies persisted Scene token source data
+and commits the after checkpoint while acknowledging the intent. On recovery:
 
 - If the token is already at the target, acknowledge without moving it again.
 - If it is still at the saved baseline, complete the already-claimed movement.
@@ -258,7 +260,7 @@ permissions require this checklist. Browser tests cannot establish those live
 behaviors. Roads, terrain penalties, vehicle stats, resources, encounters, combat,
 trade profits and Campaign Log integration remain deliberately out of scope.
 
-### Final automated results
+### Final automated results (0.1.58)
 
 - `node --test tests/*.test.mjs`: **583/583 passed**, including 27 new patrol
   model/service/overlay tests.
@@ -275,3 +277,25 @@ trade profits and Campaign Log integration remain deliberately out of scope.
 - `python tests/validate-portable-schema.py`: **28 valid and 10 invalid checks
   passed** across both schemas. Sector portability implementation and schemas
   are unchanged.
+
+## Native token movement fix (0.1.59)
+
+See [the investigation, diagnostics and regression report](patrol-movement-fix.md).
+Native v14 x/y are integer top-left coordinates, and prepared fields can be
+animated. The patrol service now normalizes its calibrated center to integer
+top-left pixels, awaits `TokenDocument.move` for positional changes, and verifies
+`toObject(true)` source data from the assigned Scene's current TokenDocument.
+Visibility-only changes still use `update`. No hook validation is bypassed.
+
+On a genuine rejection, exception or wrong-source position, the route pauses and
+retains its prior waypoint, partial progress and time baseline. The private pending
+intent holds the proposed after checkpoint for a safe Resume. If movement already
+succeeded but acknowledgement failed, source verification commits that checkpoint
+without issuing a second move. Console diagnostics distinguish rejection, exception
+and verification mismatch and include the route/token/Scene, start/destination
+sectors, expected/source/prepared coordinates and returned result summary.
+
+Existing 0.1.58 intents remain readable, including fractional target coordinates.
+Already completed intents reconcile without moving twice. Older intents did not
+store a before-progress checkpoint, so historical pre-fix consumption cannot be
+reconstructed or automatically undone; no speculative history is invented.
